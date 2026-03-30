@@ -10,7 +10,7 @@ export default async function AllAttendancePage() {
   const { data: logs } = await supabase
     .from("attendance_logs")
     .select(
-      "*, employee:users!attendance_logs_employee_id_fkey(full_name, email)"
+      "*, employee:users!attendance_logs_employee_id_fkey(full_name, email, timezone)"
     )
     .order("date", { ascending: false })
     .limit(200);
@@ -51,6 +51,15 @@ export default async function AllAttendancePage() {
                     <td className="px-4 py-3">{formatDate(log.date)}</td>
                     <td className="px-4 py-3 text-xs">
                       {log.scheduled_start?.slice(0, 5)} - {log.scheduled_end?.slice(0, 5)}
+                      <span className="ml-1 text-gray-400">
+                        {log.employee?.timezone === "Asia/Manila"
+                          ? "PHT"
+                          : log.employee?.timezone === "Europe/Berlin"
+                            ? "CET"
+                            : log.employee?.timezone === "Asia/Dubai"
+                              ? "GST"
+                              : log.employee?.timezone ?? ""}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       {log.clock_in
