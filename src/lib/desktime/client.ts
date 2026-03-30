@@ -20,7 +20,7 @@ export async function fetchAllEmployees(
     );
   }
 
-  const data: DeskTimeApiResponse = await response.json();
+  const data = await response.json();
 
   if (data.error) {
     throw new Error(`DeskTime API error: ${data.error}`);
@@ -28,7 +28,20 @@ export async function fetchAllEmployees(
 
   if (!data.employees) return [];
 
-  return Object.values(data.employees);
+  // DeskTime nests employees under the date key: { employees: { "2026-03-27": { "12345": {...} } } }
+  const employeesObj = data.employees;
+  const dateKey = Object.keys(employeesObj)[0];
+  if (!dateKey) return [];
+
+  const employeesByDate = employeesObj[dateKey];
+  if (typeof employeesByDate !== "object") return [];
+
+  // If the value is already an employee object (has 'id'), the response is flat
+  if (employeesByDate.id) {
+    return [employeesByDate as DeskTimeEmployee];
+  }
+
+  return Object.values(employeesByDate) as DeskTimeEmployee[];
 }
 
 export async function fetchEmployee(

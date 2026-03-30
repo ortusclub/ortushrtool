@@ -12,8 +12,8 @@ export interface DeskTimeEmployee {
   unproductiveTime?: number;
   work_starts?: string; // e.g., "9:05"
   work_ends?: string; // e.g., "18:30"
-  arrived?: string; // first seen timestamp
-  left?: string; // last seen timestamp
+  arrived?: string | false; // first seen timestamp or false
+  left?: string | false; // last seen timestamp or false
   lateTime?: number;
 }
 

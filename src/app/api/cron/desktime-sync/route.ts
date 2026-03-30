@@ -11,9 +11,28 @@ export async function GET(request: Request) {
   }
 
   const supabase = createAdminClient();
-  const syncDate = format(subDays(new Date(), 1), "yyyy-MM-dd");
+
+  // Support ?date=YYYY-MM-DD for manual syncs, default to yesterday
+  const url = new URL(request.url);
+  const syncDate =
+    url.searchParams.get("date") ??
+    format(subDays(new Date(), 1), "yyyy-MM-dd");
 
   try {
+    // Fetch tolerance settings once
+    const { data: lateSetting } = await supabase
+      .from("system_settings")
+      .select("value")
+      .eq("key", "late_tolerance_minutes")
+      .single();
+    const { data: earlySetting } = await supabase
+      .from("system_settings")
+      .select("value")
+      .eq("key", "early_tolerance_minutes")
+      .single();
+    const lateTolerance = parseInt(lateSetting?.value ?? "15");
+    const earlyTolerance = parseInt(earlySetting?.value ?? "15");
+
     // Fetch all employees from DeskTime
     const dtEmployees = await fetchAllEmployees(syncDate);
 
@@ -39,7 +58,7 @@ export async function GET(request: Request) {
       }
 
       // Get the employee's schedule for this date
-      const dateObj = new Date(syncDate);
+      const dateObj = new Date(syncDate + "T00:00:00");
       const dayOfWeek = (dateObj.getDay() + 6) % 7; // Monday=0
 
       // Check for approved adjustment first
@@ -70,12 +89,11 @@ export async function GET(request: Request) {
       const isRestDay = !adjustment && (schedule?.is_rest_day ?? false);
 
       // Parse DeskTime clock times
-      const clockIn = dtEmp.arrived
-        ? new Date(`${syncDate}T${dtEmp.arrived}:00+08:00`).toISOString()
-        : null;
-      const clockOut = dtEmp.left
-        ? new Date(`${syncDate}T${dtEmp.left}:00+08:00`).toISOString()
-        : null;
+      // DeskTime returns "arrived" as "2026-03-27 08:05:42" or false
+      const arrivedStr = dtEmp.arrived && typeof dtEmp.arrived === "string" ? dtEmp.arrived : null;
+      const leftStr = dtEmp.left && typeof dtEmp.left === "string" ? dtEmp.left : null;
+      const clockIn = arrivedStr ? parseDesktimeTimestamp(arrivedStr) : null;
+      const clockOut = leftStr ? parseDesktimeTimestamp(leftStr) : null;
 
       // Determine status
       let status: string = "on_time";
@@ -89,18 +107,12 @@ export async function GET(request: Request) {
       } else {
         // Calculate late arrival
         if (clockIn) {
-          const scheduledStartMinutes = timeToMinutes(scheduledStart);
-          const actualStartMinutes = timeToMinutes(
-            dtEmp.arrived ?? "00:00"
+          const scheduledStartMinutes = timeToMinutes(
+            scheduledStart.slice(0, 5)
           );
-          const { data: settings } = await supabase
-            .from("system_settings")
-            .select("value")
-            .eq("key", "late_tolerance_minutes")
-            .single();
-          const tolerance = parseInt(settings?.value ?? "15");
+          const actualStartMinutes = extractTimeMinutes(arrivedStr!);
 
-          if (actualStartMinutes > scheduledStartMinutes + tolerance) {
+          if (actualStartMinutes > scheduledStartMinutes + lateTolerance) {
             lateMinutes = actualStartMinutes - scheduledStartMinutes;
             status = "late_arrival";
           }
@@ -108,16 +120,10 @@ export async function GET(request: Request) {
 
         // Calculate early departure
         if (clockOut) {
-          const scheduledEndMinutes = timeToMinutes(scheduledEnd);
-          const actualEndMinutes = timeToMinutes(dtEmp.left ?? "23:59");
-          const { data: settings } = await supabase
-            .from("system_settings")
-            .select("value")
-            .eq("key", "early_tolerance_minutes")
-            .single();
-          const tolerance = parseInt(settings?.value ?? "15");
+          const scheduledEndMinutes = timeToMinutes(scheduledEnd.slice(0, 5));
+          const actualEndMinutes = extractTimeMinutes(leftStr!);
 
-          if (actualEndMinutes < scheduledEndMinutes - tolerance) {
+          if (actualEndMinutes < scheduledEndMinutes - earlyTolerance) {
             earlyMinutes = scheduledEndMinutes - actualEndMinutes;
             status =
               status === "late_arrival" ? "late_and_early" : "early_departure";
@@ -162,6 +168,29 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
+}
+
+// Parse "2026-03-27 08:05:42" to ISO timestamp
+function parseDesktimeTimestamp(ts: string): string | null {
+  if (!ts || ts === "false") return null;
+  // Replace space with T and assume the DeskTime account timezone
+  // DeskTime returns times in the employee's configured timezone
+  const isoish = ts.replace(" ", "T");
+  const date = new Date(isoish);
+  if (isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+// Extract HH:MM minutes from "2026-03-27 08:05:42" or "08:05"
+function extractTimeMinutes(ts: string): number {
+  // Try full datetime format first
+  const dtMatch = ts.match(/(\d{2}):(\d{2}):\d{2}$/);
+  if (dtMatch) {
+    return parseInt(dtMatch[1]) * 60 + parseInt(dtMatch[2]);
+  }
+  // Fall back to HH:MM
+  const parts = ts.split(":").map(Number);
+  return (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
 }
 
 function timeToMinutes(time: string): number {

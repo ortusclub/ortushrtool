@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
   { label: "Attendance", href: "/attendance", icon: <Clock size={20} />, minRole: "employee" },
   { label: "Team Attendance", href: "/attendance/team", icon: <Clock size={20} />, minRole: "manager" },
   { label: "Flags", href: "/flags", icon: <Flag size={20} />, minRole: "employee" },
+  { label: "All Attendance", href: "/attendance/all", icon: <Clock size={20} />, minRole: "hr_admin" },
   { label: "Reports", href: "/reports", icon: <BarChart3 size={20} />, minRole: "hr_admin" },
   { label: "All Schedules", href: "/admin/schedules", icon: <Calendar size={20} />, minRole: "hr_admin" },
   { label: "Users", href: "/admin/users", icon: <Users size={20} />, minRole: "hr_admin" },
