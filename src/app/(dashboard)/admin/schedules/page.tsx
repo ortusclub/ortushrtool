@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { DAYS_OF_WEEK } from "@/lib/constants";
+import Link from "next/link";
 
 export default async function AdminSchedulesPage() {
   await requireRole("hr_admin");
@@ -67,12 +68,14 @@ export default async function AdminSchedulesPage() {
               const tz = user.timezone === "Asia/Manila" ? "PHT" : user.timezone === "Europe/Berlin" ? "CET" : user.timezone === "Asia/Dubai" ? "GST" : user.timezone;
 
               return (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="sticky left-0 bg-white px-4 py-3 font-medium text-gray-900">
-                    <div>
-                      {user.full_name || user.email.split("@")[0]}
+                <tr key={user.id} className="hover:bg-blue-50 cursor-pointer">
+                  <td className="sticky left-0 bg-white px-4 py-3 font-medium text-gray-900 group-hover:bg-blue-50">
+                    <Link href={`/admin/schedules/${user.id}`} className="block">
+                      <span className="text-blue-600 hover:underline">
+                        {user.full_name || user.email.split("@")[0]}
+                      </span>
                       <p className="text-xs text-gray-400 font-normal">{user.email}</p>
-                    </div>
+                    </Link>
                   </td>
                   <td className="px-4 py-3 text-gray-600 text-xs">
                     {user.manager_id ? userMap.get(user.manager_id) ?? "-" : "-"}
