@@ -12,11 +12,11 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient();
 
-  // Support ?date=YYYY-MM-DD for manual syncs, default to yesterday
+  // Support ?date=YYYY-MM-DD for manual syncs, default to today
   const url = new URL(request.url);
   const syncDate =
     url.searchParams.get("date") ??
-    format(subDays(new Date(), 1), "yyyy-MM-dd");
+    format(new Date(), "yyyy-MM-dd");
 
   try {
     // Fetch tolerance settings once
