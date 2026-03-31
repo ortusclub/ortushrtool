@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function SetPasswordPage() {
@@ -8,7 +8,24 @@ export default function SetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    // Supabase client auto-detects the recovery token from the URL hash
+    // and establishes the session. We wait for that before showing the form.
+    const supabase = createClient();
+    supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+        setReady(true);
+      }
+    });
+
+    // Also check if already signed in
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setReady(true);
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +73,10 @@ export default function SetPasswordPage() {
         {success ? (
           <div className="rounded-md bg-green-50 p-4 text-sm text-green-700">
             Password set successfully! Redirecting...
+          </div>
+        ) : !ready ? (
+          <div className="text-center text-sm text-gray-500">
+            Verifying your link...
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">

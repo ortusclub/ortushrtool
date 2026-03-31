@@ -313,14 +313,14 @@ export function UserManagement({
                             <button
                               onClick={() => startEdit(user)}
                               className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                              title="Edit user"
+                              title="Edit details"
                             >
                               <Pencil size={16} />
                             </button>
                             <Link
                               href={`/admin/schedules/${user.id}`}
                               className="rounded p-1 text-blue-500 hover:bg-blue-50 hover:text-blue-700"
-                              title="Edit schedule"
+                              title="Edit work schedule"
                             >
                               <Calendar size={16} />
                             </Link>
@@ -328,7 +328,7 @@ export function UserManagement({
                               onClick={() => resetPassword(user)}
                               disabled={resettingPassword === user.id}
                               className="rounded p-1 text-amber-500 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50"
-                              title="Send password reset email"
+                              title="Send reset password email"
                             >
                               <KeyRound size={16} />
                             </button>

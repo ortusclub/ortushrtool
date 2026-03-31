@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       type: "recovery",
       email,
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/callback?next=/auth/set-password`,
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/auth/set-password`,
       },
     });
 
