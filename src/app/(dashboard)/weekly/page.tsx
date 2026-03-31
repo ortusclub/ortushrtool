@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { WeeklyScheduleTable } from "@/components/admin/weekly-schedule-table";
 
 export default async function WeeklySchedulePage() {
-  const currentUser = await requireRole("hr_admin");
+  const currentUser = await requireRole("employee");
   const supabase = await createClient();
 
   const today = new Date().toISOString().split("T")[0];

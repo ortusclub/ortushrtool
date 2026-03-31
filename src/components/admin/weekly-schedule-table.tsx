@@ -194,21 +194,36 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
           >
             <ChevronLeft size={16} />
           </button>
-          <button
-            onClick={() => setWeekOffset(0)}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium shadow-sm transition-all hover:bg-gray-100 hover:shadow active:scale-95 active:bg-gray-200"
+          <select
+            value={weekOffset}
+            onChange={(e) => setWeekOffset(Number(e.target.value))}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
-            This Week
-          </button>
+            {Array.from({ length: 25 }, (_, i) => i - 12).map((offset) => {
+              const start = addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), offset * 7);
+              const end = addDays(start, 4);
+              const label = offset === 0
+                ? `This Week — ${format(start, "MMM d")} – ${format(end, "MMM d")}`
+                : `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`;
+              return (
+                <option key={offset} value={offset}>{label}</option>
+              );
+            })}
+          </select>
           <button
             onClick={() => setWeekOffset((w) => w + 1)}
             className="rounded-lg border border-gray-300 bg-white p-2 shadow-sm transition-all hover:bg-gray-100 hover:shadow active:scale-95 active:bg-gray-200"
           >
             <ChevronRight size={16} />
           </button>
-          <span className="ml-2 text-sm text-gray-600">
-            {format(weekStart, "MMM d")} – {format(weekDates[4], "MMM d, yyyy")}
-          </span>
+          {weekOffset !== 0 && (
+            <button
+              onClick={() => setWeekOffset(0)}
+              className="ml-1 rounded-lg px-3 py-2 text-sm text-blue-600 transition-all hover:bg-blue-50 active:scale-95"
+            >
+              Back to current week
+            </button>
+          )}
         </div>
         <input
           type="text"
