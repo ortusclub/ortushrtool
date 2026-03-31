@@ -1,70 +1,73 @@
+import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-// Map CSV timezone abbreviations to IANA timezones
 const TIMEZONE_MAP: Record<string, string> = {
   PHT: "Asia/Manila",
   CET: "Europe/Berlin",
   GST: "Asia/Dubai",
 };
 
-// Map CSV day columns to day_of_week (Monday=0)
-const DAY_INDICES = [0, 1, 2, 3, 4]; // M, T, W, TH, F
+const COUNTRY_MAP: Record<string, string> = {
+  PH: "PH",
+  PHILIPPINES: "PH",
+  XK: "XK",
+  KOSOVO: "XK",
+  IT: "IT",
+  ITALY: "IT",
+  AE: "AE",
+  UAE: "AE",
+  DUBAI: "AE",
+};
 
-interface ParsedRow {
+interface ParsedUserRow {
   name: string;
   email: string;
   timezone: string;
-  days: { location: string; start: string; end: string }[];
+  department: string;
   managerName: string;
+  holidayCountry: string;
+  desktimeId: number | null;
 }
 
-function parseScheduleCell(cell: string): {
-  location: string;
-  start: string;
-  end: string;
-} {
-  // Format: "Online - 10:00 - 19:00" or "Office - 09:00 - 18:00"
-  const match = cell.trim().match(/^(Online|Office)\s*-\s*(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$/i);
-  if (!match) {
-    return { location: "office", start: "09:00", end: "18:00" };
-  }
-  return {
-    location: match[1].toLowerCase(),
-    start: match[2],
-    end: match[3],
-  };
-}
-
-function parseCSV(csvText: string): ParsedRow[] {
+function parseCSV(csvText: string): ParsedUserRow[] {
   const lines = csvText.split("\n").filter((l) => l.trim());
-  // Skip header
-  const rows: ParsedRow[] = [];
+  if (lines.length < 2) return [];
+
+  // Parse header to find columns
+  const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+  const col = (name: string) => header.indexOf(name);
+
+  const nameIdx = Math.max(col("name"), col("person"), col("full_name"));
+  const emailIdx = col("email");
+
+  if (nameIdx === -1 || emailIdx === -1) return [];
+
+  const tzIdx = Math.max(col("timezone"), col("time zone"), col("tz"));
+  const deptIdx = Math.max(col("department"), col("dept"));
+  const managerIdx = Math.max(col("manager"), col("manager name"), col("manager_name"));
+  const countryIdx = Math.max(col("holiday_country"), col("holiday country"), col("country"));
+  const desktimeIdx = Math.max(col("desktime_id"), col("desktime id"), col("desktime_employee_id"), col("desktime"));
+
+  const rows: ParsedUserRow[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i].split(",");
-    if (parts.length < 8) continue;
-
-    const name = parts[0].trim();
-    const email = parts[1].trim();
-    const tz = parts[2].trim();
-    const days = [
-      parseScheduleCell(parts[3]),
-      parseScheduleCell(parts[4]),
-      parseScheduleCell(parts[5]),
-      parseScheduleCell(parts[6]),
-      parseScheduleCell(parts[7]),
-    ];
-    const managerName = parts[8]?.trim() ?? "";
-
+    const parts = lines[i].split(",").map((p) => p.trim());
+    const email = parts[emailIdx] || "";
     if (!email) continue;
 
+    const tz = tzIdx >= 0 ? parts[tzIdx] || "" : "";
+    const country = countryIdx >= 0 ? (parts[countryIdx] || "").toUpperCase() : "";
+    const desktimeRaw = desktimeIdx >= 0 ? parts[desktimeIdx] : "";
+
     rows.push({
-      name,
+      name: parts[nameIdx] || "",
       email,
-      timezone: TIMEZONE_MAP[tz] ?? "Asia/Manila",
-      days,
-      managerName,
+      timezone: TIMEZONE_MAP[tz] ?? (tz || "Asia/Manila"),
+      department: deptIdx >= 0 ? parts[deptIdx] || "" : "",
+      managerName: managerIdx >= 0 ? parts[managerIdx] || "" : "",
+      holidayCountry: COUNTRY_MAP[country] ?? "PH",
+      desktimeId: desktimeRaw ? parseInt(desktimeRaw, 10) || null : null,
     });
   }
 
@@ -72,14 +75,13 @@ function parseCSV(csvText: string): ParsedRow[] {
 }
 
 export async function POST(request: Request) {
-  // Auth check — must be HR admin or super admin
   const supabase = await createClient();
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser();
 
   if (!authUser) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { data: currentUser } = await supabase
@@ -89,21 +91,27 @@ export async function POST(request: Request) {
     .single();
 
   if (!currentUser || !["hr_admin", "super_admin"].includes(currentUser.role)) {
-    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
 
   if (!file) {
-    return new Response(JSON.stringify({ error: "No file provided" }), { status: 400 });
+    return NextResponse.json({ error: "No file provided" }, { status: 400 });
   }
 
   const csvText = await file.text();
   const rows = parseCSV(csvText);
 
+  if (rows.length === 0) {
+    return NextResponse.json(
+      { error: "No valid rows found. Ensure CSV has Name and Email columns." },
+      { status: 400 }
+    );
+  }
+
   const admin = createAdminClient();
-  const today = new Date().toISOString().split("T")[0];
   const total = rows.length;
 
   const encoder = new TextEncoder();
@@ -116,12 +124,11 @@ export async function POST(request: Request) {
       const results = {
         usersCreated: 0,
         usersUpdated: 0,
-        schedulesCreated: 0,
         managersLinked: 0,
         errors: [] as string[],
       };
 
-      // First pass: create/update all users
+      // First pass: create/update users
       const emailToId = new Map<string, string>();
 
       for (let i = 0; i < rows.length; i++) {
@@ -135,12 +142,17 @@ export async function POST(request: Request) {
             .eq("email", row.email)
             .maybeSingle();
 
+          const updateFields: Record<string, unknown> = {
+            full_name: row.name,
+            timezone: row.timezone,
+          };
+          if (row.department) updateFields.department = row.department;
+          if (row.holidayCountry) updateFields.holiday_country = row.holidayCountry;
+          if (row.desktimeId) updateFields.desktime_employee_id = row.desktimeId;
+
           if (existingUser) {
             emailToId.set(row.email, existingUser.id);
-            await admin
-              .from("users")
-              .update({ timezone: row.timezone, full_name: row.name })
-              .eq("id", existingUser.id);
+            await admin.from("users").update(updateFields).eq("id", existingUser.id);
             results.usersUpdated++;
           } else {
             const { data: authData, error: authError } =
@@ -151,22 +163,14 @@ export async function POST(request: Request) {
               });
 
             if (authError) {
-              const { data: existingAuth } =
-                await admin.auth.admin.listUsers();
-              const found = existingAuth?.users?.find(
-                (u) => u.email === row.email
-              );
+              const { data: existingAuth } = await admin.auth.admin.listUsers();
+              const found = existingAuth?.users?.find((u) => u.email === row.email);
               if (found) {
                 emailToId.set(row.email, found.id);
-                await admin.from("users").upsert({
-                  id: found.id,
-                  email: row.email,
-                  full_name: row.name,
-                  timezone: row.timezone,
-                });
+                await admin.from("users").upsert({ id: found.id, email: row.email, ...updateFields });
                 results.usersUpdated++;
               } else {
-                results.errors.push(`Failed to create user ${row.email}: ${authError.message}`);
+                results.errors.push(`Failed to create ${row.email}: ${authError.message}`);
               }
               continue;
             }
@@ -174,17 +178,12 @@ export async function POST(request: Request) {
             if (authData.user) {
               emailToId.set(row.email, authData.user.id);
               await new Promise((r) => setTimeout(r, 100));
-              await admin
-                .from("users")
-                .update({ timezone: row.timezone, full_name: row.name })
-                .eq("id", authData.user.id);
+              await admin.from("users").update(updateFields).eq("id", authData.user.id);
               results.usersCreated++;
             }
           }
         } catch (err) {
-          results.errors.push(
-            `Error processing ${row.email}: ${err instanceof Error ? err.message : "unknown"}`
-          );
+          results.errors.push(`Error processing ${row.email}: ${err instanceof Error ? err.message : "unknown"}`);
         }
       }
 
@@ -225,10 +224,7 @@ export async function POST(request: Request) {
             .maybeSingle();
 
           if (managerUser) {
-            await admin
-              .from("users")
-              .update({ manager_id: managerUser.id })
-              .eq("id", userId);
+            await admin.from("users").update({ manager_id: managerUser.id }).eq("id", userId);
             results.managersLinked++;
             continue;
           }
@@ -237,53 +233,9 @@ export async function POST(request: Request) {
         if (managerEmail) {
           const managerId = emailToId.get(managerEmail);
           if (managerId && managerId !== userId) {
-            await admin
-              .from("users")
-              .update({ manager_id: managerId })
-              .eq("id", userId);
+            await admin.from("users").update({ manager_id: managerId }).eq("id", userId);
             results.managersLinked++;
           }
-        }
-      }
-
-      // Third pass: create schedules
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        send({ type: "progress", phase: "schedules", current: i + 1, total, message: `Creating schedule for ${row.name || row.email}` });
-
-        const userId = emailToId.get(row.email);
-        if (!userId) continue;
-
-        await admin
-          .from("schedules")
-          .delete()
-          .eq("employee_id", userId);
-
-        for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
-          const day = row.days[dayIdx];
-          await admin.from("schedules").insert({
-            employee_id: userId,
-            day_of_week: dayIdx,
-            start_time: day.start,
-            end_time: day.end,
-            is_rest_day: false,
-            work_location: day.location as "office" | "online",
-            effective_from: today,
-          });
-          results.schedulesCreated++;
-        }
-
-        for (const dayIdx of [5, 6]) {
-          await admin.from("schedules").insert({
-            employee_id: userId,
-            day_of_week: dayIdx,
-            start_time: "00:00",
-            end_time: "00:00",
-            is_rest_day: true,
-            work_location: "office",
-            effective_from: today,
-          });
-          results.schedulesCreated++;
         }
       }
 

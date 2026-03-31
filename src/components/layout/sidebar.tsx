@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Calendar,
+  CalendarDays,
   CalendarHeart,
   Clock,
   Flag,
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
   { label: "Flags", href: "/flags", icon: <Flag size={20} />, minRole: "employee" },
   { label: "All Attendance", href: "/attendance/all", icon: <Clock size={20} />, minRole: "hr_admin" },
   { label: "Reports", href: "/reports", icon: <BarChart3 size={20} />, minRole: "hr_admin" },
+  { label: "Weekly Overview", href: "/admin/weekly", icon: <CalendarDays size={20} />, minRole: "hr_admin" },
   { label: "All Schedules", href: "/admin/schedules", icon: <Calendar size={20} />, minRole: "hr_admin" },
   { label: "Manage Holidays", href: "/admin/holidays", icon: <CalendarHeart size={20} />, minRole: "hr_admin" },
   { label: "Users", href: "/admin/users", icon: <Users size={20} />, minRole: "hr_admin" },
