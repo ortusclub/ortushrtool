@@ -161,26 +161,26 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
             />
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => goDay(-1)}
-            className="rounded-lg border border-gray-300 p-2 hover:bg-gray-50"
+            className="relative z-10 rounded-lg border border-gray-300 p-2.5 hover:bg-gray-100 active:bg-gray-200"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={18} />
           </button>
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm [&::-webkit-calendar-picker-indicator]:opacity-50"
           />
           <button
             type="button"
             onClick={() => goDay(1)}
-            className="rounded-lg border border-gray-300 p-2 hover:bg-gray-50"
+            className="relative z-10 rounded-lg border border-gray-300 p-2.5 hover:bg-gray-100 active:bg-gray-200"
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={18} />
           </button>
         </div>
       </div>
