@@ -25,7 +25,9 @@ export type NotificationType =
   | "schedule_adjustment_decision"
   | "attendance_flag"
   | "leave_request"
-  | "leave_decision";
+  | "leave_decision"
+  | "holiday_work_request"
+  | "holiday_work_decision";
 
 export interface User {
   id: string;
@@ -142,6 +144,22 @@ export interface Holiday {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface HolidayWorkRequest {
+  id: string;
+  employee_id: string;
+  holiday_id: string;
+  holiday_date: string;
+  start_time: string;
+  end_time: string;
+  work_location: WorkLocation;
+  reason: string;
+  status: LeaveStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  reviewer_notes: string | null;
+  created_at: string;
 }
 
 // Extended types with joins

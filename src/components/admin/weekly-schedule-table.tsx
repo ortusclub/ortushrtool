@@ -12,6 +12,7 @@ import type {
   Holiday,
   LeaveRequest,
   ScheduleAdjustment,
+  HolidayWorkRequest,
 } from "@/types/database";
 
 interface Props {
@@ -25,6 +26,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
   const [search, setSearch] = useState("");
   const [leaveMap, setLeaveMap] = useState<Record<string, LeaveRequest[]>>({});
   const [adjustmentMap, setAdjustmentMap] = useState<Record<string, ScheduleAdjustment[]>>({});
+  const [holidayWorkMap, setHolidayWorkMap] = useState<Record<string, HolidayWorkRequest[]>>({});
   const [loaded, setLoaded] = useState(false);
 
   // Calculate week dates (Monday-Sunday)
@@ -45,7 +47,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
     const startStr = format(weekStart, "yyyy-MM-dd");
     const endStr = format(weekDates[4], "yyyy-MM-dd");
 
-    const [{ data: leaves }, { data: adjustments }] = await Promise.all([
+    const [{ data: leaves }, { data: adjustments }, { data: holidayWork }] = await Promise.all([
       supabase
         .from("leave_requests")
         .select("*")
@@ -58,6 +60,12 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
         .eq("status", "approved")
         .gte("requested_date", startStr)
         .lte("requested_date", endStr),
+      supabase
+        .from("holiday_work_requests")
+        .select("*")
+        .eq("status", "approved")
+        .gte("holiday_date", startStr)
+        .lte("holiday_date", endStr),
     ]);
 
     const lMap: Record<string, LeaveRequest[]> = {};
@@ -72,8 +80,15 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
       aMap[a.employee_id].push(a);
     }
 
+    const hwMap: Record<string, HolidayWorkRequest[]> = {};
+    for (const hw of holidayWork ?? []) {
+      if (!hwMap[hw.employee_id]) hwMap[hw.employee_id] = [];
+      hwMap[hw.employee_id].push(hw);
+    }
+
     setLeaveMap(lMap);
     setAdjustmentMap(aMap);
+    setHolidayWorkMap(hwMap);
     setLoaded(true);
   };
 
@@ -137,6 +152,17 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
     if (dayHolidays) {
       for (const h of dayHolidays.values()) {
         if (h.country === user.holiday_country) {
+          // Check if user has approved holiday work for this date
+          const userHW = holidayWorkMap[user.id] ?? [];
+          const hw = userHW.find((r) => r.holiday_date === dateStr);
+          if (hw) {
+            return {
+              type: "holiday_work" as const,
+              label: `${formatTime(hw.start_time)} - ${formatTime(hw.end_time)}`,
+              location: hw.work_location,
+              holidayName: h.name,
+            };
+          }
           return { type: "holiday" as const, label: h.name };
         }
       }
@@ -283,6 +309,22 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                         isToday(date) && "bg-blue-50/50",
                       )}
                     >
+                      {cell.type === "holiday_work" && (
+                        <div>
+                          <div className="text-xs text-gray-700">{cell.label}</div>
+                          {"location" in cell && cell.location && (
+                            <span className={cn(
+                              "mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
+                              cell.location === "online"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-blue-100 text-blue-700"
+                            )}>
+                              {cell.location === "online" ? "Online" : "Office"}
+                            </span>
+                          )}
+                          <div className="mt-0.5 text-[10px] text-teal-600">Working on {"holidayName" in cell ? cell.holidayName : "Holiday"}</div>
+                        </div>
+                      )}
                       {cell.type === "holiday" && (
                         <span className="inline-block rounded bg-purple-100 px-2 py-1 text-xs font-medium text-purple-700">
                           {cell.label}
@@ -354,6 +396,9 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
         </div>
         <div className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-3 rounded bg-purple-100" /> Holiday
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block h-3 w-3 rounded bg-teal-100" /> Working on Holiday
         </div>
       </div>
     </div>
