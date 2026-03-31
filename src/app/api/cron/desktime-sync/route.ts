@@ -44,14 +44,14 @@ export async function GET(request: Request) {
       .eq("is_active", true);
 
     const userMap = new Map(
-      (users ?? []).map((u) => [u.desktime_employee_id, u.id])
+      (users ?? []).map((u) => [String(u.desktime_employee_id), u.id])
     );
 
     let synced = 0;
     let skipped = 0;
 
     for (const dtEmp of dtEmployees) {
-      const userId = userMap.get(dtEmp.id);
+      const userId = userMap.get(String(dtEmp.id));
       if (!userId) {
         skipped++;
         continue;
@@ -159,6 +159,7 @@ export async function GET(request: Request) {
       synced,
       skipped,
       total: dtEmployees.length,
+      mappedUsers: userMap.size,
     });
   } catch (error) {
     console.error("DeskTime sync error:", error);
