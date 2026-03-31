@@ -35,7 +35,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
   }, [weekOffset]);
 
   const weekDates = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
+    () => Array.from({ length: 5 }, (_, i) => addDays(weekStart, i)),
     [weekStart]
   );
 
@@ -43,7 +43,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
   const loadWeekData = async () => {
     const supabase = createClient();
     const startStr = format(weekStart, "yyyy-MM-dd");
-    const endStr = format(weekDates[6], "yyyy-MM-dd");
+    const endStr = format(weekDates[4], "yyyy-MM-dd");
 
     const [{ data: leaves }, { data: adjustments }] = await Promise.all([
       supabase
@@ -207,7 +207,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
             <ChevronRight size={16} />
           </button>
           <span className="ml-2 text-sm text-gray-600">
-            {format(weekStart, "MMM d")} – {format(weekDates[6], "MMM d, yyyy")}
+            {format(weekStart, "MMM d")} – {format(weekDates[4], "MMM d, yyyy")}
           </span>
         </div>
         <input
@@ -314,7 +314,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
             ))}
             {filteredUsers.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                   No users found
                 </td>
               </tr>
