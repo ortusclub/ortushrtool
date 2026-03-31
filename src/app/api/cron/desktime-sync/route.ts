@@ -92,8 +92,9 @@ export async function GET(request: Request) {
       // DeskTime returns "arrived" as "2026-03-27 08:05:42" or false
       const arrivedStr = dtEmp.arrived && typeof dtEmp.arrived === "string" ? dtEmp.arrived : null;
       const leftStr = dtEmp.left && typeof dtEmp.left === "string" ? dtEmp.left : null;
-      const clockIn = arrivedStr ? parseDesktimeTimestamp(arrivedStr) : null;
-      const clockOut = leftStr ? parseDesktimeTimestamp(leftStr) : null;
+      const dtTimezone = (dtEmp as Record<string, unknown>).timezone as string | undefined;
+      const clockIn = arrivedStr ? parseDesktimeTimestamp(arrivedStr, dtTimezone) : null;
+      const clockOut = leftStr ? parseDesktimeTimestamp(leftStr, dtTimezone) : null;
 
       // Determine status
       let status: string = "on_time";
@@ -171,11 +172,23 @@ export async function GET(request: Request) {
 }
 
 // Parse "2026-03-27 08:05:42" to ISO timestamp
-function parseDesktimeTimestamp(ts: string): string | null {
+// DeskTime returns times in the employee's configured timezone (e.g. Asia/Singapore = UTC+8)
+function parseDesktimeTimestamp(ts: string, dtTimezone?: string): string | null {
   if (!ts || ts === "false") return null;
-  // Replace space with T and assume the DeskTime account timezone
-  // DeskTime returns times in the employee's configured timezone
-  const isoish = ts.replace(" ", "T");
+
+  // Map common DeskTime timezones to UTC offsets
+  const tzOffsets: Record<string, string> = {
+    "Asia/Singapore": "+08:00",
+    "Asia/Manila": "+08:00",
+    "Asia/Hong_Kong": "+08:00",
+    "Asia/Dubai": "+04:00",
+    "Europe/Berlin": "+02:00", // CEST (summer)
+    "Europe/London": "+01:00", // BST (summer)
+    "UTC": "+00:00",
+  };
+
+  const offset = tzOffsets[dtTimezone ?? ""] ?? "+08:00"; // Default to +08:00 (PHT/SGT)
+  const isoish = ts.replace(" ", "T") + offset;
   const date = new Date(isoish);
   if (isNaN(date.getTime())) return null;
   return date.toISOString();

@@ -15,6 +15,7 @@ export interface DeskTimeEmployee {
   arrived?: string | false; // first seen timestamp or false
   left?: string | false; // last seen timestamp or false
   lateTime?: number;
+  timezone?: string;
 }
 
 export interface DeskTimeApiResponse {
