@@ -1,8 +1,12 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
+
   const handleGoogleLogin = async () => {
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
@@ -25,6 +29,11 @@ export default function LoginPage() {
             Schedule & Attendance Management
           </p>
         </div>
+        {error && (
+          <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+            Auth error: {decodeURIComponent(error)}
+          </div>
+        )}
         <button
           onClick={handleGoogleLogin}
           className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
