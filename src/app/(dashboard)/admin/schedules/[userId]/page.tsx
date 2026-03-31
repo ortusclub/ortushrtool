@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { UserScheduleEditor } from "@/components/admin/user-schedule-editor";
 import { AdminAdjustmentForm } from "@/components/admin/admin-adjustment-form";
+import { AdminLeaveForm } from "@/components/admin/admin-leave-form";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { formatDate, formatTime } from "@/lib/utils";
@@ -42,6 +43,15 @@ export default async function UserSchedulePage({
     .eq("employee_id", userId)
     .gte("requested_date", today)
     .order("requested_date", { ascending: true })
+    .limit(20);
+
+  // Get upcoming/current leave
+  const { data: leaves } = await supabase
+    .from("leave_requests")
+    .select("*")
+    .eq("employee_id", userId)
+    .gte("end_date", today)
+    .order("start_date", { ascending: true })
     .limit(20);
 
   // Get manager name
@@ -155,6 +165,68 @@ export default async function UserSchedulePage({
                   </span>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Leave */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          Add Leave
+        </h2>
+        <AdminLeaveForm userId={userId} />
+      </div>
+
+      {/* Existing Leave */}
+      {leaves && leaves.length > 0 && (
+        <div>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+            Upcoming Leave
+          </h2>
+          <div className="rounded-xl border border-purple-200 bg-white shadow-sm">
+            <div className="divide-y divide-gray-100">
+              {leaves.map((leave) => {
+                const leaveLabels: Record<string, string> = {
+                  annual: "Annual Leave",
+                  sick: "Sick Leave",
+                  personal: "Personal Leave",
+                  unpaid: "Unpaid Leave",
+                  other: "Other",
+                };
+                return (
+                  <div
+                    key={leave.id}
+                    className="flex items-center justify-between p-4"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                          {leaveLabels[leave.leave_type] ?? leave.leave_type}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700">
+                        {formatDate(leave.start_date)} &mdash;{" "}
+                        {formatDate(leave.end_date)}
+                      </p>
+                      {leave.reason && (
+                        <p className="text-xs text-gray-500">{leave.reason}</p>
+                      )}
+                    </div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
+                        leave.status === "approved"
+                          ? "bg-green-100 text-green-700"
+                          : leave.status === "rejected"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-yellow-100 text-yellow-700"
+                      }`}
+                    >
+                      {leave.status}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

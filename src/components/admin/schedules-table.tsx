@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { DAYS_OF_WEEK } from "@/lib/constants";
-import { Search } from "lucide-react";
+import { Search, Pencil } from "lucide-react";
 
 interface UserRow {
   id: string;
@@ -207,6 +207,8 @@ export function SchedulesTable({
               <th className="px-4 py-3 font-medium text-gray-600 min-w-[160px]">
                 Adjustment / Leave
               </th>
+              <th className="px-4 py-3 font-medium text-gray-600 min-w-[50px]">
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -338,6 +340,15 @@ export function SchedulesTable({
                     {!adjustment && !leave && (
                       <span className="text-xs text-gray-400">—</span>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/admin/schedules/${user.id}`}
+                      className="rounded p-1.5 text-blue-500 hover:bg-blue-50 hover:text-blue-700 inline-flex"
+                      title="Edit schedule"
+                    >
+                      <Pencil size={15} />
+                    </Link>
                   </td>
                 </tr>
               );
