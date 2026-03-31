@@ -19,12 +19,12 @@ export function SyncDesktimeButton() {
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
-    return d.toISOString().split("T")[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
   const [endDate, setEndDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
-    return d.toISOString().split("T")[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
   const [results, setResults] = useState<DayResult[]>([]);
 
@@ -39,7 +39,7 @@ export function SyncDesktimeButton() {
     const end = new Date(endDate + "T00:00:00");
 
     while (current <= end) {
-      dates.push(current.toISOString().split("T")[0]);
+      dates.push(`${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`);
       current.setDate(current.getDate() + 1);
     }
 
