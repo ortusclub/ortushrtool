@@ -172,26 +172,48 @@ export async function GET(request: Request) {
 }
 
 // Parse "2026-03-27 08:05:42" to ISO timestamp
-// DeskTime returns times in the employee's configured timezone (e.g. Asia/Singapore = UTC+8)
+// DeskTime returns times in the employee's configured timezone
 function parseDesktimeTimestamp(ts: string, dtTimezone?: string): string | null {
   if (!ts || ts === "false") return null;
 
-  // Map common DeskTime timezones to UTC offsets
-  const tzOffsets: Record<string, string> = {
-    "Asia/Singapore": "+08:00",
-    "Asia/Manila": "+08:00",
-    "Asia/Hong_Kong": "+08:00",
-    "Asia/Dubai": "+04:00",
-    "Europe/Berlin": "+02:00", // CEST (summer)
-    "Europe/London": "+01:00", // BST (summer)
-    "UTC": "+00:00",
-  };
+  const tz = dtTimezone || "Asia/Singapore";
 
-  const offset = tzOffsets[dtTimezone ?? ""] ?? "+08:00"; // Default to +08:00 (PHT/SGT)
-  const isoish = ts.replace(" ", "T") + offset;
-  const date = new Date(isoish);
-  if (isNaN(date.getTime())) return null;
-  return date.toISOString();
+  // Use Intl to get the UTC offset for the given timezone at the given date
+  // by formatting a known UTC date and comparing
+  try {
+    // Parse the local time components
+    const [datePart, timePart] = ts.split(" ");
+    const [year, month, day] = datePart.split("-").map(Number);
+    const [hours, minutes, seconds] = (timePart || "00:00:00").split(":").map(Number);
+
+    // Create a date assuming UTC first to get the offset
+    const utcGuess = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
+
+    // Get the timezone offset in minutes using Intl
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      timeZoneName: "shortOffset",
+    });
+    const parts = formatter.formatToParts(utcGuess);
+    const tzPart = parts.find((p) => p.type === "timeZoneName");
+    const offsetStr = tzPart?.value ?? "GMT";
+
+    // Parse offset like "GMT+8", "GMT+2", "GMT-5", "GMT+5:30"
+    let offsetMinutes = 0;
+    const match = offsetStr.match(/GMT([+-]?)(\d{1,2})(?::(\d{2}))?/);
+    if (match) {
+      const sign = match[1] === "-" ? -1 : 1;
+      offsetMinutes = sign * (parseInt(match[2]) * 60 + parseInt(match[3] || "0"));
+    }
+
+    // The local time IS in the given timezone, so subtract the offset to get UTC
+    const utcMs = Date.UTC(year, month - 1, day, hours, minutes, seconds) - offsetMinutes * 60 * 1000;
+    const result = new Date(utcMs);
+    if (isNaN(result.getTime())) return null;
+    return result.toISOString();
+  } catch {
+    return null;
+  }
 }
 
 // Extract HH:MM minutes from "2026-03-27 08:05:42" or "08:05"
