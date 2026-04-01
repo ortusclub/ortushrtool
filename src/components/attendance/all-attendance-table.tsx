@@ -280,9 +280,13 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
                       {log ? formatClockTime(log.clock_in, tz) : "-"}
                     </td>
                     <td className="px-4 py-3">
-                      {log && log.status !== "working"
-                        ? formatClockTime(log.clock_out, tz)
-                        : "-"}
+                      {(() => {
+                        if (!log?.clock_out) return "-";
+                        const isToday = selectedDate === new Date().toISOString().split("T")[0];
+                        const hasEarlyDeparture = log.status === "early_departure" || log.status === "late_and_early";
+                        if (isToday && !hasEarlyDeparture) return "-";
+                        return formatClockTime(log.clock_out, tz);
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       {log ? (
