@@ -90,6 +90,9 @@ function StatusBadge({ status }: { status: string }) {
     late_and_early: "bg-red-100 text-red-700",
     absent: "bg-red-100 text-red-700",
     rest_day: "bg-gray-100 text-gray-600",
+    on_leave: "bg-blue-100 text-blue-700",
+    holiday: "bg-purple-100 text-purple-700",
+    working: "bg-green-50 text-green-600",
   };
 
   const labels: Record<string, string> = {
@@ -99,6 +102,9 @@ function StatusBadge({ status }: { status: string }) {
     late_and_early: "Late & Early",
     absent: "Absent",
     rest_day: "Rest Day",
+    on_leave: "On Leave",
+    holiday: "Holiday",
+    working: "Working",
   };
 
   return (

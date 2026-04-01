@@ -6,7 +6,10 @@ export type AttendanceStatus =
   | "early_departure"
   | "late_and_early"
   | "absent"
-  | "rest_day";
+  | "rest_day"
+  | "on_leave"
+  | "holiday"
+  | "working";
 export type FlagType = "late_arrival" | "early_departure" | "absent";
 export type WorkLocation = "office" | "online";
 export type LeaveType = "annual" | "sick" | "personal" | "unpaid" | "other";

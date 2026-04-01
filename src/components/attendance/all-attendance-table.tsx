@@ -62,6 +62,9 @@ const statusStyles: Record<string, string> = {
   late_and_early: "bg-red-100 text-red-700",
   absent: "bg-red-100 text-red-700",
   rest_day: "bg-gray-100 text-gray-500",
+  on_leave: "bg-blue-100 text-blue-700",
+  holiday: "bg-purple-100 text-purple-700",
+  working: "bg-green-50 text-green-600",
 };
 
 const statusLabels: Record<string, string> = {
@@ -71,6 +74,9 @@ const statusLabels: Record<string, string> = {
   late_and_early: "Late & Early",
   absent: "Absent",
   rest_day: "Rest Day",
+  on_leave: "On Leave",
+  holiday: "Holiday",
+  working: "Working",
 };
 
 export function AllAttendanceTable({ users }: { users: UserRow[] }) {
@@ -126,7 +132,7 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
 
   // Stats
   const stats = useMemo(() => {
-    let onTime = 0, late = 0, early = 0, absent = 0, noData = 0;
+    let onTime = 0, late = 0, early = 0, absent = 0, noData = 0, onLeave = 0, holiday = 0, working = 0;
     for (const user of filteredUsers) {
       const log = logMap.get(user.id);
       if (!log) { noData++; continue; }
@@ -135,8 +141,11 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
       else if (log.status === "early_departure") early++;
       else if (log.status === "late_and_early") { late++; early++; }
       else if (log.status === "absent") absent++;
+      else if (log.status === "on_leave") onLeave++;
+      else if (log.status === "holiday") holiday++;
+      else if (log.status === "working") working++;
     }
-    return { onTime, late, early, absent, noData };
+    return { onTime, late, early, absent, noData, onLeave, holiday, working };
   }, [filteredUsers, logMap]);
 
   return (
@@ -203,6 +212,21 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
           <span className="rounded-full bg-red-100 px-3 py-1 text-red-700 font-medium">
             {stats.absent} Absent
           </span>
+          {stats.working > 0 && (
+            <span className="rounded-full bg-green-50 px-3 py-1 text-green-600 font-medium">
+              {stats.working} Working
+            </span>
+          )}
+          {stats.onLeave > 0 && (
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-700 font-medium">
+              {stats.onLeave} On Leave
+            </span>
+          )}
+          {stats.holiday > 0 && (
+            <span className="rounded-full bg-purple-100 px-3 py-1 text-purple-700 font-medium">
+              {stats.holiday} Holiday
+            </span>
+          )}
           {stats.noData > 0 && (
             <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-500 font-medium">
               {stats.noData} No Data

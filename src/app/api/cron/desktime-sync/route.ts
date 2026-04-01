@@ -36,26 +36,65 @@ export async function GET(request: Request) {
     // Fetch all employees from DeskTime
     const dtEmployees = await fetchAllEmployees(syncDate);
 
-    // Get user mapping from our DB
+    // Get user mapping from our DB (include holiday_country and timezone)
     const { data: users } = await supabase
       .from("users")
-      .select("id, desktime_employee_id")
+      .select("id, desktime_employee_id, holiday_country, timezone")
       .not("desktime_employee_id", "is", null)
       .eq("is_active", true);
 
     const userMap = new Map(
-      (users ?? []).map((u) => [String(u.desktime_employee_id), u.id])
+      (users ?? []).map((u) => [String(u.desktime_employee_id), u])
     );
+
+    // Fetch holidays for the sync date
+    const { data: holidaysOnDate } = await supabase
+      .from("holidays")
+      .select("country")
+      .eq("date", syncDate);
+
+    const holidayCountries = new Set(
+      (holidaysOnDate ?? []).map((h) => h.country)
+    );
+
+    // Fetch approved leaves covering the sync date
+    const { data: approvedLeaves } = await supabase
+      .from("leave_requests")
+      .select("employee_id")
+      .eq("status", "approved")
+      .lte("start_date", syncDate)
+      .gte("end_date", syncDate);
+
+    const employeesOnLeave = new Set(
+      (approvedLeaves ?? []).map((l) => l.employee_id)
+    );
+
+    // Fetch approved holiday work requests for the sync date
+    const { data: holidayWorkApprovals } = await supabase
+      .from("holiday_work_requests")
+      .select("employee_id")
+      .eq("status", "approved")
+      .eq("holiday_date", syncDate);
+
+    const employeesWorkingHoliday = new Set(
+      (holidayWorkApprovals ?? []).map((h) => h.employee_id)
+    );
+
+    // Check if sync date is today (for "workday not over" logic)
+    const today = format(new Date(), "yyyy-MM-dd");
+    const isSyncingToday = syncDate === today;
 
     let synced = 0;
     let skipped = 0;
 
     for (const dtEmp of dtEmployees) {
-      const userId = userMap.get(String(dtEmp.id));
-      if (!userId) {
+      const userRecord = userMap.get(String(dtEmp.id));
+      if (!userRecord) {
         skipped++;
         continue;
       }
+      const userId = userRecord.id;
+      const userTz = userRecord.timezone || "Asia/Manila";
 
       // Get the employee's schedule for this date
       const dateObj = new Date(syncDate + "T00:00:00");
@@ -101,10 +140,27 @@ export async function GET(request: Request) {
       let lateMinutes: number | null = null;
       let earlyMinutes: number | null = null;
 
-      if (isRestDay) {
+      // Check leave first
+      if (employeesOnLeave.has(userId)) {
+        status = "on_leave";
+      // Check holiday (unless they have an approved work-on-holiday)
+      } else if (
+        userRecord.holiday_country &&
+        holidayCountries.has(userRecord.holiday_country) &&
+        !employeesWorkingHoliday.has(userId)
+      ) {
+        status = "holiday";
+      } else if (isRestDay) {
         status = "rest_day";
       } else if (!clockIn && !clockOut) {
-        status = "absent";
+        // Only mark absent if we're past the scheduled start time
+        if (isSyncingToday) {
+          const nowInTz = getCurrentTimeMinutes(userTz);
+          const scheduledStartMinutes = timeToMinutes(scheduledStart.slice(0, 5));
+          status = nowInTz >= scheduledStartMinutes ? "absent" : "working";
+        } else {
+          status = "absent";
+        }
       } else {
         // Calculate late arrival
         if (clockIn) {
@@ -119,15 +175,33 @@ export async function GET(request: Request) {
           }
         }
 
-        // Calculate early departure
+        // Calculate early departure — only if the workday is over
         if (clockOut) {
           const scheduledEndMinutes = timeToMinutes(scheduledEnd.slice(0, 5));
-          const actualEndMinutes = extractTimeMinutes(leftStr!);
 
-          if (actualEndMinutes < scheduledEndMinutes - earlyTolerance) {
-            earlyMinutes = scheduledEndMinutes - actualEndMinutes;
-            status =
-              status === "late_arrival" ? "late_and_early" : "early_departure";
+          if (isSyncingToday) {
+            const nowInTz = getCurrentTimeMinutes(userTz);
+            // Only flag early departure if we're past scheduled end
+            if (nowInTz >= scheduledEndMinutes) {
+              const actualEndMinutes = extractTimeMinutes(leftStr!);
+              if (actualEndMinutes < scheduledEndMinutes - earlyTolerance) {
+                earlyMinutes = scheduledEndMinutes - actualEndMinutes;
+                status =
+                  status === "late_arrival" ? "late_and_early" : "early_departure";
+              }
+            } else {
+              // Workday still in progress — mark as "working" if currently on time
+              if (status === "on_time") {
+                status = "working";
+              }
+            }
+          } else {
+            const actualEndMinutes = extractTimeMinutes(leftStr!);
+            if (actualEndMinutes < scheduledEndMinutes - earlyTolerance) {
+              earlyMinutes = scheduledEndMinutes - actualEndMinutes;
+              status =
+                status === "late_arrival" ? "late_and_early" : "early_departure";
+            }
           }
         }
       }
@@ -232,4 +306,16 @@ function extractTimeMinutes(ts: string): number {
 function timeToMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + (minutes || 0);
+}
+
+// Get current time in minutes for a given timezone
+function getCurrentTimeMinutes(tz: string): number {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: tz,
+  });
+  return timeToMinutes(timeStr);
 }
