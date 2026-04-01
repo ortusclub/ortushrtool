@@ -280,7 +280,9 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
                       {log ? formatClockTime(log.clock_in, tz) : "-"}
                     </td>
                     <td className="px-4 py-3">
-                      {log ? formatClockTime(log.clock_out, tz) : "-"}
+                      {log && log.status !== "working"
+                        ? formatClockTime(log.clock_out, tz)
+                        : "-"}
                     </td>
                     <td className="px-4 py-3">
                       {log ? (
