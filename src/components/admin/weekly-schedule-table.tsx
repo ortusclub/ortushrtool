@@ -308,7 +308,9 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                   <div className="flex items-center gap-1.5 font-medium text-gray-900">
                     {user.full_name}
                     {getOfficeDaysCount(user) < 2 && (
-                      <Flag size={14} className="fill-red-500 text-red-500" title={`Only ${getOfficeDaysCount(user)} office day(s) this week`} />
+                      <span title={`Only ${getOfficeDaysCount(user)} office day(s) this week`}>
+                        <Flag size={14} className="fill-red-500 text-red-500" />
+                      </span>
                     )}
                   </div>
                   <div className="text-xs text-gray-500">{user.email}</div>
