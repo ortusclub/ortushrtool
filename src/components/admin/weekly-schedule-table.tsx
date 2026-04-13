@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { format, startOfWeek, addDays, isSameDay, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flag } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatTime, cn } from "@/lib/utils";
 import { HOLIDAY_COUNTRY_LABELS } from "@/types/database";
@@ -209,6 +209,21 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
 
   const isToday = (date: Date) => isSameDay(date, new Date());
 
+  function getOfficeDaysCount(user: User): number {
+    let count = 0;
+    for (let i = 0; i < weekDates.length; i++) {
+      const cell = getCellContent(user, weekDates[i], i);
+      if (
+        (cell.type === "schedule" || cell.type === "adjusted" || cell.type === "holiday_work") &&
+        "location" in cell &&
+        cell.location === "office"
+      ) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   return (
     <div className="space-y-4">
       {/* Controls */}
@@ -290,7 +305,12 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
             {filteredUsers.map((user) => (
               <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                 <td className="sticky left-0 z-10 bg-white px-4 py-3">
-                  <div className="font-medium text-gray-900">{user.full_name}</div>
+                  <div className="flex items-center gap-1.5 font-medium text-gray-900">
+                    {user.full_name}
+                    {getOfficeDaysCount(user) < 2 && (
+                      <Flag size={14} className="fill-red-500 text-red-500" title={`Only ${getOfficeDaysCount(user)} office day(s) this week`} />
+                    )}
+                  </div>
                   <div className="text-xs text-gray-500">{user.email}</div>
                 </td>
                 <td className="px-3 py-3 text-gray-600">{user.department || "—"}</td>
@@ -399,6 +419,9 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
         </div>
         <div className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-3 rounded bg-teal-100" /> Working on Holiday
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Flag size={12} className="fill-red-500 text-red-500" /> Less than 2 office days
         </div>
       </div>
     </div>
