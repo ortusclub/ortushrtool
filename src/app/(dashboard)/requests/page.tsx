@@ -6,17 +6,18 @@ import { LeaveActions } from "@/components/leave/leave-actions";
 import { HolidayWorkActions } from "@/components/holiday-work/holiday-work-actions";
 import { CancelRequest } from "@/components/shared/cancel-request";
 import Link from "next/link";
-import { ArrowRightLeft, CalendarOff, CalendarCheck } from "lucide-react";
+import { ArrowRightLeft, CalendarOff, CalendarCheck, AlertTriangle } from "lucide-react";
+import { startOfWeek, addDays, format } from "date-fns";
 
 export default async function RequestsPage() {
   const user = await getCurrentUser();
   const supabase = await createClient();
   const isReviewer = hasRole(user.role, "manager");
 
-  // Fetch schedule adjustments
+  // Fetch schedule adjustments (include role for office day threshold)
   let adjQuery = supabase
     .from("schedule_adjustments")
-    .select("*, employee:users!schedule_adjustments_employee_id_fkey(full_name, email)")
+    .select("*, employee:users!schedule_adjustments_employee_id_fkey(full_name, email, role)")
     .order("created_at", { ascending: false });
 
   if (!isReviewer) {
@@ -55,6 +56,90 @@ export default async function RequestsPage() {
   const pastLeave = (leaveRequests ?? []).filter((l) => l.status !== "pending");
   const pendingHW = (holidayWorkRequests ?? []).filter((h) => h.status === "pending");
   const pastHW = (holidayWorkRequests ?? []).filter((h) => h.status !== "pending");
+
+  // --- Compute office day warnings for pending adjustments ---
+  const officeWarnings = new Map<string, { officeDays: number; threshold: number }>();
+
+  if (pendingAdj.length > 0) {
+    // Gather unique employee IDs and week ranges
+    const employeeIds = [...new Set(pendingAdj.map((a) => a.employee_id))];
+
+    // Fetch base schedules for all relevant employees
+    const today = new Date().toISOString().split("T")[0];
+    const { data: allSchedules } = await supabase
+      .from("schedules")
+      .select("employee_id, day_of_week, work_location, is_rest_day")
+      .in("employee_id", employeeIds)
+      .lte("effective_from", today)
+      .or(`effective_until.is.null,effective_until.gte.${today}`);
+
+    // Build schedule map: employeeId -> dayOfWeek -> work_location
+    const scheduleMap = new Map<string, Map<number, string | null>>();
+    for (const s of allSchedules ?? []) {
+      if (!scheduleMap.has(s.employee_id)) scheduleMap.set(s.employee_id, new Map());
+      const userMap = scheduleMap.get(s.employee_id)!;
+      userMap.set(s.day_of_week, s.is_rest_day ? null : s.work_location);
+    }
+
+    // For each pending adjustment, compute office days for its week
+    for (const adj of pendingAdj) {
+      if (adj.requested_date === "9999-12-31") continue; // Skip permanent
+
+      const reqDate = new Date(adj.requested_date + "T00:00:00");
+      const weekMon = startOfWeek(reqDate, { weekStartsOn: 1 });
+      const weekStartStr = format(weekMon, "yyyy-MM-dd");
+      const weekEndStr = format(addDays(weekMon, 4), "yyyy-MM-dd");
+
+      // Fetch approved adjustments for this employee in this week
+      const { data: weekAdjs } = await supabase
+        .from("schedule_adjustments")
+        .select("requested_date, requested_work_location")
+        .eq("employee_id", adj.employee_id)
+        .eq("status", "approved")
+        .gte("requested_date", weekStartStr)
+        .lte("requested_date", weekEndStr);
+
+      // Build override map for the week: date -> location
+      const adjOverrides = new Map<string, string | null>();
+      for (const a of weekAdjs ?? []) {
+        adjOverrides.set(a.requested_date, a.requested_work_location);
+      }
+
+      // Simulate this pending adjustment as if approved
+      adjOverrides.set(adj.requested_date, adj.requested_work_location ?? null);
+
+      // Count office days Mon-Fri
+      const userSchedule = scheduleMap.get(adj.employee_id);
+      let officeDays = 0;
+
+      for (let i = 0; i < 5; i++) {
+        const dayDate = format(addDays(weekMon, i), "yyyy-MM-dd");
+        const override = adjOverrides.get(dayDate);
+
+        if (override !== undefined) {
+          // There's an adjustment for this day
+          if (override === "office") officeDays++;
+          // If override is "online" or null, check: null means only time changed, fall back to base
+          else if (override === null) {
+            const baseLocation = userSchedule?.get(i);
+            if (baseLocation === "office") officeDays++;
+          }
+          // "online" = not office, don't count
+        } else {
+          // No adjustment, use base schedule
+          const baseLocation = userSchedule?.get(i);
+          if (baseLocation === "office") officeDays++;
+        }
+      }
+
+      const employeeRole = adj.employee?.role ?? "employee";
+      const threshold = hasRole(employeeRole, "manager") ? 3 : 2;
+
+      if (officeDays < threshold) {
+        officeWarnings.set(adj.id, { officeDays, threshold });
+      }
+    }
+  }
 
   const leaveTypeLabels: Record<string, string> = {
     annual: "Annual Leave",
@@ -117,40 +202,59 @@ export default async function RequestsPage() {
             </h2>
           </div>
           <div className="divide-y divide-gray-100">
-            {pendingAdj.map((adj) => (
-              <div key={adj.id} className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    {isReviewer && adj.employee && (
-                      <p className="font-medium text-gray-900">
-                        {adj.employee.full_name || adj.employee.email}
+            {pendingAdj.map((adj) => {
+              const warning = officeWarnings.get(adj.id);
+              return (
+                <div key={adj.id} className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      {isReviewer && adj.employee && (
+                        <p className="font-medium text-gray-900">
+                          {adj.employee.full_name || adj.employee.email}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-700">
+                        <span className="font-medium">Date:</span>{" "}
+                        {formatDate(adj.requested_date)}
                       </p>
-                    )}
-                    <p className="text-sm text-gray-700">
-                      <span className="font-medium">Date:</span>{" "}
-                      {formatDate(adj.requested_date)}
-                    </p>
-                    <p className="text-sm text-gray-700">
-                      <span className="font-medium">Original:</span>{" "}
-                      {formatTime(adj.original_start_time)} -{" "}
-                      {formatTime(adj.original_end_time)}
-                    </p>
-                    <p className="text-sm text-gray-700">
-                      <span className="font-medium">Requested:</span>{" "}
-                      {formatTime(adj.requested_start_time)} -{" "}
-                      {formatTime(adj.requested_end_time)}
-                    </p>
-                    <p className="text-sm text-gray-600">{adj.reason}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    {isReviewer && <AdjustmentActions adjustmentId={adj.id} />}
-                    {!isReviewer && (
-                      <CancelRequest requestId={adj.id} table="schedule_adjustments" />
-                    )}
+                      <p className="text-sm text-gray-700">
+                        <span className="font-medium">Original:</span>{" "}
+                        {formatTime(adj.original_start_time)} -{" "}
+                        {formatTime(adj.original_end_time)}
+                      </p>
+                      <p className="text-sm text-gray-700">
+                        <span className="font-medium">Requested:</span>{" "}
+                        {formatTime(adj.requested_start_time)} -{" "}
+                        {formatTime(adj.requested_end_time)}
+                      </p>
+                      {adj.requested_work_location && (
+                        <p className="text-sm text-gray-700">
+                          <span className="font-medium">Location:</span>{" "}
+                          <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${adj.requested_work_location === "office" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                            {adj.requested_work_location === "office" ? "Office" : "Online"}
+                          </span>
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-600">{adj.reason}</p>
+                      {warning && (
+                        <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2">
+                          <AlertTriangle size={14} className="text-red-500 shrink-0" />
+                          <span className="text-xs text-red-700">
+                            Approving this would leave only {warning.officeDays} office day{warning.officeDays !== 1 ? "s" : ""} this week (minimum {warning.threshold} required)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      {isReviewer && <AdjustmentActions adjustmentId={adj.id} />}
+                      {!isReviewer && (
+                        <CancelRequest requestId={adj.id} table="schedule_adjustments" />
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

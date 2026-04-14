@@ -1,11 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Search } from "lucide-react";
 
+interface TeamMember {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
 interface AttendanceLog {
   id: string;
+  employee_id: string;
   date: string;
   scheduled_start: string;
   scheduled_end: string;
@@ -14,25 +21,12 @@ interface AttendanceLog {
   status: string;
   late_minutes: number | null;
   early_departure_minutes: number | null;
-}
-
-interface ScheduleInfo {
-  day_of_week: number;
-  work_location: string;
-  is_rest_day: boolean;
-  effective_from: string;
-  effective_until: string | null;
-}
-
-interface AdjustmentInfo {
-  requested_date: string;
-  requested_work_location: string | null;
+  employee?: { full_name: string; email: string } | null;
 }
 
 interface Props {
   initialLogs: AttendanceLog[];
-  userId: string;
-  schedules: ScheduleInfo[];
+  teamMembers: TeamMember[];
 }
 
 function formatDate(dateStr: string): string {
@@ -54,87 +48,38 @@ function formatClockTime(iso: string | null): string {
   });
 }
 
-export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
+export function TeamAttendanceTable({ initialLogs, teamMembers }: Props) {
   const [logs, setLogs] = useState(initialLogs);
-  const [adjustments, setAdjustments] = useState<AdjustmentInfo[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedMember, setSelectedMember] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [filtered, setFiltered] = useState(false);
 
-  // Build schedule lookup: day_of_week -> work_location
-  const scheduleByDay = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const s of schedules) {
-      if (!s.is_rest_day) {
-        map.set(s.day_of_week, s.work_location);
-      }
-    }
-    return map;
-  }, [schedules]);
-
-  // Build adjustment lookup: date -> requested_work_location
-  const adjByDate = useMemo(() => {
-    const map = new Map<string, string | null>();
-    for (const a of adjustments) {
-      map.set(a.requested_date, a.requested_work_location);
-    }
-    return map;
-  }, [adjustments]);
-
-  function getLocation(log: AttendanceLog): string | null {
-    // Skip non-working statuses
-    if (["rest_day", "on_leave", "holiday", "absent"].includes(log.status)) {
-      return null;
-    }
-
-    // Check if there's an adjustment with a location for this date
-    const adjLocation = adjByDate.get(log.date);
-    if (adjLocation) return adjLocation;
-
-    // Fall back to base schedule
-    const dateObj = new Date(log.date + "T00:00:00");
-    const dayOfWeek = (dateObj.getDay() + 6) % 7; // Monday=0
-    return scheduleByDay.get(dayOfWeek) ?? null;
-  }
-
-  const fetchAdjustments = async (from: string, to: string) => {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("schedule_adjustments")
-      .select("requested_date, requested_work_location")
-      .eq("employee_id", userId)
-      .eq("status", "approved")
-      .gte("requested_date", from)
-      .lte("requested_date", to);
-    setAdjustments(data ?? []);
-  };
-
-  // Load adjustments for initial logs
-  useMemo(() => {
-    if (initialLogs.length > 0) {
-      const dates = initialLogs.map((l) => l.date).sort();
-      fetchAdjustments(dates[0], dates[dates.length - 1]);
-    }
-  }, []);
+  const memberIds = teamMembers.map((m) => m.id);
 
   const handleFilter = async () => {
-    if (!startDate || !endDate) return;
-
     setLoading(true);
     const supabase = createClient();
 
-    const [{ data }] = await Promise.all([
-      supabase
-        .from("attendance_logs")
-        .select("*")
-        .eq("employee_id", userId)
-        .gte("date", startDate)
-        .lte("date", endDate)
-        .order("date", { ascending: false }),
-      fetchAdjustments(startDate, endDate),
-    ]);
+    let query = supabase
+      .from("attendance_logs")
+      .select("*, employee:users!attendance_logs_employee_id_fkey(full_name, email)")
+      .order("date", { ascending: false });
 
+    if (selectedMember) {
+      query = query.eq("employee_id", selectedMember);
+    } else {
+      query = query.in("employee_id", memberIds);
+    }
+
+    if (startDate && endDate) {
+      query = query.gte("date", startDate).lte("date", endDate);
+    } else {
+      query = query.limit(50);
+    }
+
+    const { data } = await query;
     setLogs(data ?? []);
     setFiltered(true);
     setLoading(false);
@@ -142,33 +87,42 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
 
   const handleReset = async () => {
     setLoading(true);
-    const supabase = createClient();
-
-    const { data } = await supabase
-      .from("attendance_logs")
-      .select("*")
-      .eq("employee_id", userId)
-      .order("date", { ascending: false })
-      .limit(30);
-
-    const newLogs = data ?? [];
-    setLogs(newLogs);
+    setSelectedMember("");
     setStartDate("");
     setEndDate("");
+
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("attendance_logs")
+      .select("*, employee:users!attendance_logs_employee_id_fkey(full_name, email)")
+      .in("employee_id", memberIds)
+      .order("date", { ascending: false })
+      .limit(50);
+
+    setLogs(data ?? []);
     setFiltered(false);
-
-    if (newLogs.length > 0) {
-      const dates = newLogs.map((l) => l.date).sort();
-      await fetchAdjustments(dates[0], dates[dates.length - 1]);
-    }
-
     setLoading(false);
   };
 
   return (
     <div className="space-y-4">
-      {/* Date range filter */}
+      {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-600">Team Member</label>
+          <select
+            value={selectedMember}
+            onChange={(e) => setSelectedMember(e.target.value)}
+            className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All members</option>
+            {teamMembers.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="block text-xs font-medium text-gray-600">From</label>
           <input
@@ -189,7 +143,7 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
         </div>
         <button
           onClick={handleFilter}
-          disabled={loading || !startDate || !endDate}
+          disabled={loading}
           className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
           <Search size={16} />
@@ -207,7 +161,7 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
         <span className="text-xs text-gray-500">
           {filtered
             ? `Showing ${logs.length} record(s)`
-            : `Showing last 30 days`}
+            : "Showing last 50 records"}
         </span>
       </div>
 
@@ -218,9 +172,9 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left">
+                  <th className="px-6 py-3 font-medium text-gray-600">Employee</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Date</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Scheduled</th>
-                  <th className="px-6 py-3 font-medium text-gray-600">Location</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Clock In</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Clock Out</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Status</th>
@@ -229,45 +183,30 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {logs.map((log) => {
-                  const location = getLocation(log);
-                  return (
-                    <tr key={log.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">{formatDate(log.date)}</td>
-                      <td className="px-6 py-4">
-                        {log.scheduled_start} - {log.scheduled_end}
-                      </td>
-                      <td className="px-6 py-4">
-                        {location ? (
-                          <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                              location === "office"
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-green-100 text-green-700"
-                            }`}
-                          >
-                            {location === "office" ? "Office" : "Online"}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">{formatClockTime(log.clock_in)}</td>
-                      <td className="px-6 py-4">{formatClockTime(log.clock_out)}</td>
-                      <td className="px-6 py-4">
-                        <StatusBadge status={log.status} />
-                      </td>
-                      <td className="px-6 py-4">{log.late_minutes ?? "-"}</td>
-                      <td className="px-6 py-4">{log.early_departure_minutes ?? "-"}</td>
-                    </tr>
-                  );
-                })}
+                {logs.map((log) => (
+                  <tr key={log.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 font-medium">
+                      {log.employee?.full_name || log.employee?.email || "-"}
+                    </td>
+                    <td className="px-6 py-4">{formatDate(log.date)}</td>
+                    <td className="px-6 py-4">
+                      {log.scheduled_start} - {log.scheduled_end}
+                    </td>
+                    <td className="px-6 py-4">{formatClockTime(log.clock_in)}</td>
+                    <td className="px-6 py-4">{formatClockTime(log.clock_out)}</td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={log.status} />
+                    </td>
+                    <td className="px-6 py-4">{log.late_minutes ?? "-"}</td>
+                    <td className="px-6 py-4">{log.early_departure_minutes ?? "-"}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         ) : (
           <div className="p-6 text-center text-gray-500">
-            No attendance records found{filtered ? " for this date range" : ""}.
+            No attendance records found{filtered ? " for this filter" : " for your team"}.
           </div>
         )}
       </div>
