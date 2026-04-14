@@ -186,18 +186,6 @@ export default async function DashboardPage() {
     return count;
   }
 
-  // Count used days per type, respecting per-type renewal dates
-  const leaveUsed: Record<string, number> = {};
-
-  for (const l of myLeavesThisYear.data ?? []) {
-    const renewalStart = leaveTypeRenewalStart[l.leave_type] ?? yearStart;
-    // Only count leaves that started on or after the renewal date
-    if (l.start_date >= renewalStart) {
-      const days = l.leave_duration === "half_day" ? 0.5 : countWeekdays(l.start_date, l.end_date);
-      leaveUsed[l.leave_type] = (leaveUsed[l.leave_type] ?? 0) + days;
-    }
-  }
-
   const leaveTypeLabels = LEAVE_TYPE_LABELS;
   const myActivatedTypes = (myActivatedLeaveTypes.data ?? []).map((d) => d.leave_type);
   const myLeaveTypes = [...UNIVERSAL_LEAVE_TYPES, ...myActivatedTypes];
@@ -243,6 +231,17 @@ export default async function DashboardPage() {
       if (!leaveTypeRenewalStart[a.leave_type] || planRenewal < leaveTypeRenewalStart[a.leave_type]) {
         leaveTypeRenewalStart[a.leave_type] = planRenewal;
       }
+    }
+  }
+
+  // Count used days per type, respecting per-type renewal dates
+  const leaveUsed: Record<string, number> = {};
+
+  for (const l of myLeavesThisYear.data ?? []) {
+    const renewalStart = leaveTypeRenewalStart[l.leave_type] ?? yearStart;
+    if (l.start_date >= renewalStart) {
+      const days = l.leave_duration === "half_day" ? 0.5 : countWeekdays(l.start_date, l.end_date);
+      leaveUsed[l.leave_type] = (leaveUsed[l.leave_type] ?? 0) + days;
     }
   }
 
