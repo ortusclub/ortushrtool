@@ -246,14 +246,17 @@ export default async function DashboardPage() {
   }
 
   // --- Who's Out ---
-  const whosOutLeaves = (whosOutThisWeek.data ?? []).map((l) => ({
-    employeeId: l.employee_id,
-    name: l.employee?.full_name ?? "Unknown",
-    leaveType: l.leave_type,
-    startDate: l.start_date,
-    endDate: l.end_date,
-    managerId: l.employee?.manager_id ?? null,
-  }));
+  const whosOutLeaves = (whosOutThisWeek.data ?? []).map((l) => {
+    const emp = l.employee as unknown as { full_name: string; manager_id: string | null } | null;
+    return {
+      employeeId: l.employee_id,
+      name: emp?.full_name ?? "Unknown",
+      leaveType: l.leave_type,
+      startDate: l.start_date,
+      endDate: l.end_date,
+      managerId: emp?.manager_id ?? null,
+    };
+  });
 
   // --- Upcoming Holidays ---
   const upcomingHols: { name: string; date: string; country: string }[] = [];
