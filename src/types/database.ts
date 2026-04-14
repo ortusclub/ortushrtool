@@ -47,6 +47,8 @@ export interface User {
   role: UserRole;
   manager_id: string | null;
   department: string | null;
+  job_title: string | null;
+  location: string | null;
   desktime_employee_id: number | null;
   timezone: string;
   holiday_country: HolidayCountry;
@@ -233,4 +235,63 @@ export interface EmployeeLeavePlan {
   plan_id: string;
   assigned_by: string | null;
   created_at: string;
+}
+
+// KPI types
+export type KpiUnitType =
+  | "percentage"
+  | "currency"
+  | "count"
+  | "score"
+  | "hours"
+  | "custom";
+export type KpiPeriodType = "monthly" | "quarterly" | "yearly";
+export type KpiAssignmentStatus = "active" | "completed" | "archived";
+
+export interface KpiDefinition {
+  id: string;
+  name: string;
+  description: string | null;
+  unit_type: KpiUnitType;
+  unit_label: string | null;
+  created_by: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KpiAssignment {
+  id: string;
+  kpi_definition_id: string;
+  employee_id: string;
+  assigned_by: string;
+  period_type: KpiPeriodType;
+  period_start: string;
+  period_end: string;
+  target_value: number;
+  current_value: number;
+  status: KpiAssignmentStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KpiUpdate {
+  id: string;
+  kpi_assignment_id: string;
+  updated_by: string;
+  old_value: number;
+  new_value: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface KpiAssignmentWithDetails extends KpiAssignment {
+  kpi_definition?: KpiDefinition;
+  employee?: { id: string; full_name: string; email: string };
+  assigned_by_user?: { id: string; full_name: string; email: string };
+}
+
+export interface KpiUpdateWithUser extends KpiUpdate {
+  updated_by_user?: { id: string; full_name: string; email: string };
 }

@@ -43,3 +43,24 @@ export const LEAVE_TYPE_LABELS: Record<string, string> = Object.fromEntries(
 );
 
 export const MANILA_TIMEZONE = "Asia/Manila";
+
+export const KPI_UNIT_TYPES = {
+  percentage: { label: "Percentage", suffix: "%" },
+  currency: { label: "Currency", suffix: "" },
+  count: { label: "Count", suffix: "" },
+  score: { label: "Score", suffix: "" },
+  hours: { label: "Hours", suffix: "hrs" },
+  custom: { label: "Custom", suffix: "" },
+} as const;
+
+export const KPI_PERIOD_TYPES = {
+  monthly: { label: "Monthly" },
+  quarterly: { label: "Quarterly" },
+  yearly: { label: "Yearly" },
+} as const;
+
+export const KPI_STATUS_LABELS: Record<string, string> = {
+  active: "Active",
+  completed: "Completed",
+  archived: "Archived",
+};
