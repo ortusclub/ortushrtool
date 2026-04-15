@@ -50,6 +50,10 @@ export interface User {
   department: string | null;
   job_title: string | null;
   location: string | null;
+  birthday: string | null;
+  hire_date: string | null;
+  end_date: string | null;
+  avatar_url: string | null;
   desktime_employee_id: number | null;
   timezone: string;
   holiday_country: HolidayCountry;

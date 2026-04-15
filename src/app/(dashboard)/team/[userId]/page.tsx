@@ -4,7 +4,10 @@ import { formatTime } from "@/lib/utils";
 import { DAYS_OF_WEEK } from "@/lib/constants";
 import { HOLIDAY_COUNTRY_LABELS, type HolidayCountry } from "@/types/database";
 import Link from "next/link";
-import { ArrowLeft, Mail, Building2, Clock, Globe, Users, MapPin } from "lucide-react";
+import { ArrowLeft, Mail, Building2, Clock, Globe, Users, MapPin, Cake, BriefcaseBusiness, CalendarX } from "lucide-react";
+import { format, parseISO, differenceInYears } from "date-fns";
+import { UserAvatar } from "@/components/shared/user-avatar";
+import { AvatarUpload } from "@/components/shared/avatar-upload";
 
 const ROLE_LABELS: Record<string, string> = {
   employee: "Employee",
@@ -25,8 +28,9 @@ export default async function TeamMemberPage({
 }: {
   params: Promise<{ userId: string }>;
 }) {
-  await getCurrentUser();
+  const currentUser = await getCurrentUser();
   const { userId } = await params;
+  const isOwnProfile = currentUser.id === userId;
   // Use admin client to bypass RLS — any employee can view any profile
   const supabase = createAdminClient();
 
@@ -67,7 +71,7 @@ export default async function TeamMemberPage({
   // Fetch direct reports
   const { data: directReports } = await supabase
     .from("users")
-    .select("id, full_name, email")
+    .select("id, full_name, email, avatar_url")
     .eq("manager_id", userId)
     .eq("is_active", true)
     .order("full_name");
@@ -91,15 +95,6 @@ export default async function TeamMemberPage({
           ? "GST (Asia/Dubai)"
           : user.timezone;
 
-  const initials = user.full_name
-    ? user.full_name
-        .split(" ")
-        .map((n: string) => n[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase()
-    : user.email[0].toUpperCase();
-
   return (
     <div className="space-y-6">
       <Link
@@ -113,9 +108,19 @@ export default async function TeamMemberPage({
       {/* Profile Header */}
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <div className="flex items-start gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xl font-bold text-blue-700">
-            {initials}
-          </div>
+          {isOwnProfile ? (
+            <AvatarUpload
+              userId={user.id}
+              currentAvatarUrl={user.avatar_url}
+              userName={user.full_name || user.email}
+            />
+          ) : (
+            <UserAvatar
+              name={user.full_name || user.email}
+              avatarUrl={user.avatar_url}
+              size="lg"
+            />
+          )}
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold text-gray-900">
               {user.full_name || user.email}
@@ -168,6 +173,35 @@ export default async function TeamMemberPage({
                   user.holiday_country}
               </span>
             </div>
+            {user.birthday && (
+              <div className="flex items-center gap-3 text-sm">
+                <Cake size={16} className="shrink-0 text-gray-400" />
+                <span className="text-gray-900">
+                  {format(parseISO(user.birthday), "MMMM d")}
+                </span>
+              </div>
+            )}
+            {user.hire_date && (
+              <div className="flex items-center gap-3 text-sm">
+                <BriefcaseBusiness size={16} className="shrink-0 text-gray-400" />
+                <span className="text-gray-900">
+                  Joined {format(parseISO(user.hire_date), "MMM d, yyyy")}
+                  {(() => {
+                    const years = differenceInYears(new Date(), parseISO(user.hire_date));
+                    if (years >= 1) return ` (${years} year${years !== 1 ? "s" : ""})`;
+                    return "";
+                  })()}
+                </span>
+              </div>
+            )}
+            {user.end_date && (
+              <div className="flex items-center gap-3 text-sm">
+                <CalendarX size={16} className="shrink-0 text-gray-400" />
+                <span className="text-gray-900">
+                  Last day: {format(parseISO(user.end_date), "MMM d, yyyy")}
+                </span>
+              </div>
+            )}
             {managerName && (
               <div className="flex items-center gap-3 text-sm">
                 <Users size={16} className="shrink-0 text-gray-400" />
@@ -196,16 +230,11 @@ export default async function TeamMemberPage({
                   href={`/team/${report.id}`}
                   className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-gray-50"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">
-                    {report.full_name
-                      ? report.full_name
-                          .split(" ")
-                          .map((n: string) => n[0])
-                          .join("")
-                          .slice(0, 2)
-                          .toUpperCase()
-                      : report.email[0].toUpperCase()}
-                  </div>
+                  <UserAvatar
+                    name={report.full_name || report.email}
+                    avatarUrl={report.avatar_url}
+                    size="sm"
+                  />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-gray-900">
                       {report.full_name || report.email}

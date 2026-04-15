@@ -2,8 +2,10 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { LogOut } from "lucide-react";
 import type { User } from "@/types/database";
+import { UserAvatar } from "@/components/shared/user-avatar";
 
 export function Header({ user }: { user: User }) {
   const router = useRouter();
@@ -37,7 +39,10 @@ export function Header({ user }: { user: User }) {
         >
           {roleLabel[user.role]}
         </span>
-        <span className="text-sm text-gray-700">{user.full_name || user.email}</span>
+        <Link href={`/team/${user.id}`} className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 hover:underline">
+          <UserAvatar name={user.full_name || user.email} avatarUrl={user.avatar_url} size="xs" />
+          {user.full_name || user.email}
+        </Link>
         <button
           onClick={handleLogout}
           className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"

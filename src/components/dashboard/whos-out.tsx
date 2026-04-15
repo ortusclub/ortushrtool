@@ -2,8 +2,9 @@
 // Who's Out dashboard component
 
 import { useState, useMemo } from "react";
-import { Users, CalendarHeart } from "lucide-react";
+import { Users, CalendarHeart, X } from "lucide-react";
 import { HOLIDAY_COUNTRY_LABELS } from "@/types/database";
+import { UserAvatar } from "@/components/shared/user-avatar";
 
 interface LeaveEntry {
   employeeId: string;
@@ -12,6 +13,7 @@ interface LeaveEntry {
   startDate: string;
   endDate: string;
   managerId: string | null;
+  avatarUrl: string | null;
 }
 
 interface Holiday {
@@ -35,12 +37,23 @@ type Filter = "everyone" | "my_team" | "direct_reports";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
 const leaveTypeLabels = LEAVE_TYPE_LABELS;
 
+const MAX_VISIBLE = 3;
+
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
+  });
+}
+
+function formatDayHeader(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
   });
 }
 
@@ -71,6 +84,7 @@ export function WhosOut({
   directReportIds,
 }: Props) {
   const [filter, setFilter] = useState<Filter>("everyone");
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
   const teamSet = useMemo(() => new Set(teamMemberIds), [teamMemberIds]);
   const directSet = useMemo(() => new Set(directReportIds), [directReportIds]);
@@ -107,6 +121,8 @@ export function WhosOut({
     });
   }, [weekStartStr, filteredLeaves, todayStr]);
 
+  const expandedDayData = weekDays.find((d) => d.dateStr === expandedDay);
+
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
@@ -127,42 +143,99 @@ export function WhosOut({
 
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="grid grid-cols-5 divide-x divide-gray-100">
-          {weekDays.map((day) => (
-            <div
-              key={day.dateStr}
-              className={`p-4 ${day.isToday ? "bg-blue-50" : day.isPast ? "opacity-50" : ""}`}
-            >
-              <div className="mb-2 text-center">
-                <p className={`text-xs font-semibold ${day.isToday ? "text-blue-700" : "text-gray-700"}`}>
-                  {day.dayName}
-                </p>
-                <p className={`text-lg font-bold ${day.isToday ? "text-blue-900" : "text-gray-900"}`}>
-                  {day.dayNum}
-                </p>
-              </div>
-              {day.entries.length === 0 ? (
-                <p className="text-center text-xs text-gray-300">&mdash;</p>
-              ) : (
-                <div className="space-y-1">
-                  {day.entries.map((e, i) => (
-                    <div
-                      key={i}
-                      className="rounded bg-amber-50 px-2 py-1 text-center"
-                    >
-                      <p className="text-xs font-medium text-gray-800 truncate">
-                        {e.name}
-                      </p>
-                      <p className="text-[10px] text-amber-600">
-                        {leaveTypeLabels[e.leaveType] ?? e.leaveType}
-                      </p>
-                    </div>
-                  ))}
+          {weekDays.map((day) => {
+            const visible = day.entries.slice(0, MAX_VISIBLE);
+            const overflowCount = day.entries.length - MAX_VISIBLE;
+
+            return (
+              <div
+                key={day.dateStr}
+                className={`p-4 ${day.isToday ? "bg-blue-50" : day.isPast ? "opacity-50" : ""}`}
+              >
+                <div className="mb-3 text-center">
+                  <p className={`text-xs font-semibold ${day.isToday ? "text-blue-700" : "text-gray-700"}`}>
+                    {day.dayName}
+                  </p>
+                  <p className={`text-lg font-bold ${day.isToday ? "text-blue-900" : "text-gray-900"}`}>
+                    {day.dayNum}
+                  </p>
                 </div>
-              )}
-            </div>
-          ))}
+                {day.entries.length === 0 ? (
+                  <p className="text-center text-xs text-gray-300">&mdash;</p>
+                ) : (
+                  <div className="flex flex-col items-center gap-1.5">
+                    {/* Avatar row */}
+                    <div className="flex flex-wrap justify-center gap-1">
+                      {visible.map((e, i) => (
+                        <div key={i} className="relative group/tip">
+                          <UserAvatar name={e.name} avatarUrl={e.avatarUrl} size="sm" />
+                          {/* Tooltip */}
+                          <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover/tip:opacity-100 z-10">
+                            {e.name}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Overflow / expand button */}
+                    {overflowCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedDay(day.dateStr)}
+                        className="text-[11px] font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        +{overflowCount} more
+                      </button>
+                    ) : day.entries.length > 0 && day.entries.length <= MAX_VISIBLE ? (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedDay(day.dateStr)}
+                        className="text-[11px] font-medium text-gray-400 hover:text-gray-600 hover:underline"
+                      >
+                        {day.entries.length} out
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* Expanded Day Modal */}
+      {expandedDayData && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setExpandedDay(null)} />
+          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-gray-900">
+                {formatDayHeader(expandedDayData.dateStr)}
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  {expandedDayData.entries.length} out
+                </span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setExpandedDay(null)}
+                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
+              {expandedDayData.entries.map((e, i) => (
+                <div key={i} className="flex items-center gap-3 px-5 py-3">
+                  <UserAvatar name={e.name} avatarUrl={e.avatarUrl} size="md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900 truncate">{e.name}</p>
+                    <p className="text-xs text-amber-600">{leaveTypeLabels[e.leaveType] ?? e.leaveType}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Upcoming Holidays */}
       {upcomingHolidays.length > 0 && (

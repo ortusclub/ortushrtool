@@ -41,6 +41,9 @@ export function UserManagement({
       desktime_employee_id: user.desktime_employee_id,
       holiday_country: user.holiday_country,
       is_active: user.is_active,
+      birthday: user.birthday,
+      hire_date: user.hire_date,
+      end_date: user.end_date,
     });
   };
 
@@ -143,6 +146,9 @@ export function UserManagement({
                 <th className="px-4 py-3 font-medium text-gray-600">Manager</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Country</th>
                 <th className="px-4 py-3 font-medium text-gray-600">DeskTime ID</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Birthday</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Hire Date</th>
+                <th className="px-4 py-3 font-medium text-gray-600">End Date</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Active</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Actions</th>
               </tr>
@@ -273,6 +279,57 @@ export function UserManagement({
                         />
                       ) : (
                         user.desktime_employee_id ?? "-"
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editForm.birthday ?? ""}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              birthday: e.target.value || null,
+                            })
+                          }
+                          className="rounded border px-2 py-1 text-sm"
+                        />
+                      ) : (
+                        user.birthday ?? "-"
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editForm.hire_date ?? ""}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              hire_date: e.target.value || null,
+                            })
+                          }
+                          className="rounded border px-2 py-1 text-sm"
+                        />
+                      ) : (
+                        user.hire_date ?? "-"
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editForm.end_date ?? ""}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              end_date: e.target.value || null,
+                            })
+                          }
+                          className="rounded border px-2 py-1 text-sm"
+                        />
+                      ) : (
+                        user.end_date ?? "-"
                       )}
                     </td>
                     <td className="px-4 py-3">

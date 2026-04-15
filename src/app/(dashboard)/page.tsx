@@ -8,9 +8,16 @@ import {
   ArrowRightLeft,
   Flag,
   Palmtree,
+  UserCircle,
+  CalendarHeart,
+  Cake,
+  BriefcaseBusiness,
+  UserPlus,
+  UserMinus,
 } from "lucide-react";
-import { startOfWeek, endOfWeek, addDays, format, parseISO } from "date-fns";
+import { startOfWeek, endOfWeek, addDays, format, parseISO, differenceInYears } from "date-fns";
 import { WhosOut } from "@/components/dashboard/whos-out";
+import { UserAvatar } from "@/components/shared/user-avatar";
 import { LEAVE_TYPE_LABELS, UNIVERSAL_LEAVE_TYPES, LEAVE_TYPES } from "@/lib/constants";
 
 export default async function DashboardPage() {
@@ -140,6 +147,12 @@ export default async function DashboardPage() {
       .eq("employee_id", user.id),
   ]);
 
+  // Fetch all users with date fields for upcoming events
+  const { data: allUsersForEvents } = await supabase
+    .from("users")
+    .select("id, full_name, email, birthday, hire_date, end_date, avatar_url")
+    .eq("is_active", true);
+
   // Fetch direct report IDs for "My Direct Reports" filter
   const { data: directReports } = isReviewer
     ? await supabase
@@ -246,6 +259,11 @@ export default async function DashboardPage() {
   }
 
   // --- Who's Out ---
+  // Build avatar lookup from allUsersForEvents
+  const avatarMap = new Map(
+    (allUsersForEvents ?? []).map((u) => [u.id, u.avatar_url as string | null])
+  );
+
   const whosOutLeaves = (whosOutThisWeek.data ?? []).map((l) => {
     const emp = l.employee as unknown as { full_name: string; manager_id: string | null } | null;
     return {
@@ -255,8 +273,10 @@ export default async function DashboardPage() {
       startDate: l.start_date,
       endDate: l.end_date,
       managerId: emp?.manager_id ?? null,
+      avatarUrl: avatarMap.get(l.employee_id) ?? null,
     };
   });
+
 
   // --- Upcoming Holidays ---
   const upcomingHols: { name: string; date: string; country: string }[] = [];
@@ -296,6 +316,96 @@ export default async function DashboardPage() {
     return true;
   });
 
+  // --- Upcoming Events (birthdays, anniversaries, first/last days) ---
+  const upcomingEvents: {
+    type: "birthday" | "anniversary" | "first_day" | "last_day";
+    name: string;
+    date: string;
+    detail: string;
+    userId: string;
+    avatarUrl: string | null;
+  }[] = [];
+
+  const lookAheadDays = 30;
+  const todayDate = parseISO(today);
+
+  for (const u of allUsersForEvents ?? []) {
+    const name = u.full_name || u.email.split("@")[0];
+
+    // Birthday
+    if (u.birthday) {
+      const bd = parseISO(u.birthday);
+      const thisYearBd = new Date(now.getFullYear(), bd.getMonth(), bd.getDate());
+      const nextYearBd = new Date(now.getFullYear() + 1, bd.getMonth(), bd.getDate());
+      const upcoming = thisYearBd >= todayDate ? thisYearBd : nextYearBd;
+      const daysAway = Math.round((upcoming.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysAway < lookAheadDays) {
+        upcomingEvents.push({
+          type: "birthday",
+          name,
+          date: format(upcoming, "yyyy-MM-dd"),
+          detail: format(upcoming, "MMM d"),
+          userId: u.id,
+          avatarUrl: u.avatar_url,
+        });
+      }
+    }
+
+    // Work Anniversary
+    if (u.hire_date) {
+      const hd = parseISO(u.hire_date);
+      const thisYearAnniv = new Date(now.getFullYear(), hd.getMonth(), hd.getDate());
+      const nextYearAnniv = new Date(now.getFullYear() + 1, hd.getMonth(), hd.getDate());
+      const upcoming = thisYearAnniv >= todayDate ? thisYearAnniv : nextYearAnniv;
+      const daysAway = Math.round((upcoming.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+      const years = differenceInYears(upcoming, hd);
+      if (daysAway < lookAheadDays && years >= 1) {
+        upcomingEvents.push({
+          type: "anniversary",
+          name,
+          date: format(upcoming, "yyyy-MM-dd"),
+          detail: `${years} year${years !== 1 ? "s" : ""}`,
+          userId: u.id,
+          avatarUrl: u.avatar_url,
+        });
+      }
+    }
+
+    // First Day (hire_date in the future or today)
+    if (u.hire_date) {
+      const hd = parseISO(u.hire_date);
+      const daysAway = Math.round((hd.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysAway >= 0 && daysAway < lookAheadDays) {
+        upcomingEvents.push({
+          type: "first_day",
+          name,
+          date: u.hire_date,
+          detail: format(hd, "MMM d"),
+          userId: u.id,
+          avatarUrl: u.avatar_url,
+        });
+      }
+    }
+
+    // Last Day
+    if (u.end_date) {
+      const ed = parseISO(u.end_date);
+      const daysAway = Math.round((ed.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysAway >= 0 && daysAway < lookAheadDays) {
+        upcomingEvents.push({
+          type: "last_day",
+          name,
+          date: u.end_date,
+          detail: format(ed, "MMM d"),
+          userId: u.id,
+          avatarUrl: u.avatar_url,
+        });
+      }
+    }
+  }
+
+  upcomingEvents.sort((a, b) => a.date.localeCompare(b.date));
+
   return (
     <div className="space-y-6">
       <div>
@@ -305,6 +415,13 @@ export default async function DashboardPage() {
         <p className="text-gray-600">
           Here&apos;s your overview for today.
         </p>
+        <Link
+          href={`/team/${user.id}`}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <UserCircle size={16} />
+          View my profile
+        </Link>
       </div>
 
       {/* ===== Needs Attention ===== */}
@@ -360,6 +477,78 @@ export default async function DashboardPage() {
                 </div>
               </Link>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== Upcoming Events ===== */}
+      {upcomingEvents.length > 0 && (
+        <div>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+            <CalendarHeart size={16} />
+            Upcoming Events
+          </h2>
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="max-h-72 overflow-y-auto divide-y divide-gray-100">
+              {upcomingEvents.map((event, i) => {
+                const daysAway = Math.round(
+                  (parseISO(event.date).getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24)
+                );
+                const daysLabel =
+                  daysAway === 0
+                    ? "Today"
+                    : daysAway === 1
+                      ? "Tomorrow"
+                      : `In ${daysAway} days`;
+
+                const icons = {
+                  birthday: <Cake size={10} className="text-pink-500" />,
+                  anniversary: <BriefcaseBusiness size={10} className="text-amber-500" />,
+                  first_day: <UserPlus size={10} className="text-green-500" />,
+                  last_day: <UserMinus size={10} className="text-red-500" />,
+                };
+
+                const labels = {
+                  birthday: "Birthday",
+                  anniversary: `Work Anniversary (${event.detail})`,
+                  first_day: "First Day",
+                  last_day: "Last Day",
+                };
+
+                const bgColors = {
+                  birthday: "bg-pink-50",
+                  anniversary: "bg-amber-50",
+                  first_day: "bg-green-50",
+                  last_day: "bg-red-50",
+                };
+
+                return (
+                  <div key={`${event.type}-${event.userId}-${i}`} className="flex items-center gap-4 px-5 py-3">
+                    <div className="relative shrink-0">
+                      <UserAvatar name={event.name} avatarUrl={event.avatarUrl} size="md" />
+                      <div className={`absolute -bottom-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full ${bgColors[event.type]} ring-2 ring-white`}>
+                        {icons[event.type]}
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/team/${event.userId}`}
+                        className="text-sm font-medium text-gray-900 hover:text-blue-600 hover:underline"
+                      >
+                        {event.name}
+                      </Link>
+                      <p className="text-xs text-gray-500">{labels[event.type]}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-700">{format(parseISO(event.date), "MMM d")}</p>
+                      <p className={`text-xs ${daysAway === 0 ? "font-semibold text-blue-600" : "text-gray-400"}`}>
+                        {daysLabel}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
