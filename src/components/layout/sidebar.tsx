@@ -22,7 +22,6 @@ import {
 import { useState } from "react";
 import type { UserRole } from "@/types/database";
 import { cn, hasRole } from "@/lib/utils";
-import { COMING_SOON_ROUTES } from "@/lib/coming-soon";
 
 interface NavItem {
   label: string;
@@ -81,13 +80,13 @@ const navSections: NavSection[] = [
   },
 ];
 
-function isComingSoon(href: string): boolean {
-  return COMING_SOON_ROUTES.some(
-    (route) => href === route || href.startsWith(route + "/")
-  );
-}
-
-export function Sidebar({ userRole }: { userRole: UserRole }) {
+export function Sidebar({
+  userRole,
+  comingSoonRoutes = [],
+}: {
+  userRole: UserRole;
+  comingSoonRoutes?: string[];
+}) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -125,7 +124,7 @@ export function Sidebar({ userRole }: { userRole: UserRole }) {
                 >
                   {item.icon}
                   {item.label}
-                  {isComingSoon(item.href) && userRole !== "super_admin" && (
+                  {comingSoonRoutes.some((r) => item.href === r || item.href.startsWith(r + "/")) && userRole !== "super_admin" && (
                     <span className="ml-auto rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-700">
                       Soon
                     </span>

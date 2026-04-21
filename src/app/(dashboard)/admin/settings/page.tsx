@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { SettingsForm } from "@/components/admin/settings-form";
+import { FeatureToggles } from "@/components/admin/feature-toggles";
 
 export default async function AdminSettingsPage() {
   await requireRole("super_admin");
@@ -11,6 +12,16 @@ export default async function AdminSettingsPage() {
     .select("*")
     .order("key");
 
+  const allSettings = settings ?? [];
+
+  const comingSoonRoutes = allSettings
+    .filter((s) => s.key.startsWith("coming_soon:") && s.value === "true")
+    .map((s) => s.key.replace("coming_soon:", ""));
+
+  const systemSettings = allSettings.filter(
+    (s) => !s.key.startsWith("coming_soon:")
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -19,7 +30,8 @@ export default async function AdminSettingsPage() {
           Configure attendance tolerance and system behavior
         </p>
       </div>
-      <SettingsForm settings={settings ?? []} />
+      <SettingsForm settings={systemSettings} />
+      <FeatureToggles comingSoonRoutes={comingSoonRoutes} />
     </div>
   );
 }
