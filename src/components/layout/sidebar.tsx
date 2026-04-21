@@ -56,7 +56,7 @@ const navSections: NavSection[] = [
       { label: "My Attendance", href: "/attendance", icon: <Clock size={20} />, minRole: "employee" },
       { label: "Requests", href: "/requests", icon: <ArrowRightLeft size={20} />, minRole: "employee" },
       { label: "Holidays", href: "/holidays", icon: <CalendarHeart size={20} />, minRole: "employee" },
-      { label: "Weekly Overview", href: "/weekly", icon: <CalendarDays size={20} />, minRole: "employee" },
+      { label: "Team Calendar", href: "/weekly", icon: <CalendarDays size={20} />, minRole: "employee" },
       { label: "KPIs", href: "/kpis", icon: <Target size={20} />, minRole: "employee" },
       { label: "Team Directory", href: "/team", icon: <UsersRound size={20} />, minRole: "employee" },
     ],

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { format, startOfWeek, addDays, isSameDay, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, Flag } from "lucide-react";
+import { format, startOfWeek, addDays, eachDayOfInterval, isSameDay, parseISO, isWeekend } from "date-fns";
+import { Flag } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatTime, cn } from "@/lib/utils";
 import { HOLIDAY_COUNTRY_LABELS } from "@/types/database";
@@ -22,30 +22,32 @@ interface Props {
 }
 
 export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
-  const [weekOffset, setWeekOffset] = useState(0);
+  // Default to current week (Mon-Fri)
+  const defaultStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const defaultEnd = addDays(defaultStart, 4);
+
+  const [startDate, setStartDate] = useState(defaultStart);
+  const [endDate, setEndDate] = useState(defaultEnd);
   const [search, setSearch] = useState("");
   const [leaveMap, setLeaveMap] = useState<Record<string, LeaveRequest[]>>({});
   const [adjustmentMap, setAdjustmentMap] = useState<Record<string, ScheduleAdjustment[]>>({});
   const [holidayWorkMap, setHolidayWorkMap] = useState<Record<string, HolidayWorkRequest[]>>({});
   const [loaded, setLoaded] = useState(false);
 
-  // Calculate week dates (Monday-Sunday)
-  const weekStart = useMemo(() => {
-    const now = new Date();
-    const monday = startOfWeek(now, { weekStartsOn: 1 });
-    return addDays(monday, weekOffset * 7);
-  }, [weekOffset]);
+  // Generate weekday-only dates for the selected range
+  const weekDates = useMemo(() => {
+    if (startDate > endDate) return [];
+    return eachDayOfInterval({ start: startDate, end: endDate }).filter(
+      (d) => !isWeekend(d)
+    );
+  }, [startDate, endDate]);
 
-  const weekDates = useMemo(
-    () => Array.from({ length: 5 }, (_, i) => addDays(weekStart, i)),
-    [weekStart]
-  );
-
-  // Load leave requests and adjustments for this week
+  // Load leave requests and adjustments for the date range
   const loadWeekData = async () => {
+    if (weekDates.length === 0) return;
     const supabase = createClient();
-    const startStr = format(weekStart, "yyyy-MM-dd");
-    const endStr = format(weekDates[4], "yyyy-MM-dd");
+    const startStr = format(startDate, "yyyy-MM-dd");
+    const endStr = format(endDate, "yyyy-MM-dd");
 
     const [{ data: leaves }, { data: adjustments }, { data: holidayWork }] = await Promise.all([
       supabase
@@ -92,11 +94,11 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
     setLoaded(true);
   };
 
-  // Load data on mount and week change
+  // Load data on mount and date range change
   useMemo(() => {
     setLoaded(false);
     loadWeekData();
-  }, [weekOffset]);
+  }, [startDate, endDate]);
 
   const filteredUsers = useMemo(() => {
     if (!search) return users;
@@ -209,10 +211,13 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
 
   const isToday = (date: Date) => isSameDay(date, new Date());
 
-  function getOfficeDaysCount(user: User): number {
+  /** Count office days in the current Mon–Fri of the week containing `refDate`. */
+  function getOfficeDaysInWeek(user: User, refDate: Date): number {
+    const mon = startOfWeek(refDate, { weekStartsOn: 1 });
     let count = 0;
-    for (let i = 0; i < weekDates.length; i++) {
-      const cell = getCellContent(user, weekDates[i], i);
+    for (let i = 0; i < 5; i++) {
+      const d = addDays(mon, i);
+      const cell = getCellContent(user, d, i);
       if (
         (cell.type === "schedule" || cell.type === "adjusted" || cell.type === "holiday_work") &&
         "location" in cell &&
@@ -224,45 +229,68 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
     return count;
   }
 
+  const legend = (
+    <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block h-3 w-3 rounded bg-blue-100" /> Office
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block h-3 w-3 rounded bg-green-100" /> Online
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block h-3 w-3 rounded bg-cyan-100" /> Adjusted
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block h-3 w-3 rounded bg-amber-100" /> Leave
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block h-3 w-3 rounded bg-purple-100" /> Holiday
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block h-3 w-3 rounded bg-teal-100" /> Working on Holiday
+      </div>
+      <div className="flex items-center gap-1.5">
+        <Flag size={12} className="fill-red-500 text-red-500" /> Less than 2 office days
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setWeekOffset((w) => w - 1)}
-            className="rounded-lg border border-gray-300 bg-white p-2 shadow-sm transition-all hover:bg-gray-100 hover:shadow active:scale-95 active:bg-gray-200"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <select
-            value={weekOffset}
-            onChange={(e) => setWeekOffset(Number(e.target.value))}
+          <label className="text-sm text-gray-600">From</label>
+          <input
+            type="date"
+            value={format(startDate, "yyyy-MM-dd")}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setStartDate(parseISO(e.target.value));
+            }}
             className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            {Array.from({ length: 25 }, (_, i) => i - 12).map((offset) => {
-              const start = addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), offset * 7);
-              const end = addDays(start, 4);
-              const label = offset === 0
-                ? `This Week — ${format(start, "MMM d")} – ${format(end, "MMM d")}`
-                : `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`;
-              return (
-                <option key={offset} value={offset}>{label}</option>
-              );
-            })}
-          </select>
-          <button
-            onClick={() => setWeekOffset((w) => w + 1)}
-            className="rounded-lg border border-gray-300 bg-white p-2 shadow-sm transition-all hover:bg-gray-100 hover:shadow active:scale-95 active:bg-gray-200"
-          >
-            <ChevronRight size={16} />
-          </button>
-          {weekOffset !== 0 && (
+          />
+          <label className="text-sm text-gray-600">To</label>
+          <input
+            type="date"
+            value={format(endDate, "yyyy-MM-dd")}
+            min={format(startDate, "yyyy-MM-dd")}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setEndDate(parseISO(e.target.value));
+            }}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          {(format(startDate, "yyyy-MM-dd") !== format(defaultStart, "yyyy-MM-dd") ||
+            format(endDate, "yyyy-MM-dd") !== format(defaultEnd, "yyyy-MM-dd")) && (
             <button
-              onClick={() => setWeekOffset(0)}
+              onClick={() => {
+                setStartDate(defaultStart);
+                setEndDate(defaultEnd);
+              }}
               className="ml-1 rounded-lg px-3 py-2 text-sm text-blue-600 transition-all hover:bg-blue-50 active:scale-95"
             >
-              Back to current week
+              This Week
             </button>
           )}
         </div>
@@ -274,6 +302,9 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
           className="w-72 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>
+
+      {/* Legend */}
+      {legend}
 
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
@@ -293,7 +324,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                     isToday(date) && "bg-blue-50"
                   )}
                 >
-                  <div>{format(date, "EEEE")}</div>
+                  <div>{format(date, "EEE")}</div>
                   <div className="text-xs font-normal text-gray-500">
                     {format(date, "MMM d")}
                   </div>
@@ -307,8 +338,8 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                 <td className="sticky left-0 z-10 bg-white px-4 py-3">
                   <div className="flex items-center gap-1.5 font-medium text-gray-900">
                     {user.full_name}
-                    {getOfficeDaysCount(user) < 2 && (
-                      <span title={`Only ${getOfficeDaysCount(user)} office day(s) this week`}>
+                    {getOfficeDaysInWeek(user, new Date()) < 2 && (
+                      <span title={`Only ${getOfficeDaysInWeek(user, new Date())} office day(s) this week`}>
                         <Flag size={14} className="fill-red-500 text-red-500" />
                       </span>
                     )}
@@ -322,7 +353,9 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                   </span>
                 </td>
                 {weekDates.map((date, i) => {
-                  const cell = getCellContent(user, date, i);
+                  // day_of_week: 0=Mon, 1=Tue, ... 4=Fri (matches schedule table)
+                  const dayOfWeek = (date.getDay() + 6) % 7;
+                  const cell = getCellContent(user, date, dayOfWeek);
                   return (
                     <td
                       key={i}
@@ -403,7 +436,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
             ))}
             {filteredUsers.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={3 + weekDates.length} className="px-4 py-8 text-center text-gray-500">
                   No users found
                 </td>
               </tr>
@@ -412,30 +445,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
         </table>
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-xs text-gray-600">
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded bg-blue-100" /> Office
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded bg-green-100" /> Online
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded bg-cyan-100" /> Adjusted
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded bg-amber-100" /> Leave
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded bg-purple-100" /> Holiday
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded bg-teal-100" /> Working on Holiday
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Flag size={12} className="fill-red-500 text-red-500" /> Less than 2 office days
-        </div>
-      </div>
+      {legend}
     </div>
   );
 }
