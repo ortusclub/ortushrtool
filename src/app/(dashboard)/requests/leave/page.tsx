@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { LEAVE_TYPES, UNIVERSAL_LEAVE_TYPES } from "@/lib/constants";
+import { prorateLeave } from "@/lib/leave-proration";
 
 interface BalanceWarning {
   remaining: number;
@@ -100,14 +101,47 @@ export default function LeaveRequestPage() {
       const planIds = (assignedPlans ?? []).map((p) => p.plan_id);
       if (planIds.length > 0) {
         setHasPlan(true);
-        const { data: allocs } = await supabase
-          .from("leave_plan_allocations")
-          .select("leave_type, days_per_year")
-          .in("plan_id", planIds);
+
+        // Fetch allocations and plan renewal info together
+        const [{ data: allocs }, { data: plans }, { data: profile }] = await Promise.all([
+          supabase
+            .from("leave_plan_allocations")
+            .select("plan_id, leave_type, days_per_year")
+            .in("plan_id", planIds),
+          supabase
+            .from("leave_plans")
+            .select("id, renewal_month, renewal_day")
+            .in("id", planIds),
+          supabase
+            .from("users")
+            .select("hire_date")
+            .eq("id", user.id)
+            .maybeSingle(),
+        ]);
+
+        const hireDate = profile?.hire_date ?? null;
+        const now = new Date();
+        const today = now.toISOString().split("T")[0];
+
+        // Build renewal info per plan
+        const planRenewalMap = new Map<string, { start: string; month: number; day: number }>();
+        for (const p of plans ?? []) {
+          const month = p.renewal_month ?? 1;
+          const day = p.renewal_day ?? 1;
+          const thisYear = `${now.getFullYear()}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const lastYear = `${now.getFullYear() - 1}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          planRenewalMap.set(p.id, {
+            start: thisYear <= today ? thisYear : lastYear,
+            month,
+            day,
+          });
+        }
 
         const allocMap: Record<string, number> = {};
         for (const a of allocs ?? []) {
-          allocMap[a.leave_type] = (allocMap[a.leave_type] ?? 0) + a.days_per_year;
+          const renewal = planRenewalMap.get(a.plan_id) ?? { start: `${now.getFullYear()}-01-01`, month: 1, day: 1 };
+          const prorated = prorateLeave(a.days_per_year, hireDate, renewal.start, renewal.month, renewal.day);
+          allocMap[a.leave_type] = (allocMap[a.leave_type] ?? 0) + prorated;
         }
         setPlanAllocations(allocMap);
       }

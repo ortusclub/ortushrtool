@@ -19,6 +19,7 @@ import { startOfWeek, endOfWeek, addDays, format, parseISO, differenceInYears } 
 import { WhosOut } from "@/components/dashboard/whos-out";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { LEAVE_TYPE_LABELS, UNIVERSAL_LEAVE_TYPES, LEAVE_TYPES } from "@/lib/constants";
+import { prorateLeave } from "@/lib/leave-proration";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -224,8 +225,9 @@ export default async function DashboardPage() {
         .in("plan_id", assignedPlanIds),
     ]);
 
-    // Build plan renewal date map
+    // Build plan renewal date map and store renewal month/day per plan
     const planRenewalStart = new Map<string, string>();
+    const planRenewalInfo = new Map<string, { month: number; day: number }>();
     for (const p of assignedPlanDetails ?? []) {
       const month = p.renewal_month ?? 1;
       const day = p.renewal_day ?? 1;
@@ -234,15 +236,30 @@ export default async function DashboardPage() {
       const lastYearRenewal = `${now.getFullYear() - 1}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       const renewalStart = thisYearRenewal <= today ? thisYearRenewal : lastYearRenewal;
       planRenewalStart.set(p.id, renewalStart);
+      planRenewalInfo.set(p.id, { month, day });
     }
 
+    // Track renewal info per leave type for proration
+    const leaveTypeRenewalInfo: Record<string, { month: number; day: number }> = {};
+
     for (const a of allAllocations ?? []) {
-      planAllocations[a.leave_type] = (planAllocations[a.leave_type] ?? 0) + a.days_per_year;
+      const renewalStart = planRenewalStart.get(a.plan_id) ?? yearStart;
+      const renewal = planRenewalInfo.get(a.plan_id) ?? { month: 1, day: 1 };
+
+      // Prorate for new hires in their first cycle
+      const prorated = prorateLeave(
+        a.days_per_year,
+        user.hire_date,
+        renewalStart,
+        renewal.month,
+        renewal.day
+      );
+      planAllocations[a.leave_type] = (planAllocations[a.leave_type] ?? 0) + prorated;
 
       // Track the earliest renewal start for this leave type
-      const planRenewal = planRenewalStart.get(a.plan_id) ?? yearStart;
-      if (!leaveTypeRenewalStart[a.leave_type] || planRenewal < leaveTypeRenewalStart[a.leave_type]) {
-        leaveTypeRenewalStart[a.leave_type] = planRenewal;
+      if (!leaveTypeRenewalStart[a.leave_type] || renewalStart < leaveTypeRenewalStart[a.leave_type]) {
+        leaveTypeRenewalStart[a.leave_type] = renewalStart;
+        leaveTypeRenewalInfo[a.leave_type] = renewal;
       }
     }
   }
