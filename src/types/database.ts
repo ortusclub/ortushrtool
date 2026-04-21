@@ -228,10 +228,13 @@ export interface EmployeeLeaveType {
   created_at: string;
 }
 
+export type GrantType = "custom" | "hire_date" | "anniversary";
+
 export interface LeavePlan {
   id: string;
   name: string;
   description: string | null;
+  grant_type: GrantType;
   renewal_month: number;
   renewal_day: number;
   created_at: string;

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Save, X, Pencil } from "lucide-react";
 import { LEAVE_TYPES } from "@/lib/constants";
-import type { LeavePlan, LeavePlanAllocation } from "@/types/database";
+import type { LeavePlan, LeavePlanAllocation, GrantType } from "@/types/database";
 
 interface Props {
   initialPlans: LeavePlan[];
@@ -23,6 +23,7 @@ export function LeavePlansManager({ initialPlans, initialAllocations }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [newPlanName, setNewPlanName] = useState("");
   const [newPlanDesc, setNewPlanDesc] = useState("");
+  const [newGrantType, setNewGrantType] = useState<GrantType>("custom");
   const [newRenewalMonth, setNewRenewalMonth] = useState(1);
   const [newRenewalDay, setNewRenewalDay] = useState(1);
   const [newAllocations, setNewAllocations] = useState<Record<string, number>>(
@@ -53,6 +54,7 @@ export function LeavePlansManager({ initialPlans, initialAllocations }: Props) {
       .insert({
         name: newPlanName.trim(),
         description: newPlanDesc.trim() || null,
+        grant_type: newGrantType,
         renewal_month: newRenewalMonth,
         renewal_day: newRenewalDay,
       })
@@ -81,6 +83,7 @@ export function LeavePlansManager({ initialPlans, initialAllocations }: Props) {
     setShowCreate(false);
     setNewPlanName("");
     setNewPlanDesc("");
+    setNewGrantType("custom");
     setNewRenewalMonth(1);
     setNewRenewalDay(1);
     setNewAllocations(Object.fromEntries(ALL_LEAVE_TYPE_KEYS.map((k) => [k, 0])));
@@ -171,29 +174,55 @@ export function LeavePlansManager({ initialPlans, initialAllocations }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Renewal Date</label>
-            <p className="text-xs text-gray-500 mb-2">When balances reset each year</p>
-            <div className="flex items-center gap-2">
-              <select
-                value={newRenewalMonth}
-                onChange={(e) => setNewRenewalMonth(parseInt(e.target.value))}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {MONTHS.map((m, i) => (
-                  <option key={i} value={i + 1}>{m}</option>
-                ))}
-              </select>
-              <select
-                value={newRenewalDay}
-                onChange={(e) => setNewRenewalDay(parseInt(e.target.value))}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {Array.from({ length: 31 }, (_, i) => (
-                  <option key={i} value={i + 1}>{i + 1}</option>
-                ))}
-              </select>
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Grant On</label>
+            <p className="text-xs text-gray-500 mb-2">When leave credits are granted each year</p>
+            <select
+              value={newGrantType}
+              onChange={(e) => setNewGrantType(e.target.value as GrantType)}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="custom">Custom Date</option>
+              <option value="hire_date">Hire Date (including first year)</option>
+              <option value="anniversary">Anniversary (1st year onwards)</option>
+            </select>
+            {newGrantType === "anniversary" && (
+              <p className="mt-2 text-xs text-amber-600">
+                Employees get 0 credits until their 1st work anniversary, then the full allocation each year after.
+              </p>
+            )}
+            {newGrantType === "hire_date" && (
+              <p className="mt-2 text-xs text-blue-600">
+                Credits are prorated for new hires based on months remaining until the next cycle.
+              </p>
+            )}
           </div>
+
+          {newGrantType === "custom" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Renewal Date</label>
+              <p className="text-xs text-gray-500 mb-2">When balances reset each year</p>
+              <div className="flex items-center gap-2">
+                <select
+                  value={newRenewalMonth}
+                  onChange={(e) => setNewRenewalMonth(parseInt(e.target.value))}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {MONTHS.map((m, i) => (
+                    <option key={i} value={i + 1}>{m}</option>
+                  ))}
+                </select>
+                <select
+                  value={newRenewalDay}
+                  onChange={(e) => setNewRenewalDay(parseInt(e.target.value))}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {Array.from({ length: 31 }, (_, i) => (
+                    <option key={i} value={i + 1}>{i + 1}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Days per leave type</label>
@@ -261,7 +290,11 @@ export function LeavePlansManager({ initialPlans, initialAllocations }: Props) {
                   <p className="text-sm text-gray-500">{plan.description}</p>
                 )}
                 <p className="text-xs text-gray-400">
-                  Renews every {MONTHS[(plan.renewal_month ?? 1) - 1]} {plan.renewal_day ?? 1}
+                  {plan.grant_type === "anniversary"
+                    ? "Granted on work anniversary (1st year onwards)"
+                    : plan.grant_type === "hire_date"
+                      ? "Granted on hire date each year"
+                      : `Renews every ${MONTHS[(plan.renewal_month ?? 1) - 1]} ${plan.renewal_day ?? 1}`}
                 </p>
               </div>
               <div className="flex gap-2">
