@@ -11,6 +11,16 @@ import { HOLIDAY_COUNTRY_LABELS } from "@/types/database";
 
 const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE"];
 
+const TIMEZONE_OPTIONS = [
+  { value: "Asia/Manila", label: "PHT (Manila)" },
+  { value: "Europe/Berlin", label: "CET (Berlin)" },
+  { value: "Asia/Dubai", label: "GST (Dubai)" },
+];
+
+function getTzLabel(tz: string): string {
+  return TIMEZONE_OPTIONS.find((t) => t.value === tz)?.label ?? tz;
+}
+
 export function UserManagement({
   users,
   currentUserRole,
@@ -40,6 +50,7 @@ export function UserManagement({
       manager_id: user.manager_id,
       desktime_employee_id: user.desktime_employee_id,
       holiday_country: user.holiday_country,
+      timezone: user.timezone,
       is_active: user.is_active,
       birthday: user.birthday,
       hire_date: user.hire_date,
@@ -211,6 +222,7 @@ export function UserManagement({
       "Department",
       "Manager Name",
       "Country",
+      "Timezone",
       "Desktime ID",
       "Birthday",
       "Hire Date",
@@ -235,6 +247,7 @@ export function UserManagement({
           `"${u.department ?? ""}"`,
           `"${managerName}"`,
           u.holiday_country,
+          u.timezone || "Asia/Manila",
           u.desktime_employee_id ?? "",
           u.birthday ?? "",
           u.hire_date ?? "",
@@ -320,6 +333,7 @@ export function UserManagement({
                 <th className="px-4 py-3 font-medium text-gray-600">Department</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Manager</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Country</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Timezone</th>
                 <th className="px-4 py-3 font-medium text-gray-600">DeskTime ID</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Birthday</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Hire Date</th>
@@ -442,6 +456,30 @@ export function UserManagement({
                       ) : (
                         <span className="inline-block rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
                           {HOLIDAY_COUNTRY_LABELS[user.holiday_country] ?? user.holiday_country}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <select
+                          value={editForm.timezone ?? "Asia/Manila"}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              timezone: e.target.value,
+                            })
+                          }
+                          className="rounded border px-2 py-1 text-sm"
+                        >
+                          {TIMEZONE_OPTIONS.map((t) => (
+                            <option key={t.value} value={t.value}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-gray-600">
+                          {getTzLabel(user.timezone || "Asia/Manila")}
                         </span>
                       )}
                     </td>
