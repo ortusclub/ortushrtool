@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ReportsDashboard } from "./reports-dashboard";
 import { LeaveReport } from "./leave-report";
+import { AdjustmentReport } from "./adjustment-report";
 
 interface UserOption {
   id: string;
@@ -15,6 +16,7 @@ interface UserOption {
 const TABS = [
   { key: "attendance", label: "Attendance" },
   { key: "leave", label: "Leave" },
+  { key: "adjustments", label: "Schedule Changes" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["key"];
@@ -43,6 +45,7 @@ export function ReportsTabs({ users }: { users: UserOption[] }) {
 
       {tab === "attendance" && <ReportsDashboard users={users} />}
       {tab === "leave" && <LeaveReport users={users} />}
+      {tab === "adjustments" && <AdjustmentReport users={users} />}
     </div>
   );
 }
