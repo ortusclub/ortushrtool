@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { DAYS_OF_WEEK } from "@/lib/constants";
-import { Search, Pencil } from "lucide-react";
+import { Search, Pencil, Flag } from "lucide-react";
 
 interface UserRow {
   id: string;
@@ -12,6 +12,7 @@ interface UserRow {
   email: string;
   timezone: string;
   manager_id: string | null;
+  role: string;
 }
 
 interface ScheduleRow {
@@ -216,6 +217,17 @@ export function SchedulesTable({
               const userSchedule = scheduleMap.get(user.id);
               const adjustment = adjustmentMap.get(user.id);
               const leave = leaveMap.get(user.id);
+
+              // Count office days from base schedule (Mon-Fri)
+              let officeDays = 0;
+              for (let d = 0; d < 5; d++) {
+                const s = userSchedule?.get(d);
+                if (s && !s.is_rest_day && s.work_location === "office") officeDays++;
+              }
+              const isManager = user.role === "manager" || user.role === "hr_admin" || user.role === "super_admin";
+              const minOfficeDays = isManager ? 3 : 2;
+              const isFlagged = officeDays < minOfficeDays;
+
               const tz =
                 user.timezone === "Asia/Manila"
                   ? "PHT"
@@ -232,8 +244,15 @@ export function SchedulesTable({
                       href={`/admin/schedules/${user.id}`}
                       className="block"
                     >
-                      <span className="text-blue-600 hover:underline">
-                        {user.full_name || user.email.split("@")[0]}
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-blue-600 hover:underline">
+                          {user.full_name || user.email.split("@")[0]}
+                        </span>
+                        {isFlagged && (
+                          <span title={`Only ${officeDays} office day${officeDays !== 1 ? "s" : ""} (${isManager ? "managers need 3" : "employees need 2"})`}>
+                            <Flag size={14} className="fill-red-500 text-red-500" />
+                          </span>
+                        )}
                       </span>
                       <p className="text-xs text-gray-400 font-normal">
                         {user.email}

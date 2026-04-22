@@ -11,7 +11,7 @@ export default async function AdminSchedulesPage() {
 
   const { data: users } = await supabase
     .from("users")
-    .select("id, full_name, email, timezone, manager_id")
+    .select("id, full_name, email, timezone, manager_id, role")
     .eq("is_active", true)
     .order("full_name");
 
