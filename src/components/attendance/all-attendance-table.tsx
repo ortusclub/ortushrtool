@@ -309,7 +309,7 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
   }, [schedules]);
 
   function getLocation(userId: string, status: string): string | null {
-    if (["rest_day", "on_leave", "holiday", "absent"].includes(status)) {
+    if (["rest_day", "on_leave", "holiday"].includes(status)) {
       return null;
     }
     const adjLocation = adjustmentLocationMap.get(userId);
