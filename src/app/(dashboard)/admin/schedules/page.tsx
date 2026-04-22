@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { SchedulesTable } from "@/components/admin/schedules-table";
+import { ScheduleCsvImport } from "@/components/admin/schedule-csv-import";
 
 export default async function AdminSchedulesPage() {
   await requireRole("hr_admin");
@@ -34,6 +35,10 @@ export default async function AdminSchedulesPage() {
           Company-wide schedule overview — {users?.length ?? 0} employees
         </p>
       </div>
+      <ScheduleCsvImport
+        users={(users ?? []).map((u) => ({ id: u.id, full_name: u.full_name, email: u.email }))}
+        schedules={allSchedules ?? []}
+      />
       <SchedulesTable
         users={users ?? []}
         schedules={allSchedules ?? []}
