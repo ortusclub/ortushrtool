@@ -11,6 +11,7 @@ import Link from "next/link";
 import { ArrowRightLeft, CalendarOff, CalendarCheck, AlertTriangle } from "lucide-react";
 import { startOfWeek, addDays, format } from "date-fns";
 import { LeaveCsvImport } from "@/components/admin/leave-csv-import";
+import { AdjustmentCsvImport } from "@/components/admin/adjustment-csv-import";
 
 export default async function RequestsPage() {
   const user = await getCurrentUser();
@@ -188,7 +189,12 @@ export default async function RequestsPage() {
         {!isReviewer && actionButtons}
       </div>
 
-      {hasRole(user.role, "hr_admin") && <LeaveCsvImport />}
+      {hasRole(user.role, "hr_admin") && (
+        <>
+          <LeaveCsvImport />
+          <AdjustmentCsvImport />
+        </>
+      )}
 
       {isReviewer && actionButtons}
 
