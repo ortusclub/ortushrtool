@@ -179,7 +179,9 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       const send = (data: Record<string, unknown>) => {
-        controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
+        try {
+          controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
+        } catch { /* controller may be closed */ }
       };
 
       const results = {
@@ -189,6 +191,8 @@ export async function POST(request: Request) {
         managersLinked: 0,
         errors: [] as string[],
       };
+
+      try {
 
       // First pass: create/update users
       const emailToId = new Map<string, string>();
@@ -202,7 +206,8 @@ export async function POST(request: Request) {
             full_name: row.name,
             timezone: row.timezone,
           };
-          if (row.role) updateFields.role = row.role;
+          const validRoles = ["employee", "manager", "hr_admin", "super_admin"];
+          if (row.role && validRoles.includes(row.role)) updateFields.role = row.role;
           if (row.department) updateFields.department = row.department;
           if (row.holidayCountry) updateFields.holiday_country = row.holidayCountry;
           if (row.desktimeId) updateFields.desktime_employee_id = row.desktimeId;
@@ -346,6 +351,10 @@ export async function POST(request: Request) {
       }
 
       send({ type: "done", ...results });
+      } catch (err) {
+        results.errors.push(`Fatal error: ${err instanceof Error ? err.message : "unknown"}`);
+        send({ type: "done", ...results });
+      }
       controller.close();
     },
   });
