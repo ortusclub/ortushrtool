@@ -4,13 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, Download, Users } from "lucide-react";
 
-interface ProgressState {
-  phase: string;
-  current: number;
-  total: number;
-  message: string;
-}
-
 interface ImportResult {
   usersCreated: number;
   usersUpdated: number;
@@ -33,78 +26,23 @@ function downloadSample() {
   URL.revokeObjectURL(url);
 }
 
-function ProgressBar({ progress }: { progress: ProgressState }) {
-  const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
-  const phaseLabel =
-    progress.phase === "users" ? "Importing users" :
-    progress.phase === "managers" ? "Linking managers" :
-    progress.phase === "schedules" ? "Creating schedules" : progress.phase;
-
-  return (
-    <div className="mt-4 space-y-2">
-      <div className="flex items-center justify-between text-sm">
-        <span className="font-medium text-gray-700">{phaseLabel}</span>
-        <span className="text-gray-500">{progress.current}/{progress.total} ({percent}%)</span>
-      </div>
-      <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
-        <div
-          className="h-full rounded-full bg-blue-600 transition-all duration-300"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      <p className="text-xs text-gray-500">{progress.message}</p>
-    </div>
-  );
-}
-
-async function streamImport(
-  file: File,
-  onProgress: (p: ProgressState) => void,
-): Promise<ImportResult> {
+async function importCsv(file: File): Promise<ImportResult> {
   const formData = new FormData();
   formData.append("file", file);
 
   const response = await fetch("/api/admin/import-csv", { method: "POST", body: formData });
+  const data = await response.json();
 
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || "Import failed");
+    throw new Error(data.error || "Import failed");
   }
 
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response stream");
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let finalResult: ImportResult | null = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const data = JSON.parse(line);
-      if (data.type === "progress") {
-        onProgress(data as ProgressState);
-      } else if (data.type === "done") {
-        finalResult = data as ImportResult;
-      }
-    }
-  }
-
-  if (!finalResult) throw new Error("Import ended without results");
-  return finalResult;
+  return data as ImportResult;
 }
 
 export function CsvImport() {
   const router = useRouter();
   const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState<ProgressState | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState("");
 
@@ -115,16 +53,13 @@ export function CsvImport() {
     setImporting(true);
     setError("");
     setResult(null);
-    setProgress(null);
 
     try {
-      const data = await streamImport(file, setProgress);
+      const data = await importCsv(file);
       setResult(data);
-      setProgress(null);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
-      setProgress(null);
     } finally {
       setImporting(false);
       e.target.value = "";
@@ -171,7 +106,12 @@ export function CsvImport() {
         </div>
       </div>
 
-      {importing && progress && <ProgressBar progress={progress} />}
+      {importing && (
+        <div className="mt-4 flex items-center gap-3 text-sm text-gray-600">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          Importing users...
+        </div>
+      )}
 
       {error && (
         <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">

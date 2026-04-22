@@ -172,194 +172,167 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
   const today = new Date().toISOString().split("T")[0];
-  const total = rows.length;
   const hasSchedules = rows.some((r) => r.days.some((d) => d !== null && d !== undefined));
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (data: Record<string, unknown>) => {
-        try {
-          controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
-        } catch { /* controller may be closed */ }
-      };
+  const results = {
+    usersCreated: 0,
+    usersUpdated: 0,
+    schedulesCreated: 0,
+    managersLinked: 0,
+    errors: [] as string[],
+  };
 
-      const results = {
-        usersCreated: 0,
-        usersUpdated: 0,
-        schedulesCreated: 0,
-        managersLinked: 0,
-        errors: [] as string[],
-      };
+  try {
+    // First pass: create/update users
+    const emailToId = new Map<string, string>();
 
+    for (const row of rows) {
       try {
+        const updateFields: Record<string, unknown> = {
+          full_name: row.name,
+          timezone: row.timezone,
+        };
+        const validRoles = ["employee", "manager", "hr_admin", "super_admin"];
+        if (row.role && validRoles.includes(row.role)) updateFields.role = row.role;
+        if (row.department) updateFields.department = row.department;
+        if (row.holidayCountry) updateFields.holiday_country = row.holidayCountry;
+        if (row.desktimeId) updateFields.desktime_employee_id = row.desktimeId;
+        if (row.birthday) updateFields.birthday = row.birthday;
+        if (row.hireDate) updateFields.hire_date = row.hireDate;
+        if (row.endDate) updateFields.end_date = row.endDate;
+        if (row.isActive !== null) updateFields.is_active = row.isActive;
 
-      // First pass: create/update users
-      const emailToId = new Map<string, string>();
+        const { data: existingUser } = await admin
+          .from("users")
+          .select("id")
+          .eq("email", row.email)
+          .maybeSingle();
 
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        send({ type: "progress", phase: "users", current: i + 1, total, message: `Processing ${row.name || row.email}` });
+        if (existingUser) {
+          emailToId.set(row.email, existingUser.id);
+          await admin.from("users").update(updateFields).eq("id", existingUser.id);
+          results.usersUpdated++;
+        } else {
+          const { data: authData, error: authError } =
+            await admin.auth.admin.createUser({
+              email: row.email,
+              email_confirm: true,
+              user_metadata: { full_name: row.name },
+            });
 
-        try {
-          const updateFields: Record<string, unknown> = {
-            full_name: row.name,
-            timezone: row.timezone,
-          };
-          const validRoles = ["employee", "manager", "hr_admin", "super_admin"];
-          if (row.role && validRoles.includes(row.role)) updateFields.role = row.role;
-          if (row.department) updateFields.department = row.department;
-          if (row.holidayCountry) updateFields.holiday_country = row.holidayCountry;
-          if (row.desktimeId) updateFields.desktime_employee_id = row.desktimeId;
-          if (row.birthday) updateFields.birthday = row.birthday;
-          if (row.hireDate) updateFields.hire_date = row.hireDate;
-          if (row.endDate) updateFields.end_date = row.endDate;
-          if (row.isActive !== null) updateFields.is_active = row.isActive;
-
-          const { data: existingUser } = await admin
-            .from("users")
-            .select("id")
-            .eq("email", row.email)
-            .maybeSingle();
-
-          if (existingUser) {
-            emailToId.set(row.email, existingUser.id);
-            await admin.from("users").update(updateFields).eq("id", existingUser.id);
-            results.usersUpdated++;
-          } else {
-            const { data: authData, error: authError } =
-              await admin.auth.admin.createUser({
-                email: row.email,
-                email_confirm: true,
-                user_metadata: { full_name: row.name },
-              });
-
-            if (authError) {
-              const { data: existingAuth } = await admin.auth.admin.listUsers();
-              const found = existingAuth?.users?.find((u) => u.email === row.email);
-              if (found) {
-                emailToId.set(row.email, found.id);
-                await admin.from("users").upsert({ id: found.id, email: row.email, ...updateFields });
-                results.usersUpdated++;
-              } else {
-                results.errors.push(`Failed to create ${row.email}: ${authError.message}`);
-              }
-              continue;
+          if (authError) {
+            const { data: existingAuth } = await admin.auth.admin.listUsers();
+            const found = existingAuth?.users?.find((u) => u.email === row.email);
+            if (found) {
+              emailToId.set(row.email, found.id);
+              await admin.from("users").upsert({ id: found.id, email: row.email, ...updateFields });
+              results.usersUpdated++;
+            } else {
+              results.errors.push(`Failed to create ${row.email}: ${authError.message}`);
             }
-
-            if (authData.user) {
-              emailToId.set(row.email, authData.user.id);
-              await new Promise((r) => setTimeout(r, 100));
-              await admin.from("users").update(updateFields).eq("id", authData.user.id);
-              results.usersCreated++;
-            }
+            continue;
           }
-        } catch (err) {
-          results.errors.push(`Error processing ${row.email}: ${err instanceof Error ? err.message : "unknown"}`);
+
+          if (authData.user) {
+            emailToId.set(row.email, authData.user.id);
+            await new Promise((r) => setTimeout(r, 100));
+            await admin.from("users").update(updateFields).eq("id", authData.user.id);
+            results.usersCreated++;
+          }
+        }
+      } catch (err) {
+        results.errors.push(`Error processing ${row.email}: ${err instanceof Error ? err.message : "unknown"}`);
+      }
+    }
+
+    // Second pass: link managers
+    for (const row of rows) {
+      if (!row.managerName) continue;
+
+      const userId = emailToId.get(row.email);
+      if (!userId) continue;
+
+      let managerEmail: string | undefined;
+
+      for (const r of rows) {
+        if (r.name === row.managerName) { managerEmail = r.email; break; }
+      }
+
+      if (!managerEmail) {
+        const firstName = row.managerName.split(" ")[0];
+        for (const r of rows) {
+          if (r.name === firstName) { managerEmail = r.email; break; }
         }
       }
 
-      // Second pass: link managers
-      const managerRows = rows.filter((r) => r.managerName);
-      for (let i = 0; i < managerRows.length; i++) {
-        const row = managerRows[i];
-        send({ type: "progress", phase: "managers", current: i + 1, total: managerRows.length, message: `Linking manager for ${row.name || row.email}` });
+      if (!managerEmail) {
+        const { data: managerUser } = await admin
+          .from("users")
+          .select("id")
+          .ilike("full_name", `%${row.managerName}%`)
+          .limit(1)
+          .maybeSingle();
+
+        if (managerUser) {
+          await admin.from("users").update({ manager_id: managerUser.id }).eq("id", userId);
+          results.managersLinked++;
+          continue;
+        }
+      }
+
+      if (managerEmail) {
+        const managerId = emailToId.get(managerEmail);
+        if (managerId && managerId !== userId) {
+          await admin.from("users").update({ manager_id: managerId }).eq("id", userId);
+          results.managersLinked++;
+        }
+      }
+    }
+
+    // Third pass: create schedules (only if schedule columns are present)
+    if (hasSchedules) {
+      for (const row of rows) {
+        const hasAnySchedule = row.days.some((d) => d !== null && d !== undefined);
+        if (!hasAnySchedule) continue;
 
         const userId = emailToId.get(row.email);
         if (!userId) continue;
 
-        let managerEmail: string | undefined;
+        await admin.from("schedules").delete().eq("employee_id", userId);
 
-        for (const r of rows) {
-          if (r.name === row.managerName) { managerEmail = r.email; break; }
+        for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
+          const day = row.days[dayIdx];
+          const isRest = day === "rest";
+          const hasTime = day !== null && day !== "rest";
+          await admin.from("schedules").insert({
+            employee_id: userId,
+            day_of_week: dayIdx,
+            start_time: hasTime ? day.start : "00:00",
+            end_time: hasTime ? day.end : "00:00",
+            is_rest_day: isRest,
+            work_location: (hasTime ? day.location : "office") as "office" | "online",
+            effective_from: today,
+          });
+          results.schedulesCreated++;
         }
 
-        if (!managerEmail) {
-          const firstName = row.managerName.split(" ")[0];
-          for (const r of rows) {
-            if (r.name === firstName) { managerEmail = r.email; break; }
-          }
-        }
-
-        if (!managerEmail) {
-          const { data: managerUser } = await admin
-            .from("users")
-            .select("id")
-            .ilike("full_name", `%${row.managerName}%`)
-            .limit(1)
-            .maybeSingle();
-
-          if (managerUser) {
-            await admin.from("users").update({ manager_id: managerUser.id }).eq("id", userId);
-            results.managersLinked++;
-            continue;
-          }
-        }
-
-        if (managerEmail) {
-          const managerId = emailToId.get(managerEmail);
-          if (managerId && managerId !== userId) {
-            await admin.from("users").update({ manager_id: managerId }).eq("id", userId);
-            results.managersLinked++;
-          }
+        for (const dayIdx of [5, 6]) {
+          await admin.from("schedules").insert({
+            employee_id: userId,
+            day_of_week: dayIdx,
+            start_time: "00:00",
+            end_time: "00:00",
+            is_rest_day: true,
+            work_location: "office",
+            effective_from: today,
+          });
+          results.schedulesCreated++;
         }
       }
+    }
+  } catch (err) {
+    results.errors.push(`Fatal error: ${err instanceof Error ? err.message : "unknown"}`);
+  }
 
-      // Third pass: create schedules (only if schedule columns are present)
-      if (hasSchedules) {
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          const hasAnySchedule = row.days.some((d) => d !== null && d !== undefined);
-          if (!hasAnySchedule) continue;
-
-          send({ type: "progress", phase: "schedules", current: i + 1, total, message: `Creating schedule for ${row.name || row.email}` });
-
-          const userId = emailToId.get(row.email);
-          if (!userId) continue;
-
-          await admin.from("schedules").delete().eq("employee_id", userId);
-
-          for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
-            const day = row.days[dayIdx];
-            const isRest = day === "rest";
-            const hasTime = day !== null && day !== "rest";
-            await admin.from("schedules").insert({
-              employee_id: userId,
-              day_of_week: dayIdx,
-              start_time: hasTime ? day.start : "00:00",
-              end_time: hasTime ? day.end : "00:00",
-              is_rest_day: isRest,
-              work_location: (hasTime ? day.location : "office") as "office" | "online",
-              effective_from: today,
-            });
-            results.schedulesCreated++;
-          }
-
-          for (const dayIdx of [5, 6]) {
-            await admin.from("schedules").insert({
-              employee_id: userId,
-              day_of_week: dayIdx,
-              start_time: "00:00",
-              end_time: "00:00",
-              is_rest_day: true,
-              work_location: "office",
-              effective_from: today,
-            });
-            results.schedulesCreated++;
-          }
-        }
-      }
-
-      send({ type: "done", ...results });
-      } catch (err) {
-        results.errors.push(`Fatal error: ${err instanceof Error ? err.message : "unknown"}`);
-        send({ type: "done", ...results });
-      }
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
+  return Response.json(results);
 }
