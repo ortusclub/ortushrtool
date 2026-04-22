@@ -13,8 +13,9 @@ interface ImportResult {
 }
 
 const SAMPLE_CSV = `Name,Email,Role,Department,Manager Name,Country,Timezone,Desktime ID,Birthday,Hire Date,End Date,Active,M,T,W,TH,F
-Juan Dela Cruz,juan@ortusclub.com,employee,Operations,Maria Santos,PH,Asia/Manila,12345,1990-05-15,2024-01-15,,Yes,Office - 09:00 - 18:00,Office - 09:00 - 18:00,Office - 09:00 - 18:00,Office - 09:00 - 18:00,Office - 09:00 - 18:00
-Maria Santos,maria@ortusclub.com,manager,Operations,,IT,Europe/Berlin,,1988-03-20,2023-06-01,,Yes,Online - 10:00 - 19:00,Online - 10:00 - 19:00,Online - 10:00 - 19:00,Online - 10:00 - 19:00,Rest`;
+OPTIONS:,,(employee / manager / hr_admin / super_admin),(free text),(must match exact full name),(PH / XK / IT / AE),(PHT / CET / GST),(number),(YYYY-MM-DD),(YYYY-MM-DD),(YYYY-MM-DD),(Yes / No),(Office / Online - HH:MM - HH:MM / Rest),(same),(same),(same),(same)
+Juan Dela Cruz,juan@ortusclub.com,employee,Operations,Maria Santos,PH,PHT,12345,1990-05-15,2024-01-15,,Yes,Office - 09:00 - 18:00,Office - 09:00 - 18:00,Office - 09:00 - 18:00,Office - 09:00 - 18:00,Office - 09:00 - 18:00
+Maria Santos,maria@ortusclub.com,manager,Operations,,IT,CET,,1988-03-20,2023-06-01,,Yes,Online - 10:00 - 19:00,Online - 10:00 - 19:00,Online - 10:00 - 19:00,Online - 10:00 - 19:00,Rest`;
 
 function downloadSample() {
   const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
