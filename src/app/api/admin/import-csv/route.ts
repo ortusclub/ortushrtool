@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+export const maxDuration = 60;
+
 const TIMEZONE_MAP: Record<string, string> = {
   PHT: "Asia/Manila",
   CET: "Europe/Berlin",

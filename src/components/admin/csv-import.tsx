@@ -31,7 +31,18 @@ async function importCsv(file: File): Promise<ImportResult> {
   formData.append("file", file);
 
   const response = await fetch("/api/admin/import-csv", { method: "POST", body: formData });
-  const data = await response.json();
+  const text = await response.text();
+
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(
+      response.ok
+        ? "Server returned an invalid response. The import may have timed out — try with fewer rows."
+        : `Server error (${response.status}): ${text.slice(0, 200)}`
+    );
+  }
 
   if (!response.ok) {
     throw new Error(data.error || "Import failed");
