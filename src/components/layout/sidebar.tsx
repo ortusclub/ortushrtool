@@ -22,6 +22,7 @@ import {
   SlidersHorizontal,
   Eye,
   Mail,
+  HelpCircle,
 } from "lucide-react";
 import { useState } from "react";
 import type { UserRole } from "@/types/database";
@@ -59,6 +60,7 @@ const navSections: NavSection[] = [
       { label: "Team Calendar", href: "/weekly", icon: <CalendarDays size={20} />, minRole: "employee" },
       { label: "KPIs", href: "/kpis", icon: <Target size={20} />, minRole: "employee" },
       { label: "Team Directory", href: "/team", icon: <UsersRound size={20} />, minRole: "employee" },
+      { label: "Help & Guide", href: "/help", icon: <HelpCircle size={20} />, minRole: "employee" },
     ],
   },
   {
