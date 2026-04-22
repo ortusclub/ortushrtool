@@ -174,6 +174,7 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
   const today = new Date().toISOString().split("T")[0];
+  const validRoles = new Set(["employee", "manager", "hr_admin", "super_admin"]);
   const hasSchedules = rows.some((r) => r.days.some((d) => d !== null && d !== undefined));
 
   const results = {
@@ -185,114 +186,135 @@ export async function POST(request: Request) {
   };
 
   try {
-    // First pass: create/update users
     const emailToId = new Map<string, string>();
 
-    for (const row of rows) {
-      try {
-        const updateFields: Record<string, unknown> = {
-          full_name: row.name,
-          timezone: row.timezone,
-        };
-        const validRoles = ["employee", "manager", "hr_admin", "super_admin"];
-        if (row.role && validRoles.includes(row.role)) updateFields.role = row.role;
-        if (row.department) updateFields.department = row.department;
-        if (row.holidayCountry) updateFields.holiday_country = row.holidayCountry;
-        if (row.desktimeId) updateFields.desktime_employee_id = row.desktimeId;
-        if (row.birthday) updateFields.birthday = row.birthday;
-        if (row.hireDate) updateFields.hire_date = row.hireDate;
-        if (row.endDate) updateFields.end_date = row.endDate;
-        if (row.isActive !== null) updateFields.is_active = row.isActive;
+    // Batch fetch all existing users in one query
+    const allEmails = rows.map((r) => r.email);
+    const { data: existingUsers } = await admin
+      .from("users")
+      .select("id, email")
+      .in("email", allEmails);
 
-        const { data: existingUser } = await admin
-          .from("users")
-          .select("id")
-          .eq("email", row.email)
-          .maybeSingle();
-
-        if (existingUser) {
-          emailToId.set(row.email, existingUser.id);
-          await admin.from("users").update(updateFields).eq("id", existingUser.id);
-          results.usersUpdated++;
-        } else {
-          const { data: authData, error: authError } =
-            await admin.auth.admin.createUser({
-              email: row.email,
-              email_confirm: true,
-              user_metadata: { full_name: row.name },
-            });
-
-          if (authError) {
-            const { data: existingAuth } = await admin.auth.admin.listUsers();
-            const found = existingAuth?.users?.find((u) => u.email === row.email);
-            if (found) {
-              emailToId.set(row.email, found.id);
-              await admin.from("users").upsert({ id: found.id, email: row.email, ...updateFields });
-              results.usersUpdated++;
-            } else {
-              results.errors.push(`Failed to create ${row.email}: ${authError.message}`);
-            }
-            continue;
-          }
-
-          if (authData.user) {
-            emailToId.set(row.email, authData.user.id);
-            await new Promise((r) => setTimeout(r, 100));
-            await admin.from("users").update(updateFields).eq("id", authData.user.id);
-            results.usersCreated++;
-          }
-        }
-      } catch (err) {
-        results.errors.push(`Error processing ${row.email}: ${err instanceof Error ? err.message : "unknown"}`);
-      }
+    for (const u of existingUsers ?? []) {
+      emailToId.set(u.email, u.id);
     }
 
-    // Second pass: link managers
+    // Process users in parallel batches of 10
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const batch = rows.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async (row) => {
+        try {
+          const updateFields: Record<string, unknown> = {
+            full_name: row.name,
+            timezone: row.timezone,
+          };
+          if (row.role && validRoles.has(row.role)) updateFields.role = row.role;
+          if (row.department) updateFields.department = row.department;
+          if (row.holidayCountry) updateFields.holiday_country = row.holidayCountry;
+          if (row.desktimeId) updateFields.desktime_employee_id = row.desktimeId;
+          if (row.birthday) updateFields.birthday = row.birthday;
+          if (row.hireDate) updateFields.hire_date = row.hireDate;
+          if (row.endDate) updateFields.end_date = row.endDate;
+          if (row.isActive !== null) updateFields.is_active = row.isActive;
+
+          const existingId = emailToId.get(row.email);
+
+          if (existingId) {
+            await admin.from("users").update(updateFields).eq("id", existingId);
+            results.usersUpdated++;
+          } else {
+            const { data: authData, error: authError } =
+              await admin.auth.admin.createUser({
+                email: row.email,
+                email_confirm: true,
+                user_metadata: { full_name: row.name },
+              });
+
+            if (authError) {
+              // Try to find in auth and upsert
+              const { data: existingAuth } = await admin.auth.admin.listUsers();
+              const found = existingAuth?.users?.find((u) => u.email === row.email);
+              if (found) {
+                emailToId.set(row.email, found.id);
+                await admin.from("users").upsert({ id: found.id, email: row.email, ...updateFields });
+                results.usersUpdated++;
+              } else {
+                results.errors.push(`Failed to create ${row.email}: ${authError.message}`);
+              }
+              return;
+            }
+
+            if (authData.user) {
+              emailToId.set(row.email, authData.user.id);
+              await admin.from("users").update(updateFields).eq("id", authData.user.id);
+              results.usersCreated++;
+            }
+          }
+        } catch (err) {
+          results.errors.push(`Error processing ${row.email}: ${err instanceof Error ? err.message : "unknown"}`);
+        }
+      }));
+    }
+
+    // Batch fetch all users for manager linking (one query)
+    const { data: allUsers } = await admin
+      .from("users")
+      .select("id, full_name, email");
+
+    const nameToId = new Map<string, string>();
+    for (const u of allUsers ?? []) {
+      if (u.full_name) nameToId.set(u.full_name, u.id);
+      emailToId.set(u.email, u.id);
+    }
+
+    // Link managers in parallel batches
+    const managerUpdates: { userId: string; managerId: string }[] = [];
     for (const row of rows) {
       if (!row.managerName) continue;
-
       const userId = emailToId.get(row.email);
       if (!userId) continue;
 
-      let managerEmail: string | undefined;
+      // Try exact name match first (from CSV or DB)
+      let managerId = nameToId.get(row.managerName);
 
-      for (const r of rows) {
-        if (r.name === row.managerName) { managerEmail = r.email; break; }
-      }
-
-      if (!managerEmail) {
-        const firstName = row.managerName.split(" ")[0];
-        for (const r of rows) {
-          if (r.name === firstName) { managerEmail = r.email; break; }
+      // Try partial match
+      if (!managerId) {
+        for (const u of allUsers ?? []) {
+          if (u.full_name && u.full_name.toLowerCase().includes(row.managerName.toLowerCase())) {
+            managerId = u.id;
+            break;
+          }
         }
       }
 
-      if (!managerEmail) {
-        const { data: managerUser } = await admin
-          .from("users")
-          .select("id")
-          .ilike("full_name", `%${row.managerName}%`)
-          .limit(1)
-          .maybeSingle();
-
-        if (managerUser) {
-          await admin.from("users").update({ manager_id: managerUser.id }).eq("id", userId);
-          results.managersLinked++;
-          continue;
-        }
-      }
-
-      if (managerEmail) {
-        const managerId = emailToId.get(managerEmail);
-        if (managerId && managerId !== userId) {
-          await admin.from("users").update({ manager_id: managerId }).eq("id", userId);
-          results.managersLinked++;
-        }
+      if (managerId && managerId !== userId) {
+        managerUpdates.push({ userId, managerId });
       }
     }
 
-    // Third pass: create schedules (only if schedule columns are present)
+    // Batch manager updates
+    for (let i = 0; i < managerUpdates.length; i += BATCH_SIZE) {
+      const batch = managerUpdates.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(({ userId, managerId }) =>
+        admin.from("users").update({ manager_id: managerId }).eq("id", userId)
+      ));
+      results.managersLinked += batch.length;
+    }
+
+    // Batch create schedules
     if (hasSchedules) {
+      const userIdsWithSchedules: string[] = [];
+      const scheduleRows: {
+        employee_id: string;
+        day_of_week: number;
+        start_time: string;
+        end_time: string;
+        is_rest_day: boolean;
+        work_location: string;
+        effective_from: string;
+      }[] = [];
+
       for (const row of rows) {
         const hasAnySchedule = row.days.some((d) => d !== null && d !== undefined);
         if (!hasAnySchedule) continue;
@@ -300,26 +322,26 @@ export async function POST(request: Request) {
         const userId = emailToId.get(row.email);
         if (!userId) continue;
 
-        await admin.from("schedules").delete().eq("employee_id", userId);
+        userIdsWithSchedules.push(userId);
 
         for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
           const day = row.days[dayIdx];
           const isRest = day === "rest";
           const hasTime = day !== null && day !== "rest";
-          await admin.from("schedules").insert({
+          scheduleRows.push({
             employee_id: userId,
             day_of_week: dayIdx,
             start_time: hasTime ? day.start : "00:00",
             end_time: hasTime ? day.end : "00:00",
             is_rest_day: isRest,
-            work_location: (hasTime ? day.location : "office") as "office" | "online",
+            work_location: hasTime ? day.location : "office",
             effective_from: today,
           });
-          results.schedulesCreated++;
         }
 
+        // Weekend rest days
         for (const dayIdx of [5, 6]) {
-          await admin.from("schedules").insert({
+          scheduleRows.push({
             employee_id: userId,
             day_of_week: dayIdx,
             start_time: "00:00",
@@ -328,9 +350,20 @@ export async function POST(request: Request) {
             work_location: "office",
             effective_from: today,
           });
-          results.schedulesCreated++;
         }
       }
+
+      // Delete existing schedules in one batch
+      if (userIdsWithSchedules.length > 0) {
+        await admin.from("schedules").delete().in("employee_id", userIdsWithSchedules);
+      }
+
+      // Insert all schedules in batches of 100
+      for (let i = 0; i < scheduleRows.length; i += 100) {
+        const batch = scheduleRows.slice(i, i + 100);
+        await admin.from("schedules").insert(batch);
+      }
+      results.schedulesCreated = scheduleRows.length;
     }
   } catch (err) {
     results.errors.push(`Fatal error: ${err instanceof Error ? err.message : "unknown"}`);
