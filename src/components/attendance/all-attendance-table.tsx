@@ -217,6 +217,7 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([]);
+  const [onLeaveSet, setOnLeaveSet] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
 
   // Column filters
@@ -239,7 +240,7 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
     const dateObj = new Date(selectedDate + "T00:00:00");
     const dayOfWeek = (dateObj.getDay() + 6) % 7;
 
-    const [logsResult, schedulesResult, adjustmentsResult] = await Promise.all([
+    const [logsResult, schedulesResult, adjustmentsResult, leavesResult] = await Promise.all([
       supabase
         .from("attendance_logs")
         .select("*")
@@ -255,11 +256,18 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
         .select("employee_id, requested_work_location")
         .eq("requested_date", selectedDate)
         .eq("status", "approved"),
+      supabase
+        .from("leave_requests")
+        .select("employee_id")
+        .eq("status", "approved")
+        .lte("start_date", selectedDate)
+        .gte("end_date", selectedDate),
     ]);
 
     setLogs(logsResult.data ?? []);
     setSchedules(schedulesResult.data ?? []);
     setAdjustments(adjustmentsResult.data ?? []);
+    setOnLeaveSet(new Set((leavesResult.data ?? []).map((l) => l.employee_id)));
     setLoading(false);
   }, [selectedDate]);
 
@@ -409,7 +417,10 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
     for (const user of filteredUsers) {
       const log = logMap.get(user.id);
       const tz = user.timezone || "Asia/Manila";
-      const displayStatus = getDisplayStatus(log, tz, isToday);
+      const rawStatus = getDisplayStatus(log, tz, isToday);
+      const displayStatus = onLeaveSet.has(user.id) && !["on_leave", "holiday", "rest_day"].includes(rawStatus)
+        ? "on_leave"
+        : rawStatus;
       if (displayStatus === "on_time") onTime++;
       else if (displayStatus === "late_arrival") late++;
       else if (displayStatus === "early_departure") early++;
@@ -422,7 +433,7 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
       else noData++;
     }
     return { onTime, late, early, absent, noData, onLeave, holiday, working, notStarted };
-  }, [filteredUsers, logMap, isToday]);
+  }, [filteredUsers, logMap, onLeaveSet, isToday]);
 
   const hasActiveFilters = countryFilter || locationFilter || statusFilter || tzFilter;
 
@@ -564,7 +575,11 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
                 const raw = log?.raw_response as Record<string, unknown> | null;
                 const desktimeSeconds = raw?.desktimeTime as number | undefined;
                 const productiveSeconds = raw?.productiveTime as number | undefined;
-                const displayStatus = getDisplayStatus(log, tz, isToday);
+                const rawStatus = getDisplayStatus(log, tz, isToday);
+                // Override with on_leave if employee has an approved leave for this date
+                const displayStatus = onLeaveSet.has(user.id) && !["on_leave", "holiday", "rest_day"].includes(rawStatus)
+                  ? "on_leave"
+                  : rawStatus;
                 const location = getLocation(user.id, displayStatus);
 
                 return (
