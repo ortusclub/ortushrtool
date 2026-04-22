@@ -9,6 +9,7 @@ import type { SystemSetting } from "@/types/database";
 const SETTING_LABELS: Record<string, string> = {
   late_tolerance_minutes: "Late Arrival Tolerance (minutes)",
   early_tolerance_minutes: "Early Departure Tolerance (minutes)",
+  shift_cutoff_hour: "Shift Cutoff Hour (activity before this is previous day's overtime)",
   attendance_flag_emails_enabled: "Send Attendance Flag Emails",
 };
 

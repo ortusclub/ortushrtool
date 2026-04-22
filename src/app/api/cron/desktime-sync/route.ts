@@ -33,6 +33,14 @@ export async function GET(request: Request) {
     const lateTolerance = parseInt(lateSetting?.value ?? "15");
     const earlyTolerance = parseInt(earlySetting?.value ?? "15");
 
+    // Shift cutoff: activity before this hour is treated as previous day's overtime
+    const { data: cutoffSetting } = await supabase
+      .from("system_settings")
+      .select("value")
+      .eq("key", "shift_cutoff_hour")
+      .maybeSingle();
+    const shiftCutoffHour = parseInt(cutoffSetting?.value ?? "5");
+
     // Fetch all employees from DeskTime
     const dtEmployees = await fetchAllEmployees(syncDate);
 
@@ -181,11 +189,31 @@ export async function GET(request: Request) {
 
       // Parse DeskTime clock times
       // DeskTime returns "arrived" as "2026-03-27 08:05:42" or false
+      const SHIFT_CUTOFF_MINUTES = shiftCutoffHour * 60; // activity before this is previous day's overtime
       const arrivedStr = dtEmp.arrived && typeof dtEmp.arrived === "string" ? dtEmp.arrived : null;
       const leftStr = dtEmp.left && typeof dtEmp.left === "string" ? dtEmp.left : null;
       const dtTimezone = dtEmp.timezone;
-      const clockIn = arrivedStr ? parseDesktimeTimestamp(arrivedStr, dtTimezone) : null;
-      const clockOut = leftStr ? parseDesktimeTimestamp(leftStr, dtTimezone) : null;
+
+      // If arrived time is before 5:00 AM, treat it as previous day's overtime
+      let effectiveArrivedStr = arrivedStr;
+      if (arrivedStr) {
+        const arrivedMinutes = extractTimeMinutes(arrivedStr);
+        if (arrivedMinutes < SHIFT_CUTOFF_MINUTES) {
+          effectiveArrivedStr = null;
+        }
+      }
+
+      // If left time is before 5:00 AM, also ignore it for this day
+      let effectiveLeftStr = leftStr;
+      if (leftStr) {
+        const leftMinutes = extractTimeMinutes(leftStr);
+        if (leftMinutes < SHIFT_CUTOFF_MINUTES) {
+          effectiveLeftStr = null;
+        }
+      }
+
+      const clockIn = effectiveArrivedStr ? parseDesktimeTimestamp(effectiveArrivedStr, dtTimezone) : null;
+      const clockOut = effectiveLeftStr ? parseDesktimeTimestamp(effectiveLeftStr, dtTimezone) : null;
 
       // Determine status
       let status: string = "on_time";
@@ -215,11 +243,11 @@ export async function GET(request: Request) {
         }
       } else {
         // Calculate late arrival
-        if (clockIn) {
+        if (clockIn && effectiveArrivedStr) {
           const scheduledStartMinutes = timeToMinutes(
             scheduledStart.slice(0, 5)
           );
-          const actualStartMinutes = extractTimeMinutes(arrivedStr!);
+          const actualStartMinutes = extractTimeMinutes(effectiveArrivedStr);
 
           if (actualStartMinutes > scheduledStartMinutes + lateTolerance) {
             lateMinutes = actualStartMinutes - scheduledStartMinutes;
@@ -228,14 +256,14 @@ export async function GET(request: Request) {
         }
 
         // Calculate early departure — only if the workday is over
-        if (clockOut) {
+        if (clockOut && effectiveLeftStr) {
           const scheduledEndMinutes = timeToMinutes(scheduledEnd.slice(0, 5));
 
           if (isSyncingToday) {
             const nowInTz = getCurrentTimeMinutes(userTz);
             // Only flag early departure if we're past scheduled end
             if (nowInTz >= scheduledEndMinutes) {
-              const actualEndMinutes = extractTimeMinutes(leftStr!);
+              const actualEndMinutes = extractTimeMinutes(effectiveLeftStr);
               if (actualEndMinutes < scheduledEndMinutes - earlyTolerance) {
                 earlyMinutes = scheduledEndMinutes - actualEndMinutes;
                 status =
@@ -248,7 +276,7 @@ export async function GET(request: Request) {
               }
             }
           } else {
-            const actualEndMinutes = extractTimeMinutes(leftStr!);
+            const actualEndMinutes = extractTimeMinutes(effectiveLeftStr);
             if (actualEndMinutes < scheduledEndMinutes - earlyTolerance) {
               earlyMinutes = scheduledEndMinutes - actualEndMinutes;
               status =
