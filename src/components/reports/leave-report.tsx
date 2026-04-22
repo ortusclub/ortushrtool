@@ -3,6 +3,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Download } from "lucide-react";
+import { parseISO } from "date-fns";
+
+function countWeekdays(start: string, end: string): number {
+  let count = 0;
+  const s = parseISO(start);
+  const e = parseISO(end);
+  const current = new Date(s);
+  while (current <= e) {
+    const dow = current.getDay();
+    if (dow >= 1 && dow <= 5) count++;
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
+}
 
 interface UserOption {
   id: string;
@@ -19,6 +33,7 @@ interface LeaveRow {
   manager_name: string;
   leave_type: string;
   leave_duration: string;
+  days: number;
   start_date: string;
   end_date: string;
   reason: string;
@@ -87,9 +102,11 @@ export function LeaveReport({ users }: { users: UserOption[] }) {
       const emp = r.employee as { full_name: string; email: string; department: string | null; manager_id: string | null } | null;
       const rev = r.reviewer as { full_name: string } | null;
       const managerName = emp?.manager_id ? (userMap.get(emp.manager_id) ?? "") : "";
-      const duration = r.leave_duration === "half_day"
+      const isHalf = r.leave_duration === "half_day";
+      const duration = isHalf
         ? `Half Day (${(r.half_day_period as string)?.toUpperCase() || ""})`
         : "Full Day";
+      const days = isHalf ? 0.5 : countWeekdays(r.start_date as string, r.end_date as string);
 
       return {
         id: r.id as string,
@@ -99,6 +116,7 @@ export function LeaveReport({ users }: { users: UserOption[] }) {
         manager_name: managerName,
         leave_type: LEAVE_LABELS[r.leave_type as string] ?? (r.leave_type as string),
         leave_duration: duration,
+        days,
         start_date: r.start_date as string,
         end_date: r.end_date as string,
         reason: r.reason as string,
@@ -126,6 +144,7 @@ export function LeaveReport({ users }: { users: UserOption[] }) {
       "Manager",
       "Leave Type",
       "Duration",
+      "Total Days",
       "Start Date",
       "End Date",
       "Reason",
@@ -148,6 +167,7 @@ export function LeaveReport({ users }: { users: UserOption[] }) {
           `"${r.manager_name}"`,
           `"${r.leave_type}"`,
           `"${r.leave_duration}"`,
+          r.days,
           r.start_date,
           r.end_date,
           `"${r.reason.replace(/"/g, '""')}"`,
@@ -272,6 +292,7 @@ export function LeaveReport({ users }: { users: UserOption[] }) {
                   <th className="px-6 py-3 font-medium text-gray-600">Employee</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Type</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Duration</th>
+                  <th className="px-6 py-3 font-medium text-gray-600">Total Days</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Dates</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Reason</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Approval Status</th>
@@ -291,6 +312,7 @@ export function LeaveReport({ users }: { users: UserOption[] }) {
                     </td>
                     <td className="px-6 py-4 text-gray-700">{r.leave_type}</td>
                     <td className="px-6 py-4 text-gray-700">{r.leave_duration}</td>
+                    <td className="px-6 py-4 text-gray-700 font-medium">{r.days}</td>
                     <td className="px-6 py-4 text-gray-700 whitespace-nowrap">
                       {r.start_date === r.end_date
                         ? r.start_date
