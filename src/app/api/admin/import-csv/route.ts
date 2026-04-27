@@ -120,11 +120,11 @@ function parseCSV(csvText: string): ParsedRow[] {
     rows.push({
       name: parts[nameIdx] || "",
       email,
-      timezone: TIMEZONE_MAP[tz] ?? (tz || "Asia/Manila"),
+      timezone: tz ? (TIMEZONE_MAP[tz] ?? tz) : "",
       role: ROLE_MAP[roleRaw] ?? (roleRaw ? roleRaw.toLowerCase() : ""),
       department: deptIdx >= 0 ? parts[deptIdx] || "" : "",
       managerName: managerIdx >= 0 ? parts[managerIdx] || "" : "",
-      holidayCountry: COUNTRY_MAP[country] ?? "PH",
+      holidayCountry: country ? (COUNTRY_MAP[country] ?? country) : "",
       desktimeId: desktimeRaw ? parseInt(desktimeRaw, 10) || null : null,
       birthday: birthdayRaw,
       hireDate: hireDateRaw,
@@ -205,10 +205,9 @@ export async function POST(request: Request) {
       const batch = rows.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async (row) => {
         try {
-          const updateFields: Record<string, unknown> = {
-            full_name: row.name,
-            timezone: row.timezone,
-          };
+          const updateFields: Record<string, unknown> = {};
+          if (row.name) updateFields.full_name = row.name;
+          if (row.timezone) updateFields.timezone = row.timezone;
           if (row.role) {
             if (validRoles.has(row.role)) {
               updateFields.role = row.role;
