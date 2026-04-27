@@ -26,12 +26,15 @@ const ROLE_MAP: Record<string, string> = {
 };
 
 interface ParsedRow {
+  firstName: string;
+  middleName: string;
+  lastName: string;
   name: string;
   email: string;
   timezone: string;
   role: string;
   department: string;
-  managerName: string;
+  managerEmail: string;
   holidayCountry: string;
   desktimeId: number | null;
   birthday: string;
@@ -62,14 +65,20 @@ function parseCSV(csvText: string): ParsedRow[] {
     return -1;
   };
 
+  const firstNameIdx = col(["first name", "first_name", "firstname"]);
+  const middleNameIdx = col(["middle name", "middle_name", "middlename"]);
+  const lastNameIdx = col(["last name", "last_name", "lastname"]);
   const nameIdx = col(["name", "person", "full_name"]);
   const emailIdx = col(["email"]);
-  if (nameIdx === -1 || emailIdx === -1) return [];
+  if (emailIdx === -1) return [];
+  // Need either first+last name columns or a single name column
+  const hasNameParts = firstNameIdx !== -1;
+  if (!hasNameParts && nameIdx === -1) return [];
 
   const tzIdx = col(["timezone", "time zone", "tz"]);
   const roleIdx = col(["role"]);
   const deptIdx = col(["department", "dept"]);
-  const managerIdx = col(["manager", "manager name", "manager_name"]);
+  const managerIdx = col(["manager", "manager email", "manager_email", "manager name", "manager_name"]);
   const countryIdx = col(["country", "holiday_country", "holiday country"]);
   const desktimeIdx = col(["desktime_id", "desktime id", "desktime_employee_id", "desktime"]);
   const birthdayIdx = col(["birthday", "date_of_birth", "dob"]);
@@ -117,13 +126,23 @@ function parseCSV(csvText: string): ParsedRow[] {
       isActive = ["yes", "true", "1"].includes(activeRaw.toLowerCase());
     }
 
+    const firstName = hasNameParts ? (parts[firstNameIdx] || "") : "";
+    const middleName = hasNameParts && middleNameIdx >= 0 ? (parts[middleNameIdx] || "") : "";
+    const lastName = hasNameParts && lastNameIdx >= 0 ? (parts[lastNameIdx] || "") : "";
+    const fullName = hasNameParts
+      ? [firstName, middleName, lastName].filter(Boolean).join(" ")
+      : (parts[nameIdx] || "");
+
     rows.push({
-      name: parts[nameIdx] || "",
+      firstName,
+      middleName,
+      lastName,
+      name: fullName,
       email,
       timezone: tz ? (TIMEZONE_MAP[tz] ?? tz) : "",
       role: ROLE_MAP[roleRaw] ?? (roleRaw ? roleRaw.toLowerCase() : ""),
       department: deptIdx >= 0 ? parts[deptIdx] || "" : "",
-      managerName: managerIdx >= 0 ? parts[managerIdx] || "" : "",
+      managerEmail: managerIdx >= 0 ? parts[managerIdx] || "" : "",
       holidayCountry: country ? (COUNTRY_MAP[country] ?? country) : "",
       desktimeId: desktimeRaw ? parseInt(desktimeRaw, 10) || null : null,
       birthday: birthdayRaw,
@@ -207,6 +226,9 @@ export async function POST(request: Request) {
         try {
           const updateFields: Record<string, unknown> = {};
           if (row.name) updateFields.full_name = row.name;
+          if (row.firstName) updateFields.first_name = row.firstName;
+          if (row.middleName) updateFields.middle_name = row.middleName;
+          if (row.lastName) updateFields.last_name = row.lastName;
           if (row.timezone) updateFields.timezone = row.timezone;
           if (row.role) {
             if (validRoles.has(row.role)) {
@@ -267,31 +289,18 @@ export async function POST(request: Request) {
       .from("users")
       .select("id, full_name, email");
 
-    const nameToId = new Map<string, string>();
     for (const u of allUsers ?? []) {
-      if (u.full_name) nameToId.set(u.full_name, u.id);
       emailToId.set(u.email, u.id);
     }
 
-    // Link managers in parallel batches
+    // Link managers by email
     const managerUpdates: { userId: string; managerId: string }[] = [];
     for (const row of rows) {
-      if (!row.managerName) continue;
+      if (!row.managerEmail) continue;
       const userId = emailToId.get(row.email);
       if (!userId) continue;
 
-      // Try exact name match first (from CSV or DB)
-      let managerId = nameToId.get(row.managerName);
-
-      // Try partial match
-      if (!managerId) {
-        for (const u of allUsers ?? []) {
-          if (u.full_name && u.full_name.toLowerCase().includes(row.managerName.toLowerCase())) {
-            managerId = u.id;
-            break;
-          }
-        }
-      }
+      const managerId = emailToId.get(row.managerEmail);
 
       if (managerId && managerId !== userId) {
         managerUpdates.push({ userId, managerId });

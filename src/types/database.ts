@@ -45,6 +45,9 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
+  first_name: string | null;
+  middle_name: string | null;
+  last_name: string | null;
   role: UserRole;
   manager_id: string | null;
   department: string | null;

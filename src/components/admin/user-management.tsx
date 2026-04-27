@@ -216,11 +216,13 @@ export function UserManagement({
     }
 
     const headers = [
-      "Name",
+      "First Name",
+      "Middle Name",
+      "Last Name",
       "Email",
       "Role",
       "Department",
-      "Manager Name",
+      "Manager Email",
       "Country",
       "Timezone",
       "Desktime ID",
@@ -237,15 +239,17 @@ export function UserManagement({
     const csvRows = [headers.join(",")];
 
     for (const u of users) {
-      const managerName = users.find((m) => m.id === u.manager_id)?.full_name ?? "";
+      const managerEmail = users.find((m) => m.id === u.manager_id)?.email ?? "";
       const userSchedule = scheduleMap.get(u.id);
       csvRows.push(
         [
-          `"${u.full_name ?? ""}"`,
+          `"${u.first_name ?? ""}"`,
+          `"${u.middle_name ?? ""}"`,
+          `"${u.last_name ?? ""}"`,
           u.email,
           u.role,
           `"${u.department ?? ""}"`,
-          `"${managerName}"`,
+          managerEmail,
           u.holiday_country,
           getTzLabel(u.timezone || "Asia/Manila").split(" ")[0],
           u.desktime_employee_id ?? "",
