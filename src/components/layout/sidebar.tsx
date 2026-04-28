@@ -81,6 +81,7 @@ const navSections: NavSection[] = [
       { label: "Manage Holidays", href: "/admin/holidays", icon: <CalendarHeart size={20} />, minRole: "hr_admin" },
       { label: "Leave Plans", href: "/admin/leave-plans", icon: <Palmtree size={20} />, minRole: "hr_admin" },
       { label: "Users", href: "/admin/users", icon: <Users size={20} />, minRole: "hr_admin" },
+      { label: "Help & Guide", href: "/admin/help", icon: <HelpCircle size={20} />, minRole: "hr_admin" },
     ],
   },
 ];

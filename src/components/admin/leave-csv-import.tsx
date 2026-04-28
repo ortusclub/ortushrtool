@@ -7,6 +7,7 @@ import { Upload, Download } from "lucide-react";
 interface ImportResult {
   created: number;
   skipped: number;
+  duplicates_skipped: number;
   errors: string[];
 }
 
@@ -143,6 +144,8 @@ export function LeaveCsvImport() {
           <p className="font-medium text-green-800">
             {result.created} leave{result.created !== 1 ? "s" : ""} created
             {autoApprove ? " (auto-approved)" : " (pending)"}.
+            {result.duplicates_skipped > 0 &&
+              ` ${result.duplicates_skipped} duplicate${result.duplicates_skipped !== 1 ? "s" : ""} skipped.`}
             {result.skipped > 0 && ` ${result.skipped} skipped.`}
           </p>
           {result.errors.length > 0 && (

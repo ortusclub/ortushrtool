@@ -17,8 +17,8 @@ interface AttendanceLog {
   id: string;
   employee_id: string;
   date: string;
-  scheduled_start: string;
-  scheduled_end: string;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
   clock_in: string | null;
   clock_out: string | null;
   status: string;
@@ -98,6 +98,7 @@ const statusStyles: Record<string, string> = {
   holiday: "bg-purple-100 text-purple-700",
   working: "bg-green-50 text-green-600",
   not_started: "bg-slate-100 text-slate-600",
+  no_schedule: "bg-gray-100 text-gray-500",
 };
 
 const statusLabels: Record<string, string> = {
@@ -111,6 +112,7 @@ const statusLabels: Record<string, string> = {
   holiday: "Holiday",
   working: "Working",
   not_started: "Shift Yet to Start",
+  no_schedule: "No Schedule",
 };
 
 /**
@@ -127,14 +129,19 @@ function getDisplayStatus(
   // For past dates, trust the stored status
   if (!isToday) return log.status;
 
-  const nowMinutes = getCurrentTimeMinutes(tz);
-  const scheduledStart = timeToMinutes(log.scheduled_start?.slice(0, 5) ?? "09:00");
-  const scheduledEnd = timeToMinutes(log.scheduled_end?.slice(0, 5) ?? "18:00");
-
   // Non-working statuses are always final
-  if (["rest_day", "on_leave", "holiday"].includes(log.status)) {
+  if (["rest_day", "on_leave", "holiday", "no_schedule"].includes(log.status)) {
     return log.status;
   }
+
+  // Without a schedule we can't infer late/early/absent from the wall clock.
+  if (!log.scheduled_start || !log.scheduled_end) {
+    return log.clock_in ? "working" : "no_schedule";
+  }
+
+  const nowMinutes = getCurrentTimeMinutes(tz);
+  const scheduledStart = timeToMinutes(log.scheduled_start.slice(0, 5));
+  const scheduledEnd = timeToMinutes(log.scheduled_end.slice(0, 5));
 
   // No clock-in yet
   if (!log.clock_in) {
@@ -606,8 +613,8 @@ export function AllAttendanceTable({ users }: { users: UserRow[] }) {
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
-                      {log
-                        ? `${log.scheduled_start?.slice(0, 5)} - ${log.scheduled_end?.slice(0, 5)}`
+                      {log?.scheduled_start && log?.scheduled_end
+                        ? `${log.scheduled_start.slice(0, 5)} - ${log.scheduled_end.slice(0, 5)}`
                         : scheduleTimeMap.has(user.id)
                           ? `${scheduleTimeMap.get(user.id)!.start.slice(0, 5)} - ${scheduleTimeMap.get(user.id)!.end.slice(0, 5)}`
                           : "-"}

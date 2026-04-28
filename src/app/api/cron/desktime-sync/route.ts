@@ -100,18 +100,19 @@ export async function GET(request: Request) {
       .lt("date", today);
 
     for (const log of staleWorking ?? []) {
-      let newStatus = "on_time";
+      const hasSchedule = !!(log.scheduled_start && log.scheduled_end);
+      let newStatus = hasSchedule ? "on_time" : "no_schedule";
       let lateMin: number | null = null;
       let earlyMin: number | null = null;
 
       if (!log.clock_in && !log.clock_out) {
-        newStatus = "absent";
-      } else {
+        newStatus = hasSchedule ? "absent" : "no_schedule";
+      } else if (hasSchedule) {
         if (log.clock_in && log.raw_response) {
           const raw = log.raw_response as Record<string, unknown>;
           const arrivedRaw = raw.arrived as string | undefined;
           if (arrivedRaw) {
-            const scheduledStartMin = timeToMinutes(log.scheduled_start.slice(0, 5));
+            const scheduledStartMin = timeToMinutes(log.scheduled_start!.slice(0, 5));
             const actualStartMin = extractTimeMinutes(arrivedRaw);
             if (actualStartMin > scheduledStartMin + lateTolerance) {
               lateMin = actualStartMin - scheduledStartMin;
@@ -124,7 +125,7 @@ export async function GET(request: Request) {
           const raw = log.raw_response as Record<string, unknown>;
           const leftRaw = raw.left as string | undefined;
           if (leftRaw) {
-            const scheduledEndMin = timeToMinutes(log.scheduled_end.slice(0, 5));
+            const scheduledEndMin = timeToMinutes(log.scheduled_end!.slice(0, 5));
             const actualEndMin = extractTimeMinutes(leftRaw);
             if (actualEndMin < scheduledEndMin - earlyTolerance) {
               earlyMin = scheduledEndMin - actualEndMin;
@@ -182,9 +183,10 @@ export async function GET(request: Request) {
         .maybeSingle();
 
       const scheduledStart =
-        adjustment?.requested_start_time ?? schedule?.start_time ?? "09:00";
+        adjustment?.requested_start_time ?? schedule?.start_time ?? null;
       const scheduledEnd =
-        adjustment?.requested_end_time ?? schedule?.end_time ?? "18:00";
+        adjustment?.requested_end_time ?? schedule?.end_time ?? null;
+      const hasSchedule = scheduledStart !== null && scheduledEnd !== null;
       const isRestDay = !adjustment && (schedule?.is_rest_day ?? false);
 
       // Parse DeskTime clock times
@@ -232,11 +234,14 @@ export async function GET(request: Request) {
         status = "holiday";
       } else if (isRestDay) {
         status = "rest_day";
+      } else if (!hasSchedule) {
+        // No schedule on file for this date — don't infer late/absent/etc.
+        status = "no_schedule";
       } else if (!clockIn && !clockOut) {
         // Only mark absent if we're past the scheduled start time
         if (isSyncingToday) {
           const nowInTz = getCurrentTimeMinutes(userTz);
-          const scheduledStartMinutes = timeToMinutes(scheduledStart.slice(0, 5));
+          const scheduledStartMinutes = timeToMinutes(scheduledStart!.slice(0, 5));
           status = nowInTz >= scheduledStartMinutes ? "absent" : "not_started";
         } else {
           status = "absent";
@@ -245,7 +250,7 @@ export async function GET(request: Request) {
         // Calculate late arrival
         if (clockIn && effectiveArrivedStr) {
           const scheduledStartMinutes = timeToMinutes(
-            scheduledStart.slice(0, 5)
+            scheduledStart!.slice(0, 5)
           );
           const actualStartMinutes = extractTimeMinutes(effectiveArrivedStr);
 
@@ -257,7 +262,7 @@ export async function GET(request: Request) {
 
         // Calculate early departure — only if the workday is over
         if (clockOut && effectiveLeftStr) {
-          const scheduledEndMinutes = timeToMinutes(scheduledEnd.slice(0, 5));
+          const scheduledEndMinutes = timeToMinutes(scheduledEnd!.slice(0, 5));
 
           if (isSyncingToday) {
             const nowInTz = getCurrentTimeMinutes(userTz);

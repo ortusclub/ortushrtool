@@ -7,13 +7,18 @@ import { Search } from "lucide-react";
 interface AttendanceLog {
   id: string;
   date: string;
-  scheduled_start: string;
-  scheduled_end: string;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
   clock_in: string | null;
   clock_out: string | null;
   status: string;
   late_minutes: number | null;
   early_departure_minutes: number | null;
+}
+
+function formatScheduled(start: string | null, end: string | null): string {
+  if (!start || !end) return "No schedule on file";
+  return `${start.slice(0, 5)} - ${end.slice(0, 5)}`;
 }
 
 interface ScheduleInfo {
@@ -84,7 +89,7 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
 
   function getLocation(log: AttendanceLog): string | null {
     // Skip non-working statuses
-    if (["rest_day", "on_leave", "holiday", "absent"].includes(log.status)) {
+    if (["rest_day", "on_leave", "holiday", "absent", "no_schedule"].includes(log.status)) {
       return null;
     }
 
@@ -235,7 +240,13 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
                     <tr key={log.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">{formatDate(log.date)}</td>
                       <td className="px-6 py-4">
-                        {log.scheduled_start} - {log.scheduled_end}
+                        {log.scheduled_start && log.scheduled_end ? (
+                          formatScheduled(log.scheduled_start, log.scheduled_end)
+                        ) : (
+                          <span className="text-xs italic text-gray-400">
+                            No schedule on file
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         {location ? (
@@ -286,6 +297,7 @@ function StatusBadge({ status }: { status: string }) {
     on_leave: "bg-blue-100 text-blue-700",
     holiday: "bg-purple-100 text-purple-700",
     working: "bg-green-50 text-green-600",
+    no_schedule: "bg-gray-100 text-gray-500",
   };
 
   const labels: Record<string, string> = {
@@ -298,6 +310,7 @@ function StatusBadge({ status }: { status: string }) {
     on_leave: "On Leave",
     holiday: "Holiday",
     working: "Working",
+    no_schedule: "No Schedule",
   };
 
   return (

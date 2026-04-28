@@ -109,6 +109,7 @@ export async function POST(request: Request) {
   const results = {
     created: 0,
     skipped: 0,
+    duplicates_skipped: 0,
     errors: [] as string[],
   };
 
@@ -192,8 +193,41 @@ export async function POST(request: Request) {
       });
     }
 
-    for (let i = 0; i < inserts.length; i += 50) {
-      const batch = inserts.slice(i, i + 50);
+    // Skip duplicates: rows that already exist for the same
+    // (employee_id, requested_date, requested_start_time, requested_end_time)
+    // — including duplicates within this CSV upload itself.
+    const candidateEmployeeIds = [
+      ...new Set(inserts.map((r) => r.employee_id as string)),
+    ];
+    const { data: existingAdjustments } = await admin
+      .from("schedule_adjustments")
+      .select(
+        "employee_id, requested_date, requested_start_time, requested_end_time"
+      )
+      .in("employee_id", candidateEmployeeIds);
+
+    const normalizeTime = (t: string | null | undefined) =>
+      (t ?? "").slice(0, 5);
+    const seenKeys = new Set(
+      (existingAdjustments ?? []).map(
+        (r) =>
+          `${r.employee_id}|${r.requested_date}|${normalizeTime(r.requested_start_time)}|${normalizeTime(r.requested_end_time)}`
+      )
+    );
+
+    const dedupedInserts: Record<string, unknown>[] = [];
+    for (const ins of inserts) {
+      const key = `${ins.employee_id}|${ins.requested_date}|${normalizeTime(ins.requested_start_time as string)}|${normalizeTime(ins.requested_end_time as string)}`;
+      if (seenKeys.has(key)) {
+        results.duplicates_skipped++;
+        continue;
+      }
+      seenKeys.add(key);
+      dedupedInserts.push(ins);
+    }
+
+    for (let i = 0; i < dedupedInserts.length; i += 50) {
+      const batch = dedupedInserts.slice(i, i + 50);
       const { error } = await admin.from("schedule_adjustments").insert(batch);
       if (error) {
         results.errors.push(`Insert error: ${error.message}`);

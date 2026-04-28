@@ -14,8 +14,8 @@ interface AttendanceLog {
   id: string;
   employee_id: string;
   date: string;
-  scheduled_start: string;
-  scheduled_end: string;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
   clock_in: string | null;
   clock_out: string | null;
   status: string;
@@ -190,7 +190,13 @@ export function TeamAttendanceTable({ initialLogs, teamMembers }: Props) {
                     </td>
                     <td className="px-6 py-4">{formatDate(log.date)}</td>
                     <td className="px-6 py-4">
-                      {log.scheduled_start} - {log.scheduled_end}
+                      {log.scheduled_start && log.scheduled_end ? (
+                        `${log.scheduled_start.slice(0, 5)} - ${log.scheduled_end.slice(0, 5)}`
+                      ) : (
+                        <span className="text-xs italic text-gray-400">
+                          No schedule on file
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4">{formatClockTime(log.clock_in)}</td>
                     <td className="px-6 py-4">{formatClockTime(log.clock_out)}</td>
@@ -225,6 +231,7 @@ function StatusBadge({ status }: { status: string }) {
     on_leave: "bg-blue-100 text-blue-700",
     holiday: "bg-purple-100 text-purple-700",
     working: "bg-green-50 text-green-600",
+    no_schedule: "bg-gray-100 text-gray-500",
   };
 
   const labels: Record<string, string> = {
@@ -237,6 +244,7 @@ function StatusBadge({ status }: { status: string }) {
     on_leave: "On Leave",
     holiday: "Holiday",
     working: "Working",
+    no_schedule: "No Schedule",
   };
 
   return (

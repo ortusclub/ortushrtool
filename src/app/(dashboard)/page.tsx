@@ -166,7 +166,7 @@ export default async function DashboardPage() {
 
   const directReportIds = new Set((directReports ?? []).map((r) => r.id));
 
-  // "My Team" = people with the same manager as me (peers + me)
+  // "My Team" = my manager + peers (same manager as me) + me
   const myManagerId = user.manager_id;
   const teamMemberIds = new Set<string>();
   if (myManagerId) {
@@ -176,6 +176,7 @@ export default async function DashboardPage() {
       .eq("manager_id", myManagerId)
       .eq("is_active", true);
     for (const m of teamMembers ?? []) teamMemberIds.add(m.id);
+    teamMemberIds.add(myManagerId);
   }
   teamMemberIds.add(user.id);
 

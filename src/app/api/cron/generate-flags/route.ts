@@ -70,6 +70,9 @@ export async function GET(request: Request) {
       // Skip if it's a holiday for this employee's country
       if (employee.holiday_country && holidayCountries.has(employee.holiday_country)) continue;
 
+      // Can't flag a violation against a non-existent schedule.
+      if (!log.scheduled_start || !log.scheduled_end) continue;
+
       const flagTypes: {
         type: string;
         scheduled: string;

@@ -135,6 +135,7 @@ export async function POST(request: Request) {
   const results = {
     created: 0,
     skipped: 0,
+    duplicates_skipped: 0,
     errors: [] as string[],
   };
 
@@ -197,9 +198,38 @@ export async function POST(request: Request) {
       });
     }
 
+    // Skip duplicates: rows that already exist for the same
+    // (employee_id, leave_type, start_date, end_date) — including duplicates
+    // within this CSV upload itself.
+    const candidateEmployeeIds = [
+      ...new Set(inserts.map((r) => r.employee_id as string)),
+    ];
+    const { data: existingLeaves } = await admin
+      .from("leave_requests")
+      .select("employee_id, leave_type, start_date, end_date")
+      .in("employee_id", candidateEmployeeIds);
+
+    const seenKeys = new Set(
+      (existingLeaves ?? []).map(
+        (r) =>
+          `${r.employee_id}|${r.leave_type}|${r.start_date}|${r.end_date}`
+      )
+    );
+
+    const dedupedInserts: Record<string, unknown>[] = [];
+    for (const ins of inserts) {
+      const key = `${ins.employee_id}|${ins.leave_type}|${ins.start_date}|${ins.end_date}`;
+      if (seenKeys.has(key)) {
+        results.duplicates_skipped++;
+        continue;
+      }
+      seenKeys.add(key);
+      dedupedInserts.push(ins);
+    }
+
     // Batch insert in chunks of 50
-    for (let i = 0; i < inserts.length; i += 50) {
-      const batch = inserts.slice(i, i + 50);
+    for (let i = 0; i < dedupedInserts.length; i += 50) {
+      const batch = dedupedInserts.slice(i, i + 50);
       const { error } = await admin.from("leave_requests").insert(batch);
       if (error) {
         results.errors.push(`Insert error: ${error.message}`);

@@ -10,7 +10,8 @@ export type AttendanceStatus =
   | "on_leave"
   | "holiday"
   | "working"
-  | "not_started";
+  | "not_started"
+  | "no_schedule";
 export type FlagType = "late_arrival" | "early_departure" | "absent";
 export type WorkLocation = "office" | "online";
 export type LeaveType =
@@ -106,8 +107,8 @@ export interface AttendanceLog {
   desktime_employee_id: number | null;
   clock_in: string | null;
   clock_out: string | null;
-  scheduled_start: string;
-  scheduled_end: string;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
   status: AttendanceStatus;
   late_minutes: number | null;
   early_departure_minutes: number | null;
