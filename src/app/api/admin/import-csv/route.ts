@@ -34,6 +34,7 @@ interface ParsedRow {
   timezone: string;
   role: string;
   department: string;
+  jobTitle: string;
   managerEmail: string;
   holidayCountry: string;
   desktimeId: number | null;
@@ -78,6 +79,7 @@ function parseCSV(csvText: string): ParsedRow[] {
   const tzIdx = col(["timezone", "time zone", "tz"]);
   const roleIdx = col(["role"]);
   const deptIdx = col(["department", "dept"]);
+  const jobTitleIdx = col(["job title", "job_title", "title", "position"]);
   const managerIdx = col(["manager", "manager email", "manager_email", "manager name", "manager_name"]);
   const countryIdx = col(["country", "holiday_country", "holiday country"]);
   const desktimeIdx = col(["desktime_id", "desktime id", "desktime_employee_id", "desktime"]);
@@ -142,6 +144,7 @@ function parseCSV(csvText: string): ParsedRow[] {
       timezone: tz ? (TIMEZONE_MAP[tz] ?? tz) : "",
       role: ROLE_MAP[roleRaw] ?? (roleRaw ? roleRaw.toLowerCase() : ""),
       department: deptIdx >= 0 ? parts[deptIdx] || "" : "",
+      jobTitle: jobTitleIdx >= 0 ? parts[jobTitleIdx] || "" : "",
       managerEmail: managerIdx >= 0 ? parts[managerIdx] || "" : "",
       holidayCountry: country ? (COUNTRY_MAP[country] ?? country) : "",
       desktimeId: desktimeRaw ? parseInt(desktimeRaw, 10) || null : null,
@@ -238,6 +241,7 @@ export async function POST(request: Request) {
             }
           }
           if (row.department) updateFields.department = row.department;
+          if (row.jobTitle) updateFields.job_title = row.jobTitle;
           if (row.holidayCountry) updateFields.holiday_country = row.holidayCountry;
           if (row.desktimeId) updateFields.desktime_employee_id = row.desktimeId;
           if (row.birthday) updateFields.birthday = row.birthday;
