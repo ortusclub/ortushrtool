@@ -82,9 +82,8 @@ export function SchedulesTable({
           .lte("start_date", selectedDate)
           .gte("end_date", selectedDate),
         supabase
-          .from("system_settings")
-          .select("key, value")
-          .like("key", "flag_note:%"),
+          .from("office_day_flag_notes")
+          .select("employee_id, note"),
       ]);
 
       setAdjustments(adj ?? []);
@@ -92,8 +91,7 @@ export function SchedulesTable({
 
       const noteMap: Record<string, string> = {};
       for (const n of notes ?? []) {
-        const userId = n.key.replace("flag_note:", "");
-        noteMap[userId] = n.value;
+        noteMap[n.employee_id] = n.note;
       }
       setFlagNotes(noteMap);
     }
@@ -106,9 +104,9 @@ export function SchedulesTable({
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    await supabase.from("system_settings").upsert({
-      key: `flag_note:${userId}`,
-      value: flagNoteInput,
+    await supabase.from("office_day_flag_notes").upsert({
+      employee_id: userId,
+      note: flagNoteInput,
       updated_by: user?.id,
       updated_at: new Date().toISOString(),
     });
