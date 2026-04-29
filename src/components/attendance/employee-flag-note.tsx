@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
 export function EmployeeFlagNote({
@@ -17,14 +16,25 @@ export function EmployeeFlagNote({
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState(initialNote ?? "");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
     setSaving(true);
-    const supabase = createClient();
-    await supabase
-      .from("attendance_flags")
-      .update({ employee_notes: note.trim() || null })
-      .eq("id", flagId);
+    setError(null);
+
+    const res = await fetch(`/api/flags/${flagId}/employee-note`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Failed to save");
+      setSaving(false);
+      return;
+    }
+
     setEditing(false);
     setSaving(false);
     router.refresh();
@@ -51,6 +61,9 @@ export function EmployeeFlagNote({
           rows={2}
           className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
         />
+        {error && (
+          <p className="text-xs text-red-600">{error}</p>
+        )}
         <div className="flex gap-2">
           <button
             type="button"
@@ -65,6 +78,7 @@ export function EmployeeFlagNote({
             onClick={() => {
               setNote(initialNote ?? "");
               setEditing(false);
+              setError(null);
             }}
             className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >

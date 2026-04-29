@@ -38,7 +38,7 @@ export default async function FlagsPage() {
     ? await supabase
         .from("attendance_flags")
         .select(
-          "*, employee:users!attendance_flags_employee_id_fkey(full_name, email)"
+          "*, employee:users!attendance_flags_employee_id_fkey(full_name, email, manager_id)"
         )
         .in("employee_id", employeeIds)
         .order("flag_date", { ascending: false })
@@ -65,7 +65,7 @@ export default async function FlagsPage() {
         initialFlags={flags ?? []}
         employees={employees}
         currentUserId={user.id}
-        canAcknowledge={isManager}
+        viewerIsAdmin={isAdmin}
       />
     </div>
   );

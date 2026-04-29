@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
 export function FlagAcknowledge({ flagId }: { flagId: string }) {
@@ -9,18 +8,24 @@ export function FlagAcknowledge({ flagId }: { flagId: string }) {
   const [loading, setLoading] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const handleAcknowledge = async () => {
     setLoading(true);
-    const supabase = createClient();
+    setError(null);
 
-    await supabase
-      .from("attendance_flags")
-      .update({
-        acknowledged: true,
-        notes: notes.trim() || null,
-      })
-      .eq("id", flagId);
+    const res = await fetch(`/api/flags/${flagId}/acknowledge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Failed to acknowledge");
+      setLoading(false);
+      return;
+    }
 
     router.refresh();
   };
@@ -35,6 +40,9 @@ export function FlagAcknowledge({ flagId }: { flagId: string }) {
           rows={2}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
         />
+        {error && (
+          <p className="text-xs text-red-600">{error}</p>
+        )}
         <div className="flex gap-2">
           <button
             type="button"
@@ -46,7 +54,10 @@ export function FlagAcknowledge({ flagId }: { flagId: string }) {
           </button>
           <button
             type="button"
-            onClick={() => setShowNotes(false)}
+            onClick={() => {
+              setShowNotes(false);
+              setError(null);
+            }}
             className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
             Cancel

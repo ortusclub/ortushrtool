@@ -24,15 +24,15 @@ interface AttendanceFlag {
   acknowledged: boolean;
   notes: string | null;
   employee_notes: string | null;
-  employee?: { full_name: string; email: string } | null;
+  employee?: { full_name: string; email: string; manager_id: string | null } | null;
 }
 
 interface Props {
   initialFlags: AttendanceFlag[];
   employees: Employee[];
   currentUserId: string;
-  /** True when the viewer can acknowledge flags (manager+). */
-  canAcknowledge: boolean;
+  /** True when the viewer is hr_admin or super_admin (acknowledges anyone). */
+  viewerIsAdmin: boolean;
 }
 
 function formatDate(dateStr: string): string {
@@ -66,7 +66,7 @@ const flagTypeStyles: Record<string, string> = {
   absent: "bg-red-100 text-red-700",
 };
 
-export function FlagsTable({ initialFlags, employees, currentUserId, canAcknowledge }: Props) {
+export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdmin }: Props) {
   const [flags, setFlags] = useState(initialFlags);
   const [loading, setLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState("");
@@ -83,7 +83,7 @@ export function FlagsTable({ initialFlags, employees, currentUserId, canAcknowle
 
     let query = supabase
       .from("attendance_flags")
-      .select("*, employee:users!attendance_flags_employee_id_fkey(full_name, email)")
+      .select("*, employee:users!attendance_flags_employee_id_fkey(full_name, email, manager_id)")
       .order("flag_date", { ascending: false });
 
     if (selectedEmployee) {
@@ -118,7 +118,7 @@ export function FlagsTable({ initialFlags, employees, currentUserId, canAcknowle
     const supabase = createClient();
     const { data } = await supabase
       .from("attendance_flags")
-      .select("*, employee:users!attendance_flags_employee_id_fkey(full_name, email)")
+      .select("*, employee:users!attendance_flags_employee_id_fkey(full_name, email, manager_id)")
       .in("employee_id", employeeIds)
       .order("flag_date", { ascending: false })
       .limit(50);
@@ -208,6 +208,11 @@ export function FlagsTable({ initialFlags, employees, currentUserId, canAcknowle
           <div className="divide-y divide-gray-100">
             {flags.map((flag) => {
               const isOwn = flag.employee_id === currentUserId;
+              const isDirectManager =
+                !!flag.employee?.manager_id &&
+                flag.employee.manager_id === currentUserId;
+              const canAcknowledgeThis =
+                !isOwn && (viewerIsAdmin || isDirectManager);
               return (
                 <div
                   key={flag.id}
@@ -277,7 +282,7 @@ export function FlagsTable({ initialFlags, employees, currentUserId, canAcknowle
                       <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
                         Acknowledged
                       </span>
-                    ) : canAcknowledge && !isOwn ? (
+                    ) : canAcknowledgeThis ? (
                       <FlagAcknowledge flagId={flag.id} />
                     ) : (
                       <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-700">
