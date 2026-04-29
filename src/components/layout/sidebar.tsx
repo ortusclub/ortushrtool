@@ -56,10 +56,11 @@ const navSections: NavSection[] = [
       { label: "My Schedule", href: "/schedule", icon: <Calendar size={20} />, minRole: "employee" },
       { label: "My Attendance", href: "/attendance", icon: <Clock size={20} />, minRole: "employee" },
       { label: "Schedule Requests", href: "/requests", icon: <ArrowRightLeft size={20} />, minRole: "employee" },
+      { label: "Flags", href: "/flags", icon: <Flag size={20} />, minRole: "employee" },
       { label: "Holidays", href: "/holidays", icon: <CalendarHeart size={20} />, minRole: "employee" },
       { label: "Team Calendar", href: "/weekly", icon: <CalendarDays size={20} />, minRole: "employee" },
-      { label: "KPIs", href: "/kpis", icon: <Target size={20} />, minRole: "employee" },
       { label: "Team Directory", href: "/team", icon: <UsersRound size={20} />, minRole: "employee" },
+      { label: "KPIs", href: "/kpis", icon: <Target size={20} />, minRole: "employee" },
       { label: "Help & Guide", href: "/help", icon: <HelpCircle size={20} />, minRole: "employee" },
     ],
   },
@@ -68,7 +69,6 @@ const navSections: NavSection[] = [
     minRole: "manager",
     items: [
       { label: "Team Attendance", href: "/attendance/team", icon: <Clock size={20} />, minRole: "manager" },
-      { label: "Flags", href: "/flags", icon: <Flag size={20} />, minRole: "manager" },
     ],
   },
   {

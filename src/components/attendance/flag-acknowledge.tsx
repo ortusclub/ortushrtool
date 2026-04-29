@@ -18,7 +18,7 @@ export function FlagAcknowledge({ flagId }: { flagId: string }) {
       .from("attendance_flags")
       .update({
         acknowledged: true,
-        notes: notes || null,
+        notes: notes.trim() || null,
       })
       .eq("id", flagId);
 
@@ -27,23 +27,25 @@ export function FlagAcknowledge({ flagId }: { flagId: string }) {
 
   if (showNotes) {
     return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 min-w-[220px]">
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Add explanation (optional)..."
+          placeholder="Manager note (optional)..."
           rows={2}
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
         />
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={handleAcknowledge}
             disabled={loading}
             className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {loading ? "..." : "Submit"}
+            {loading ? "..." : "Acknowledge"}
           </button>
           <button
+            type="button"
             onClick={() => setShowNotes(false)}
             className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
@@ -56,6 +58,7 @@ export function FlagAcknowledge({ flagId }: { flagId: string }) {
 
   return (
     <button
+      type="button"
       onClick={() => setShowNotes(true)}
       className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
     >

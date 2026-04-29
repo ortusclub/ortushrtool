@@ -4,7 +4,7 @@ import { formatTime, hasRole } from "@/lib/utils";
 import { DAYS_OF_WEEK } from "@/lib/constants";
 import { HOLIDAY_COUNTRY_LABELS, type HolidayCountry } from "@/types/database";
 import Link from "next/link";
-import { ArrowLeft, Mail, Building2, Clock, Globe, Users, MapPin, Cake, BriefcaseBusiness, CalendarX } from "lucide-react";
+import { ArrowLeft, Mail, Building2, Clock, Globe, Users, MapPin, Cake, BriefcaseBusiness, CalendarX, Flag } from "lucide-react";
 import { format, parseISO, differenceInYears } from "date-fns";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { AvatarUpload } from "@/components/shared/avatar-upload";
@@ -41,6 +41,11 @@ export default async function TeamMemberPage({
     .select("*")
     .eq("id", userId)
     .single();
+
+  // The viewer can see this person's flag history if they're an admin, the
+  // person themselves, or this person's direct manager.
+  const canSeeFlags =
+    isAdmin || isOwnProfile || user?.manager_id === currentUser.id;
 
   if (!user) {
     return (
@@ -87,6 +92,20 @@ export default async function TeamMemberPage({
     .lte("effective_from", today)
     .or(`effective_until.is.null,effective_until.gte.${today}`)
     .order("day_of_week", { ascending: true });
+
+  // Fetch flag history (only if the viewer is allowed to see it)
+  const flagHistory = canSeeFlags
+    ? (
+        await supabase
+          .from("attendance_flags")
+          .select(
+            "id, flag_type, flag_date, deviation_minutes, scheduled_time, actual_time, acknowledged, notes, employee_notes"
+          )
+          .eq("employee_id", userId)
+          .order("flag_date", { ascending: false })
+          .limit(50)
+      ).data ?? []
+    : [];
 
   const tz =
     user.timezone === "Asia/Manila"
@@ -289,6 +308,74 @@ export default async function TeamMemberPage({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Attendance Flag History — gated to admin / self / direct manager */}
+      {canSeeFlags && (
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+            <Flag size={14} />
+            Attendance Flag History
+          </h2>
+          {flagHistory.length === 0 ? (
+            <p className="text-sm text-gray-500">No flags on record.</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {flagHistory.map((f) => (
+                <div key={f.id} className="flex items-start justify-between gap-4 py-3">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          f.flag_type === "late_arrival"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : f.flag_type === "early_departure"
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {f.flag_type === "late_arrival"
+                          ? "Late Arrival"
+                          : f.flag_type === "early_departure"
+                            ? "Early Departure"
+                            : "Absent"}
+                      </span>
+                      <span className="text-sm text-gray-600">
+                        {format(parseISO(f.flag_date), "MMM d, yyyy")}
+                      </span>
+                      {f.deviation_minutes > 0 && (
+                        <span className="text-xs text-gray-400">
+                          {f.deviation_minutes} min
+                        </span>
+                      )}
+                    </div>
+                    {f.employee_notes && (
+                      <p className="text-xs text-gray-600">
+                        <span className="font-medium text-gray-700">Employee note:</span>{" "}
+                        <span className="italic">{f.employee_notes}</span>
+                      </p>
+                    )}
+                    {f.notes && (
+                      <p className="text-xs text-gray-600">
+                        <span className="font-medium text-gray-700">Manager note:</span>{" "}
+                        <span className="italic">{f.notes}</span>
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      f.acknowledged
+                        ? "bg-green-100 text-green-700"
+                        : "bg-yellow-100 text-yellow-700"
+                    }`}
+                  >
+                    {f.acknowledged ? "Acknowledged" : "Pending"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

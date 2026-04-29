@@ -127,6 +127,7 @@ export interface AttendanceFlag {
   actual_time: string | null;
   acknowledged: boolean;
   notes: string | null;
+  employee_notes: string | null;
   created_at: string;
 }
 
