@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   }
 
   // Call the cron endpoint internally
-  const cronUrl = `${process.env.NEXT_PUBLIC_APP_URL || request.headers.get("origin")}/api/cron/desktime-sync?date=${date}`;
+  const cronUrl = `${request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL}/api/cron/desktime-sync?date=${date}`;
 
   const response = await fetch(cronUrl, {
     headers: {

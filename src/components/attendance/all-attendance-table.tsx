@@ -137,7 +137,15 @@ const statusStyles: Record<string, string> = {
   working: "bg-green-50 text-green-600",
   not_started: "bg-slate-100 text-slate-600",
   no_schedule: "bg-gray-100 text-gray-500",
+  inconclusive: "bg-amber-100 text-amber-700",
 };
+
+// Pills bundle related stored statuses (e.g. "Late" includes late_and_early).
+function statusMatches(displayStatus: string, filter: string): boolean {
+  if (filter === "late_any") return displayStatus === "late_arrival" || displayStatus === "late_and_early";
+  if (filter === "early_any") return displayStatus === "early_departure" || displayStatus === "late_and_early";
+  return displayStatus === filter;
+}
 
 const statusLabels: Record<string, string> = {
   on_time: "On Time",
@@ -151,6 +159,7 @@ const statusLabels: Record<string, string> = {
   working: "Working",
   not_started: "Shift Yet to Start",
   no_schedule: "No Schedule",
+  inconclusive: "Inconclusive",
 };
 
 /**
@@ -168,7 +177,7 @@ function getDisplayStatus(
   if (!isToday) return log.status;
 
   // Non-working statuses are always final
-  if (["rest_day", "on_leave", "holiday", "no_schedule"].includes(log.status)) {
+  if (["rest_day", "on_leave", "holiday", "no_schedule", "inconclusive"].includes(log.status)) {
     return log.status;
   }
 
@@ -492,7 +501,7 @@ export function AllAttendanceTable({
     }
 
     if (statusFilter) {
-      result = result.filter((r) => rowDisplayStatus(r) === statusFilter);
+      result = result.filter((r) => statusMatches(rowDisplayStatus(r), statusFilter));
     }
 
     if (locationFilter) {
@@ -530,7 +539,7 @@ export function AllAttendanceTable({
   // Stats from filtered rows
   const stats = useMemo(() => {
     let onTime = 0, late = 0, early = 0, absent = 0, noData = 0,
-      onLeave = 0, holiday = 0, working = 0, notStarted = 0;
+      onLeave = 0, holiday = 0, working = 0, notStarted = 0, inconclusive = 0;
     for (const r of filteredRows) {
       const ds = rowDisplayStatus(r);
       if (ds === "on_time") onTime++;
@@ -542,9 +551,10 @@ export function AllAttendanceTable({
       else if (ds === "holiday") holiday++;
       else if (ds === "working") working++;
       else if (ds === "not_started") notStarted++;
+      else if (ds === "inconclusive") inconclusive++;
       else noData++;
     }
-    return { onTime, late, early, absent, noData, onLeave, holiday, working, notStarted };
+    return { onTime, late, early, absent, noData, onLeave, holiday, working, notStarted, inconclusive };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredRows, onLeaveByEmpDate]);
 
@@ -737,44 +747,32 @@ export function AllAttendanceTable({
             ? formatDisplayDate(fromDate)
             : `${formatDisplayDate(fromDate)} → ${formatDisplayDate(toDate)}`}
         </h2>
-        <div className="flex gap-3 text-sm">
-          <span className="rounded-full bg-green-100 px-3 py-1 text-green-700 font-medium">
-            {stats.onTime} On Time
-          </span>
-          <span className="rounded-full bg-yellow-100 px-3 py-1 text-yellow-700 font-medium">
-            {stats.late} Late
-          </span>
-          <span className="rounded-full bg-orange-100 px-3 py-1 text-orange-700 font-medium">
-            {stats.early} Early Out
-          </span>
-          <span className="rounded-full bg-red-100 px-3 py-1 text-red-700 font-medium">
-            {stats.absent} Absent
-          </span>
-          {stats.working > 0 && (
-            <span className="rounded-full bg-green-50 px-3 py-1 text-green-600 font-medium">
-              {stats.working} Working
-            </span>
-          )}
-          {stats.notStarted > 0 && (
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 font-medium">
-              {stats.notStarted} Shift Yet to Start
-            </span>
-          )}
-          {stats.onLeave > 0 && (
-            <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-700 font-medium">
-              {stats.onLeave} On Leave
-            </span>
-          )}
-          {stats.holiday > 0 && (
-            <span className="rounded-full bg-purple-100 px-3 py-1 text-purple-700 font-medium">
-              {stats.holiday} Holiday
-            </span>
-          )}
-          {stats.noData > 0 && (
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-500 font-medium">
-              {stats.noData} No Data
-            </span>
-          )}
+        <div className="flex flex-wrap gap-3 text-sm">
+          {([
+            { key: "on_time", label: "On Time", count: stats.onTime, classes: "bg-green-100 text-green-700", ringClass: "ring-green-400", alwaysShow: true },
+            { key: "late_any", label: "Late", count: stats.late, classes: "bg-yellow-100 text-yellow-700", ringClass: "ring-yellow-400", alwaysShow: true },
+            { key: "early_any", label: "Early Out", count: stats.early, classes: "bg-orange-100 text-orange-700", ringClass: "ring-orange-400", alwaysShow: true },
+            { key: "absent", label: "Absent", count: stats.absent, classes: "bg-red-100 text-red-700", ringClass: "ring-red-400", alwaysShow: true },
+            { key: "working", label: "Working", count: stats.working, classes: "bg-green-50 text-green-600", ringClass: "ring-green-300", alwaysShow: false },
+            { key: "not_started", label: "Shift Yet to Start", count: stats.notStarted, classes: "bg-slate-100 text-slate-600", ringClass: "ring-slate-400", alwaysShow: false },
+            { key: "on_leave", label: "On Leave", count: stats.onLeave, classes: "bg-blue-100 text-blue-700", ringClass: "ring-blue-400", alwaysShow: false },
+            { key: "holiday", label: "Holiday", count: stats.holiday, classes: "bg-purple-100 text-purple-700", ringClass: "ring-purple-400", alwaysShow: false },
+            { key: "inconclusive", label: "Inconclusive", count: stats.inconclusive, classes: "bg-amber-100 text-amber-700", ringClass: "ring-amber-400", alwaysShow: false },
+            { key: "no_data", label: "No Data", count: stats.noData, classes: "bg-gray-100 text-gray-500", ringClass: "ring-gray-400", alwaysShow: false },
+          ] as const).map((p) => {
+            if (!p.alwaysShow && p.count === 0) return null;
+            const active = statusFilter === p.key;
+            return (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setStatusFilter(active ? "" : p.key)}
+                className={`rounded-full px-3 py-1 font-medium transition ${p.classes} ${active ? `ring-2 ring-offset-1 ${p.ringClass}` : "hover:opacity-80"}`}
+              >
+                {p.count} {p.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -881,7 +879,13 @@ export function AllAttendanceTable({
                       {getTzLabel(tz)}
                     </td>
                     <td className="px-4 py-3">
-                      {log ? formatClockTime(log.clock_in, tz) : "-"}
+                      {ds === "inconclusive" ? (
+                        <span className="text-amber-600" title="Multiple sessions detected — actual start time is uncertain">?</span>
+                      ) : log ? (
+                        formatClockTime(log.clock_in, tz)
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {(() => {

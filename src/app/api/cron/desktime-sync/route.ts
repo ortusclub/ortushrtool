@@ -207,24 +207,24 @@ export async function GET(request: Request) {
           ? Math.max(0, scheduledStartMinutesForCutoff - 120)
           : SHIFT_CUTOFF_MINUTES;
 
+      // When pre-shift activity exists AND the day continues into / past the
+      // 2h pre-shift band, we can't reliably infer the real clock-in (DeskTime
+      // only exposes day-bookend timestamps, no per-session start times). Flag
+      // the row so we can surface it as "Inconclusive" downstream.
+      let multipleSessionsAmbiguous = false;
       let effectiveArrivedStr = arrivedStr;
       if (arrivedStr) {
         const arrivedMinutes = extractTimeMinutes(arrivedStr);
         if (arrivedMinutes < earlyThresholdMinutes) {
-          // Pre-shift activity. If the session continues into the 2h pre-shift
-          // band, snap clock-in to (scheduled_start - 2h); otherwise drop it.
           const leftMinutes = leftStr ? extractTimeMinutes(leftStr) : null;
-          if (
+          const hasLaterActivity =
             leftMinutes !== null &&
             leftMinutes >= earlyThresholdMinutes &&
-            scheduledStartMinutesForCutoff !== null
-          ) {
-            const snapH = String(Math.floor(earlyThresholdMinutes / 60)).padStart(2, "0");
-            const snapM = String(earlyThresholdMinutes % 60).padStart(2, "0");
-            effectiveArrivedStr = `${syncDate} ${snapH}:${snapM}:00`;
-          } else {
-            effectiveArrivedStr = null;
+            scheduledStartMinutesForCutoff !== null;
+          if (hasLaterActivity) {
+            multipleSessionsAmbiguous = true;
           }
+          effectiveArrivedStr = null;
         }
       }
 
@@ -313,6 +313,14 @@ export async function GET(request: Request) {
             }
           }
         }
+      }
+
+      // Override: if pre-shift activity continued into the workday, we can't
+      // tell their real clock-in. Surface as "inconclusive" rather than guess.
+      if (multipleSessionsAmbiguous) {
+        status = "inconclusive";
+        lateMinutes = null;
+        earlyMinutes = null;
       }
 
       // Upsert attendance log
