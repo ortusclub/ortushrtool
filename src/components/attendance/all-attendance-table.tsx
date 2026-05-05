@@ -9,6 +9,8 @@ import { UserNameLink } from "@/components/shared/user-name-link";
 interface UserRow {
   id: string;
   full_name: string;
+  preferred_name: string | null;
+  first_name: string | null;
   email: string;
   timezone: string;
   holiday_country: HolidayCountry;
@@ -784,6 +786,7 @@ export function AllAttendanceTable({
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50 text-left">
                 <th className="px-4 py-3 font-medium text-gray-600">Employee</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Preferred Name</th>
                 {!isSingleDate && (
                   <th className="px-4 py-3 font-medium text-gray-600">Date</th>
                 )}
@@ -827,6 +830,9 @@ export function AllAttendanceTable({
                         userId={user.id}
                         name={user.full_name || user.email.split("@")[0]}
                       />
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">
+                      {user.preferred_name || user.first_name || "-"}
                     </td>
                     {!isSingleDate && (
                       <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">

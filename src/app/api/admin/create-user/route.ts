@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { full_name, first_name, middle_name, last_name, email, role, department, job_title, manager_id, desktime_employee_id, holiday_country, schedule } = body;
+  const { full_name, preferred_name, first_name, middle_name, last_name, email, role, department, job_title, manager_id, desktime_employee_id, holiday_country, schedule } = body;
 
   if (!email) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
 
   const updateFields: Record<string, unknown> = {
     full_name: full_name || "",
+    preferred_name: preferred_name || first_name || null,
     first_name: first_name || null,
     middle_name: middle_name || null,
     last_name: last_name || null,

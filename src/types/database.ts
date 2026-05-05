@@ -46,6 +46,7 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
+  preferred_name: string | null;
   first_name: string | null;
   middle_name: string | null;
   last_name: string | null;

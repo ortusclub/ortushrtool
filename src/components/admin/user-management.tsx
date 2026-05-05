@@ -45,6 +45,7 @@ export function UserManagement({
   const startEdit = (user: User) => {
     setEditingId(user.id);
     setEditForm({
+      preferred_name: user.preferred_name,
       first_name: user.first_name,
       middle_name: user.middle_name,
       last_name: user.last_name,
@@ -225,6 +226,7 @@ export function UserManagement({
     }
 
     const headers = [
+      "Preferred Name",
       "First Name",
       "Middle Name",
       "Last Name",
@@ -253,6 +255,7 @@ export function UserManagement({
       const userSchedule = scheduleMap.get(u.id);
       csvRows.push(
         [
+          `"${u.preferred_name ?? u.first_name ?? ""}"`,
           `"${u.first_name ?? ""}"`,
           `"${u.middle_name ?? ""}"`,
           `"${u.last_name ?? ""}"`,
@@ -342,6 +345,7 @@ export function UserManagement({
                     className="rounded border-gray-300"
                   />
                 </th>
+                <th className="px-4 py-3 font-medium text-gray-600">Preferred Name</th>
                 <th className="px-4 py-3 font-medium text-gray-600">First Name</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Middle Name</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Last Name</th>
@@ -372,6 +376,19 @@ export function UserManagement({
                         onChange={() => toggleOne(user.id)}
                         className="rounded border-gray-300"
                       />
+                    </td>
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <input
+                          value={editForm.preferred_name ?? ""}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, preferred_name: e.target.value })
+                          }
+                          className="w-full rounded border px-2 py-1 text-sm"
+                        />
+                      ) : (
+                        user.preferred_name || user.first_name || "-"
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {isEditing ? (
@@ -744,6 +761,7 @@ function AddUserModal({
   onSuccess: () => void;
 }) {
   const [form, setForm] = useState({
+    preferred_name: "",
     first_name: "",
     middle_name: "",
     last_name: "",
@@ -836,6 +854,10 @@ function AddUserModal({
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* User details */}
           <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Preferred Name</label>
+              <input type="text" placeholder="Defaults to first name" value={form.preferred_name} onChange={(e) => setForm({ ...form, preferred_name: e.target.value })} className={inputClass} />
+            </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">First Name</label>
               <input type="text" required value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} className={inputClass} />

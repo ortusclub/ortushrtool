@@ -26,6 +26,7 @@ const ROLE_MAP: Record<string, string> = {
 };
 
 interface ParsedRow {
+  preferredName: string;
   firstName: string;
   middleName: string;
   lastName: string;
@@ -66,6 +67,7 @@ function parseCSV(csvText: string): ParsedRow[] {
     return -1;
   };
 
+  const preferredNameIdx = col(["preferred name", "preferred_name", "preferredname"]);
   const firstNameIdx = col(["first name", "first_name", "firstname"]);
   const middleNameIdx = col(["middle name", "middle_name", "middlename"]);
   const lastNameIdx = col(["last name", "last_name", "lastname"]);
@@ -131,11 +133,13 @@ function parseCSV(csvText: string): ParsedRow[] {
     const firstName = hasNameParts ? (parts[firstNameIdx] || "") : "";
     const middleName = hasNameParts && middleNameIdx >= 0 ? (parts[middleNameIdx] || "") : "";
     const lastName = hasNameParts && lastNameIdx >= 0 ? (parts[lastNameIdx] || "") : "";
+    const preferredName = preferredNameIdx >= 0 ? (parts[preferredNameIdx] || "") : "";
     const fullName = hasNameParts
       ? [firstName, middleName, lastName].filter(Boolean).join(" ")
       : (parts[nameIdx] || "");
 
     rows.push({
+      preferredName,
       firstName,
       middleName,
       lastName,
@@ -229,6 +233,8 @@ export async function POST(request: Request) {
         try {
           const updateFields: Record<string, unknown> = {};
           if (row.name) updateFields.full_name = row.name;
+          const effectivePreferredName = row.preferredName || row.firstName;
+          if (effectivePreferredName) updateFields.preferred_name = effectivePreferredName;
           if (row.firstName) updateFields.first_name = row.firstName;
           if (row.middleName) updateFields.middle_name = row.middleName;
           if (row.lastName) updateFields.last_name = row.lastName;
