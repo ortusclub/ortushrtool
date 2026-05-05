@@ -55,6 +55,7 @@ export function UserManagement({
       job_title: user.job_title,
       manager_id: user.manager_id,
       desktime_employee_id: user.desktime_employee_id,
+      desktime_url: user.desktime_url,
       holiday_country: user.holiday_country,
       timezone: user.timezone,
       is_active: user.is_active,
@@ -238,6 +239,7 @@ export function UserManagement({
       "Country",
       "Timezone",
       "Desktime ID",
+      "Desktime URL",
       "Birthday",
       "Hire Date",
       "End Date",
@@ -267,6 +269,7 @@ export function UserManagement({
           u.holiday_country,
           getTzLabel(u.timezone || "Asia/Manila").split(" ")[0],
           u.desktime_employee_id ?? "",
+          `"${u.desktime_url ?? ""}"`,
           u.birthday ?? "",
           u.hire_date ?? "",
           u.end_date ?? "",
@@ -357,6 +360,7 @@ export function UserManagement({
                 <th className="px-4 py-3 font-medium text-gray-600">Country</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Timezone</th>
                 <th className="px-4 py-3 font-medium text-gray-600">DeskTime ID</th>
+                <th className="px-4 py-3 font-medium text-gray-600">DeskTime URL</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Birthday</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Hire Date</th>
                 <th className="px-4 py-3 font-medium text-gray-600">End Date</th>
@@ -582,6 +586,33 @@ export function UserManagement({
                     <td className="px-4 py-3">
                       {isEditing ? (
                         <input
+                          type="url"
+                          value={editForm.desktime_url ?? ""}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              desktime_url: e.target.value || null,
+                            })
+                          }
+                          placeholder="https://..."
+                          className="w-48 rounded border px-2 py-1 text-sm"
+                        />
+                      ) : user.desktime_url ? (
+                        <a
+                          href={user.desktime_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Open
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <input
                           type="date"
                           value={editForm.birthday ?? ""}
                           onChange={(e) =>
@@ -771,6 +802,7 @@ function AddUserModal({
     job_title: "",
     manager_id: "",
     desktime_employee_id: "",
+    desktime_url: "",
     holiday_country: "PH" as HolidayCountry,
   });
   const [includeSchedule, setIncludeSchedule] = useState(false);
@@ -816,6 +848,7 @@ function AddUserModal({
           full_name: fullName,
           manager_id: form.manager_id || null,
           desktime_employee_id: form.desktime_employee_id || null,
+          desktime_url: form.desktime_url || null,
           department: form.department || null,
           job_title: form.job_title || null,
           schedule,
@@ -912,6 +945,10 @@ function AddUserModal({
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">DeskTime ID</label>
               <input type="number" value={form.desktime_employee_id} onChange={(e) => setForm({ ...form, desktime_employee_id: e.target.value })} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">DeskTime URL</label>
+              <input type="url" placeholder="https://..." value={form.desktime_url} onChange={(e) => setForm({ ...form, desktime_url: e.target.value })} className={inputClass} />
             </div>
           </div>
 

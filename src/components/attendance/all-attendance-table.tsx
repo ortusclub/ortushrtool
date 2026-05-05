@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Search, ChevronLeft, ChevronRight, ChevronDown, Download } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ChevronDown, Download, ExternalLink } from "lucide-react";
 import { HOLIDAY_COUNTRY_LABELS, type HolidayCountry } from "@/types/database";
 import { UserNameLink } from "@/components/shared/user-name-link";
 
@@ -14,6 +14,7 @@ interface UserRow {
   email: string;
   timezone: string;
   holiday_country: HolidayCountry;
+  desktime_url: string | null;
 }
 
 interface AttendanceLog {
@@ -785,8 +786,8 @@ export function AllAttendanceTable({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50 text-left">
-                <th className="px-4 py-3 font-medium text-gray-600">Employee</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Preferred Name</th>
+                <th className="px-4 py-3 font-medium text-gray-600">DeskTime URL</th>
                 {!isSingleDate && (
                   <th className="px-4 py-3 font-medium text-gray-600">Date</th>
                 )}
@@ -828,11 +829,23 @@ export function AllAttendanceTable({
                     <td className="px-4 py-3 font-medium text-gray-900">
                       <UserNameLink
                         userId={user.id}
-                        name={user.full_name || user.email.split("@")[0]}
+                        name={user.preferred_name || user.first_name || user.full_name || user.email.split("@")[0]}
                       />
                     </td>
-                    <td className="px-4 py-3 text-gray-700">
-                      {user.preferred_name || user.first_name || "-"}
+                    <td className="px-4 py-3">
+                      {user.desktime_url ? (
+                        <a
+                          href={user.desktime_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                        >
+                          Open
+                          <ExternalLink size={12} />
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
                     {!isSingleDate && (
                       <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">

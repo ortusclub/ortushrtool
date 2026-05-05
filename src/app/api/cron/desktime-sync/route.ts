@@ -196,16 +196,40 @@ export async function GET(request: Request) {
       const leftStr = dtEmp.left && typeof dtEmp.left === "string" ? dtEmp.left : null;
       const dtTimezone = dtEmp.timezone;
 
-      // If arrived time is before 5:00 AM, treat it as previous day's overtime
+      // Determine the "too early" cutoff for clock-in. With a schedule, anything
+      // more than 2 hours before scheduled start is treated as previous day's
+      // overtime; without one, fall back to the global shift_cutoff_hour.
+      const scheduledStartMinutesForCutoff = hasSchedule
+        ? timeToMinutes(scheduledStart!.slice(0, 5))
+        : null;
+      const earlyThresholdMinutes =
+        scheduledStartMinutesForCutoff !== null
+          ? Math.max(0, scheduledStartMinutesForCutoff - 120)
+          : SHIFT_CUTOFF_MINUTES;
+
       let effectiveArrivedStr = arrivedStr;
       if (arrivedStr) {
         const arrivedMinutes = extractTimeMinutes(arrivedStr);
-        if (arrivedMinutes < SHIFT_CUTOFF_MINUTES) {
-          effectiveArrivedStr = null;
+        if (arrivedMinutes < earlyThresholdMinutes) {
+          // Pre-shift activity. If the session continues into the 2h pre-shift
+          // band, snap clock-in to (scheduled_start - 2h); otherwise drop it.
+          const leftMinutes = leftStr ? extractTimeMinutes(leftStr) : null;
+          if (
+            leftMinutes !== null &&
+            leftMinutes >= earlyThresholdMinutes &&
+            scheduledStartMinutesForCutoff !== null
+          ) {
+            const snapH = String(Math.floor(earlyThresholdMinutes / 60)).padStart(2, "0");
+            const snapM = String(earlyThresholdMinutes % 60).padStart(2, "0");
+            effectiveArrivedStr = `${syncDate} ${snapH}:${snapM}:00`;
+          } else {
+            effectiveArrivedStr = null;
+          }
         }
       }
 
-      // If left time is before 5:00 AM, also ignore it for this day
+      // Mirror the cutoff for "left" (preserves existing behaviour around
+      // post-midnight overtime trailing into the next sync window).
       let effectiveLeftStr = leftStr;
       if (leftStr) {
         const leftMinutes = extractTimeMinutes(leftStr);

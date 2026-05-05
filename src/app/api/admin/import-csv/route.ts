@@ -39,6 +39,7 @@ interface ParsedRow {
   managerEmail: string;
   holidayCountry: string;
   desktimeId: number | null;
+  desktimeUrl: string;
   birthday: string;
   hireDate: string;
   endDate: string;
@@ -85,6 +86,7 @@ function parseCSV(csvText: string): ParsedRow[] {
   const managerIdx = col(["manager", "manager email", "manager_email", "manager name", "manager_name"]);
   const countryIdx = col(["country", "holiday_country", "holiday country"]);
   const desktimeIdx = col(["desktime_id", "desktime id", "desktime_employee_id", "desktime"]);
+  const desktimeUrlIdx = col(["desktime url", "desktime_url", "desktimeurl"]);
   const birthdayIdx = col(["birthday", "date_of_birth", "dob"]);
   const hireDateIdx = col(["hire_date", "hire date", "start_date", "start date"]);
   const endDateIdx = col(["end_date", "end date"]);
@@ -116,6 +118,7 @@ function parseCSV(csvText: string): ParsedRow[] {
     const roleRaw = roleIdx >= 0 ? (parts[roleIdx] || "").toUpperCase() : "";
     const country = countryIdx >= 0 ? (parts[countryIdx] || "").toUpperCase() : "";
     const desktimeRaw = desktimeIdx >= 0 ? parts[desktimeIdx] : "";
+    const desktimeUrlRaw = desktimeUrlIdx >= 0 ? parts[desktimeUrlIdx] || "" : "";
     const birthdayRaw = birthdayIdx >= 0 ? parts[birthdayIdx] || "" : "";
     const hireDateRaw = hireDateIdx >= 0 ? parts[hireDateIdx] || "" : "";
     const endDateRaw = endDateIdx >= 0 ? parts[endDateIdx] || "" : "";
@@ -152,6 +155,7 @@ function parseCSV(csvText: string): ParsedRow[] {
       managerEmail: managerIdx >= 0 ? parts[managerIdx] || "" : "",
       holidayCountry: country ? (COUNTRY_MAP[country] ?? country) : "",
       desktimeId: desktimeRaw ? parseInt(desktimeRaw, 10) || null : null,
+      desktimeUrl: desktimeUrlRaw,
       birthday: birthdayRaw,
       hireDate: hireDateRaw,
       endDate: endDateRaw,
@@ -250,6 +254,7 @@ export async function POST(request: Request) {
           if (row.jobTitle) updateFields.job_title = row.jobTitle;
           if (row.holidayCountry) updateFields.holiday_country = row.holidayCountry;
           if (row.desktimeId) updateFields.desktime_employee_id = row.desktimeId;
+          if (row.desktimeUrl) updateFields.desktime_url = row.desktimeUrl;
           if (row.birthday) updateFields.birthday = row.birthday;
           if (row.hireDate) updateFields.hire_date = row.hireDate;
           if (row.endDate) updateFields.end_date = row.endDate;

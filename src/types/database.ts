@@ -60,6 +60,7 @@ export interface User {
   end_date: string | null;
   avatar_url: string | null;
   desktime_employee_id: number | null;
+  desktime_url: string | null;
   timezone: string;
   holiday_country: HolidayCountry;
   is_active: boolean;
