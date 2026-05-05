@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
+import { getUniversalVars } from "@/lib/email/universal-vars";
 
 export async function POST(request: Request) {
   const { email } = await request.json();
@@ -15,7 +16,9 @@ export async function POST(request: Request) {
   // Check if user exists
   const { data: user } = await admin
     .from("users")
-    .select("full_name, email")
+    .select(
+      "full_name, email, preferred_name, first_name, last_name, department, job_title, location"
+    )
     .eq("email", email)
     .maybeSingle();
 
@@ -39,9 +42,9 @@ export async function POST(request: Request) {
   const adminEmails = superAdmins.map((a) => a.email);
 
   const { subject, html } = await loadAndRender("forgot_password_alert", {
+    ...getUniversalVars(user, null, APP_URL),
     employee_name: user.full_name || user.email,
     employee_email: user.email,
-    app_url: APP_URL,
   });
 
   await sendEmail({

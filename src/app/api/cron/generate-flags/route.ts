@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
+import { getUniversalVars } from "@/lib/email/universal-vars";
 import { format, subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
     const { data: logs } = await supabase
       .from("attendance_logs")
       .select(
-        "*, employee:users!attendance_logs_employee_id_fkey(id, full_name, email, manager_id, holiday_country, timezone)"
+        "*, employee:users!attendance_logs_employee_id_fkey(id, full_name, email, preferred_name, first_name, last_name, department, job_title, location, manager_id, holiday_country, timezone)"
       )
       .eq("date", flagDate)
       .in("status", ["late_arrival", "early_departure", "late_and_early", "absent"]);
@@ -154,28 +155,32 @@ export async function GET(request: Request) {
           };
 
           const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+          const recipients = [employee.email, ...hrEmails];
+
+          // Add manager
+          let manager: { email: string; full_name: string | null } | null = null;
+          if (employee.manager_id) {
+            const { data: m } = await supabase
+              .from("users")
+              .select("email, full_name")
+              .eq("id", employee.manager_id)
+              .single();
+            if (m) {
+              manager = m;
+              recipients.push(m.email);
+            }
+          }
+
           const { subject: emailSubject, html: emailHtml } = await loadAndRender("attendance_flag", {
+            ...getUniversalVars(employee, manager, APP_URL),
             employee_name: employee.full_name || employee.email,
             flag_date: flagDate,
             flag_type: flagLabels[flag.type] ?? flag.type,
             scheduled_time: flag.scheduled,
             actual_time: flag.actual || "",
             deviation_minutes: String(flag.deviation),
-            app_url: APP_URL,
           });
-
-          const recipients = [employee.email, ...hrEmails];
-
-          // Add manager email
-          if (employee.manager_id) {
-            const { data: manager } = await supabase
-              .from("users")
-              .select("email")
-              .eq("id", employee.manager_id)
-              .single();
-
-            if (manager) recipients.push(manager.email);
-          }
 
           const uniqueRecipients = [...new Set(recipients)];
 

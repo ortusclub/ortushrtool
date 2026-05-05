@@ -5,12 +5,14 @@ import { createClient } from "@/lib/supabase/client";
 import { Search, ChevronLeft, ChevronRight, ChevronDown, Download, ExternalLink } from "lucide-react";
 import { HOLIDAY_COUNTRY_LABELS, type HolidayCountry } from "@/types/database";
 import { UserNameLink } from "@/components/shared/user-name-link";
+import { displayName } from "@/lib/utils";
 
 interface UserRow {
   id: string;
   full_name: string;
   preferred_name: string | null;
   first_name: string | null;
+  last_name: string | null;
   email: string;
   timezone: string;
   holiday_country: HolidayCountry;
@@ -449,7 +451,7 @@ export function AllAttendanceTable({
     out.sort(
       (a, b) =>
         b.date.localeCompare(a.date) ||
-        (a.user.full_name || "").localeCompare(b.user.full_name || "")
+        displayName(a.user).localeCompare(displayName(b.user))
     );
     return out;
   }, [isSingleDate, users, userById, logMap, logs, fromDate]);
@@ -483,6 +485,7 @@ export function AllAttendanceTable({
       const q = search.toLowerCase();
       result = result.filter(
         (r) =>
+          displayName(r.user).toLowerCase().includes(q) ||
           r.user.full_name.toLowerCase().includes(q) ||
           r.user.email.toLowerCase().includes(q)
       );
@@ -669,7 +672,7 @@ export function AllAttendanceTable({
                 <option value="">All members</option>
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.full_name || u.email}
+                    {displayName(u)}
                   </option>
                 ))}
               </select>
@@ -827,7 +830,7 @@ export function AllAttendanceTable({
                     <td className="px-4 py-3 font-medium text-gray-900">
                       <UserNameLink
                         userId={user.id}
-                        name={user.preferred_name || user.first_name || user.full_name || user.email.split("@")[0]}
+                        name={displayName(user)}
                       />
                     </td>
                     <td className="px-4 py-3">

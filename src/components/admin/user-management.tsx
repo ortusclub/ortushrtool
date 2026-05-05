@@ -61,6 +61,7 @@ export function UserManagement({
       is_active: user.is_active,
       birthday: user.birthday,
       hire_date: user.hire_date,
+      regularization_date: user.regularization_date,
       end_date: user.end_date,
     });
   };
@@ -242,6 +243,7 @@ export function UserManagement({
       "Desktime URL",
       "Birthday",
       "Hire Date",
+      "Regularization Date",
       "End Date",
       "Active",
       "M",
@@ -272,6 +274,7 @@ export function UserManagement({
           `"${u.desktime_url ?? ""}"`,
           u.birthday ?? "",
           u.hire_date ?? "",
+          u.regularization_date ?? "",
           u.end_date ?? "",
           u.is_active ? "Yes" : "No",
           userSchedule?.get(0) ?? "",
@@ -363,6 +366,7 @@ export function UserManagement({
                 <th className="px-4 py-3 font-medium text-gray-600">DeskTime URL</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Birthday</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Hire Date</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Regularization</th>
                 <th className="px-4 py-3 font-medium text-gray-600">End Date</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Active</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Actions</th>
@@ -642,6 +646,23 @@ export function UserManagement({
                         />
                       ) : (
                         user.hire_date ?? "-"
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editForm.regularization_date ?? ""}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              regularization_date: e.target.value || null,
+                            })
+                          }
+                          className="rounded border px-2 py-1 text-sm"
+                        />
+                      ) : (
+                        user.regularization_date ?? "-"
                       )}
                     </td>
                     <td className="px-4 py-3">

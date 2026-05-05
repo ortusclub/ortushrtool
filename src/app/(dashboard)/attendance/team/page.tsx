@@ -8,7 +8,7 @@ export default async function TeamAttendancePage() {
 
   const { data: reports } = await supabase
     .from("users")
-    .select("id, full_name, preferred_name, first_name, email, timezone, holiday_country, desktime_url")
+    .select("id, full_name, preferred_name, first_name, last_name, email, timezone, holiday_country, desktime_url")
     .eq("manager_id", user.id)
     .eq("is_active", true)
     .not("desktime_employee_id", "is", null)

@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
-import { hasRole, formatDate, formatTime } from "@/lib/utils";
+import { hasRole, formatDate, formatTime, displayName } from "@/lib/utils";
 import { HOLIDAY_COUNTRY_LABELS } from "@/types/database";
 import Link from "next/link";
 import {
@@ -126,7 +126,7 @@ export default async function DashboardPage() {
     // Who's out this week (approved leaves overlapping this week)
     supabase
       .from("leave_requests")
-      .select("employee_id, leave_type, start_date, end_date, employee:users!leave_requests_employee_id_fkey(full_name, manager_id)")
+      .select("employee_id, leave_type, start_date, end_date, employee:users!leave_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email, manager_id)")
       .eq("status", "approved")
       .lte("start_date", weekEnd)
       .gte("end_date", weekStart),
@@ -152,7 +152,9 @@ export default async function DashboardPage() {
   // Fetch all users with date fields for upcoming events
   const { data: allUsersForEvents } = await supabase
     .from("users")
-    .select("id, full_name, email, birthday, hire_date, end_date, avatar_url")
+    .select(
+      "id, full_name, preferred_name, first_name, last_name, email, birthday, hire_date, end_date, avatar_url"
+    )
     .eq("is_active", true);
 
   // Fetch direct report IDs for "My Direct Reports" filter
@@ -274,10 +276,17 @@ export default async function DashboardPage() {
   );
 
   const whosOutLeaves = (whosOutThisWeek.data ?? []).map((l) => {
-    const emp = l.employee as unknown as { full_name: string; manager_id: string | null } | null;
+    const emp = l.employee as unknown as {
+      full_name: string;
+      preferred_name: string | null;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      manager_id: string | null;
+    } | null;
     return {
       employeeId: l.employee_id,
-      name: emp?.full_name ?? "Unknown",
+      name: displayName(emp),
       leaveType: l.leave_type,
       startDate: l.start_date,
       endDate: l.end_date,
@@ -339,7 +348,7 @@ export default async function DashboardPage() {
   const todayDate = parseISO(today);
 
   for (const u of allUsersForEvents ?? []) {
-    const name = u.full_name || u.email.split("@")[0];
+    const name = displayName(u);
 
     // Birthday
     if (u.birthday) {

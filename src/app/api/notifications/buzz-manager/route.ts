@@ -3,7 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
+import { getUniversalVars } from "@/lib/email/universal-vars";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
+
+function detailsList(rows: [string, string][]): string {
+  return (
+    `<ul>\n` +
+    rows.map(([k, v]) => `  <li><strong>${k}:</strong> ${v}</li>`).join("\n") +
+    `\n</ul>`
+  );
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -26,7 +35,9 @@ export async function POST(request: Request) {
   // Get employee details
   const { data: employee } = await admin
     .from("users")
-    .select("full_name, email, manager_id")
+    .select(
+      "full_name, email, preferred_name, first_name, last_name, department, job_title, location, manager_id"
+    )
     .eq("id", authUser.id)
     .single();
 
@@ -63,12 +74,12 @@ export async function POST(request: Request) {
     }
 
     subject = `Reminder: Schedule Adjustment from ${employeeName}`;
-    details = `
-      <tr><td style="padding: 8px 0; color: #6b7280;">Type</td><td style="padding: 8px 0; font-weight: bold;">Schedule Adjustment</td></tr>
-      <tr><td style="padding: 8px 0; color: #6b7280;">Date</td><td style="padding: 8px 0;">${adj.requested_date}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6b7280;">Requested Hours</td><td style="padding: 8px 0;">${adj.requested_start_time} - ${adj.requested_end_time}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6b7280;">Reason</td><td style="padding: 8px 0;">${adj.reason}</td></tr>
-    `;
+    details = detailsList([
+      ["Type", "Schedule Adjustment"],
+      ["Date", adj.requested_date],
+      ["Requested Hours", `${adj.requested_start_time} - ${adj.requested_end_time}`],
+      ["Reason", adj.reason],
+    ]);
   } else if (request_type === "leave") {
     const { data: leave } = await admin
       .from("leave_requests")
@@ -83,12 +94,12 @@ export async function POST(request: Request) {
 
     const leaveLabel = LEAVE_TYPE_LABELS[leave.leave_type] ?? leave.leave_type;
     subject = `Reminder: ${leaveLabel} Request from ${employeeName}`;
-    details = `
-      <tr><td style="padding: 8px 0; color: #6b7280;">Type</td><td style="padding: 8px 0; font-weight: bold;">${leaveLabel}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6b7280;">From</td><td style="padding: 8px 0;">${leave.start_date}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6b7280;">To</td><td style="padding: 8px 0;">${leave.end_date}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6b7280;">Reason</td><td style="padding: 8px 0;">${leave.reason}</td></tr>
-    `;
+    details = detailsList([
+      ["Type", leaveLabel],
+      ["From", leave.start_date],
+      ["To", leave.end_date],
+      ["Reason", leave.reason],
+    ]);
   } else if (request_type === "holiday_work") {
     const { data: hw } = await admin
       .from("holiday_work_requests")
@@ -102,13 +113,13 @@ export async function POST(request: Request) {
     }
 
     subject = `Reminder: Holiday Work Request from ${employeeName}`;
-    details = `
-      <tr><td style="padding: 8px 0; color: #6b7280;">Type</td><td style="padding: 8px 0; font-weight: bold;">Holiday Work</td></tr>
-      <tr><td style="padding: 8px 0; color: #6b7280;">Date</td><td style="padding: 8px 0;">${hw.holiday_date}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6b7280;">Hours</td><td style="padding: 8px 0;">${hw.start_time} - ${hw.end_time}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6b7280;">Location</td><td style="padding: 8px 0;">${hw.work_location === "office" ? "Office" : "Online"}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6b7280;">Reason</td><td style="padding: 8px 0;">${hw.reason}</td></tr>
-    `;
+    details = detailsList([
+      ["Type", "Holiday Work"],
+      ["Date", hw.holiday_date],
+      ["Hours", `${hw.start_time} - ${hw.end_time}`],
+      ["Location", hw.work_location === "office" ? "Office" : "Online"],
+      ["Reason", hw.reason],
+    ]);
   } else {
     return NextResponse.json({ error: "Invalid request_type" }, { status: 400 });
   }
@@ -116,10 +127,10 @@ export async function POST(request: Request) {
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   const { subject: renderedSubject, html } = await loadAndRender("reminder", {
+    ...getUniversalVars(employee, manager, APP_URL),
     employee_name: employeeName,
     request_type: request_type === "schedule_adjustment" ? "Schedule Adjustment" : request_type === "leave" ? "Leave" : "Holiday Work",
     details,
-    app_url: APP_URL,
   });
 
   const result = await sendEmail({

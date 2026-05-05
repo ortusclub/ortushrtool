@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
+import { getUniversalVars } from "@/lib/email/universal-vars";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -21,7 +22,9 @@ export async function POST(request: Request) {
   // Get adjustment details with employee info
   const { data: adjustment } = await admin
     .from("schedule_adjustments")
-    .select("*, employee:users!schedule_adjustments_employee_id_fkey(full_name, email, manager_id)")
+    .select(
+      "*, employee:users!schedule_adjustments_employee_id_fkey(full_name, email, preferred_name, first_name, last_name, department, job_title, location, manager_id)"
+    )
     .eq("id", adjustment_id)
     .single();
 
@@ -32,14 +35,18 @@ export async function POST(request: Request) {
   const employee = adjustment.employee;
   const recipients: string[] = [employee.email];
 
-  // Get manager email
+  // Get manager
+  let manager: { email: string; full_name: string | null } | null = null;
   if (employee.manager_id) {
-    const { data: manager } = await admin
+    const { data: m } = await admin
       .from("users")
-      .select("email")
+      .select("email, full_name")
       .eq("id", employee.manager_id)
       .single();
-    if (manager) recipients.push(manager.email);
+    if (m) {
+      manager = m;
+      recipients.push(m.email);
+    }
   }
 
   // Also include the reviewer if different from manager
@@ -60,11 +67,11 @@ export async function POST(request: Request) {
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const templateType = status === "approved" ? "adjustment_approved" : "adjustment_rejected";
   const { subject, html } = await loadAndRender(templateType, {
+    ...getUniversalVars(employee, manager, APP_URL),
     employee_name: employee.full_name || employee.email,
     requested_date: requestedDate,
     requested_time: `${adjustment.requested_start_time.slice(0, 5)} - ${adjustment.requested_end_time.slice(0, 5)}`,
     notes: notes || "",
-    app_url: APP_URL,
   });
 
   const result = await sendEmail({

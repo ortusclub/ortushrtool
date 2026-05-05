@@ -4,11 +4,14 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { UserRole } from "@/types/database";
 import { Search, LayoutGrid, List } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, displayName } from "@/lib/utils";
 
 interface TeamUser {
   id: string;
   full_name: string;
+  preferred_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   email: string;
   role: UserRole;
   department: string | null;
@@ -33,8 +36,9 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 function getInitials(user: TeamUser): string {
-  return user.full_name
-    ? user.full_name
+  const name = displayName(user);
+  return name && name !== "Unknown"
+    ? name
         .split(" ")
         .map((n) => n[0])
         .join("")
@@ -64,6 +68,7 @@ export function TeamDirectory({ users }: { users: TeamUser[] }) {
       const q = search.toLowerCase();
       result = result.filter(
         (u) =>
+          displayName(u).toLowerCase().includes(q) ||
           u.full_name.toLowerCase().includes(q) ||
           u.email.toLowerCase().includes(q) ||
           (u.department && u.department.toLowerCase().includes(q))
@@ -193,7 +198,7 @@ function GridView({ users }: { users: TeamUser[] }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium text-gray-900">
-                {user.full_name || user.email}
+                {displayName(user)}
               </p>
               <p className="truncate text-xs text-gray-500">{user.email}</p>
               {user.job_title && (
@@ -265,7 +270,7 @@ function ListView({ users }: { users: TeamUser[] }) {
                       {getInitials(user)}
                     </div>
                     <span className="font-medium text-gray-900 hover:text-blue-600">
-                      {user.full_name || user.email}
+                      {displayName(user)}
                     </span>
                   </Link>
                 </td>

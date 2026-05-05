@@ -57,6 +57,7 @@ export interface User {
   location: string | null;
   birthday: string | null;
   hire_date: string | null;
+  regularization_date: string | null;
   end_date: string | null;
   avatar_url: string | null;
   desktime_employee_id: number | null;

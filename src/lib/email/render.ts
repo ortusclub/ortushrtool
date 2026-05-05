@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { EMAIL_TEMPLATE_DEFAULTS } from "./template-defaults";
+import { applyEmailStyles } from "./styles";
 
 /**
  * Renders a template string by replacing {{variable}} placeholders
@@ -24,7 +25,8 @@ export function renderTemplate(
 
 /**
  * Loads a template from the database (falling back to defaults),
- * renders it with the given variables, and returns subject + html.
+ * renders it with the given variables, applies email styling, and
+ * returns subject + html ready to send.
  */
 export async function loadAndRender(
   type: string,
@@ -54,6 +56,6 @@ export async function loadAndRender(
 
   return {
     subject: renderTemplate(subject, vars),
-    html: renderTemplate(body, vars),
+    html: applyEmailStyles(renderTemplate(body, vars)),
   };
 }

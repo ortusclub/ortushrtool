@@ -6,6 +6,7 @@ import Link from "next/link";
 import { LogOut } from "lucide-react";
 import type { User } from "@/types/database";
 import { UserAvatar } from "@/components/shared/user-avatar";
+import { displayName } from "@/lib/utils";
 
 export function Header({ user }: { user: User }) {
   const router = useRouter();
@@ -40,8 +41,8 @@ export function Header({ user }: { user: User }) {
           {roleLabel[user.role]}
         </span>
         <Link href={`/team/${user.id}`} className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 hover:underline">
-          <UserAvatar name={user.full_name || user.email} avatarUrl={user.avatar_url} size="xs" />
-          {user.full_name || user.email}
+          <UserAvatar name={displayName(user)} avatarUrl={user.avatar_url} size="xs" />
+          {displayName(user)}
         </Link>
         <button
           onClick={handleLogout}

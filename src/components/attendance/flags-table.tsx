@@ -6,10 +6,14 @@ import { Search } from "lucide-react";
 import { FlagAcknowledge } from "./flag-acknowledge";
 import { EmployeeFlagNote } from "./employee-flag-note";
 import { UserNameLink } from "@/components/shared/user-name-link";
+import { displayName } from "@/lib/utils";
 
 interface Employee {
   id: string;
   full_name: string;
+  preferred_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   email: string;
 }
 
@@ -24,7 +28,14 @@ interface AttendanceFlag {
   acknowledged: boolean;
   notes: string | null;
   employee_notes: string | null;
-  employee?: { full_name: string; email: string; manager_id: string | null } | null;
+  employee?: {
+    full_name: string;
+    preferred_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string;
+    manager_id: string | null;
+  } | null;
 }
 
 interface Props {
@@ -142,7 +153,7 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
             <option value="">All employees</option>
             {employees.map((e) => (
               <option key={e.id} value={e.id}>
-                {e.full_name}
+                {displayName(e)}
               </option>
             ))}
           </select>
@@ -223,7 +234,7 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
                       <p className="font-medium text-gray-900">
                         <UserNameLink
                           userId={flag.employee_id}
-                          name={flag.employee.full_name || flag.employee.email}
+                          name={displayName(flag.employee)}
                         />
                       </p>
                     )}

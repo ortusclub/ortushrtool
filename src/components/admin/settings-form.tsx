@@ -11,9 +11,15 @@ const SETTING_LABELS: Record<string, string> = {
   early_tolerance_minutes: "Early Departure Tolerance (minutes)",
   shift_cutoff_hour: "Shift Cutoff Hour (activity before this is previous day's overtime)",
   attendance_flag_emails_enabled: "Send Attendance Flag Emails",
+  birthday_emails_enabled: "Send Birthday Greeting Emails",
+  anniversary_emails_enabled: "Send Work Anniversary Emails",
 };
 
-const BOOLEAN_SETTINGS = new Set(["attendance_flag_emails_enabled"]);
+const BOOLEAN_SETTINGS = new Set([
+  "attendance_flag_emails_enabled",
+  "birthday_emails_enabled",
+  "anniversary_emails_enabled",
+]);
 
 export function SettingsForm({ settings }: { settings: SystemSetting[] }) {
   const router = useRouter();

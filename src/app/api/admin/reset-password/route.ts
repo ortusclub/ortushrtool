@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { loadAndRender } from "@/lib/email/render";
+import { getUniversalVars } from "@/lib/email/universal-vars";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -32,7 +33,9 @@ export async function POST(request: Request) {
   // Get user email
   const { data: targetUser } = await admin
     .from("users")
-    .select("email")
+    .select(
+      "email, full_name, preferred_name, first_name, last_name, department, job_title, location"
+    )
     .eq("id", userId)
     .single();
 
@@ -61,6 +64,7 @@ export async function POST(request: Request) {
   const resetLink = data.properties?.action_link || `${APP_URL}/login`;
 
   const { subject, html } = await loadAndRender("password_reset", {
+    ...getUniversalVars(targetUser, null, APP_URL),
     reset_link: resetLink,
   });
 

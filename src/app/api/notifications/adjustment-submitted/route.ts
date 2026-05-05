@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
+import { getUniversalVars } from "@/lib/email/universal-vars";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -22,7 +23,9 @@ export async function POST(request: Request) {
   // Get employee details
   const { data: employee } = await admin
     .from("users")
-    .select("full_name, email, manager_id")
+    .select(
+      "full_name, email, preferred_name, first_name, last_name, department, job_title, location, manager_id"
+    )
     .eq("id", authUser.id)
     .single();
 
@@ -44,12 +47,12 @@ export async function POST(request: Request) {
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   const { subject, html } = await loadAndRender("adjustment_submitted", {
+    ...getUniversalVars(employee, manager, APP_URL),
     employee_name: employee.full_name || employee.email,
     requested_date,
     original_time,
     requested_time,
     reason,
-    app_url: APP_URL,
   });
 
   const result = await sendEmail({

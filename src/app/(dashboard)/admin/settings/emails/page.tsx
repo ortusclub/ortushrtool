@@ -2,15 +2,24 @@ import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { EmailTemplateEditor } from "@/components/admin/email-template-editor";
 import type { EmailTemplate } from "@/types/database";
+import { TEMPLATE_TOGGLE_KEYS } from "@/lib/email/template-meta";
 
 export default async function EmailSettingsPage() {
   await requireRole("super_admin");
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from("email_templates")
-    .select("*")
-    .order("type");
+  const [{ data: templates }, { data: settings }] = await Promise.all([
+    supabase.from("email_templates").select("*").order("type"),
+    supabase
+      .from("system_settings")
+      .select("key, value")
+      .in("key", TEMPLATE_TOGGLE_KEYS),
+  ]);
+
+  const toggles: Record<string, boolean> = {};
+  for (const s of settings ?? []) {
+    toggles[s.key] = s.value === "true";
+  }
 
   return (
     <div className="space-y-6">
@@ -20,7 +29,10 @@ export default async function EmailSettingsPage() {
           Customize the emails sent by the system
         </p>
       </div>
-      <EmailTemplateEditor templates={(data ?? []) as EmailTemplate[]} />
+      <EmailTemplateEditor
+        templates={(templates ?? []) as EmailTemplate[]}
+        toggles={toggles}
+      />
     </div>
   );
 }

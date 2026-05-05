@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
+import { getUniversalVars } from "@/lib/email/universal-vars";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -18,7 +19,9 @@ export async function POST(request: Request) {
 
   const { data: employee } = await admin
     .from("users")
-    .select("full_name, email, manager_id")
+    .select(
+      "full_name, email, preferred_name, first_name, last_name, department, job_title, location, manager_id"
+    )
     .eq("id", authUser.id)
     .single();
 
@@ -40,6 +43,7 @@ export async function POST(request: Request) {
   const locationLabel = work_location === "online" ? "Online" : "Office";
 
   const { subject, html } = await loadAndRender("holiday_work_submitted", {
+    ...getUniversalVars(employee, manager, APP_URL),
     employee_name: employee.full_name || employee.email,
     holiday_name,
     holiday_date,
@@ -47,7 +51,6 @@ export async function POST(request: Request) {
     end_time,
     location: locationLabel,
     reason,
-    app_url: APP_URL,
   });
 
   const result = await sendEmail({

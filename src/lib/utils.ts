@@ -23,6 +23,36 @@ export function cn(...classes: (string | boolean | undefined | null)[]): string 
   return classes.filter(Boolean).join(" ");
 }
 
+/**
+ * Casual display name for a user — combines the preferred (or first) name with
+ * the last name, e.g. "BB Batongbakal". Use anywhere a name is shown outside a
+ * formal table or admin/audit context.
+ *
+ * Falls back to: preferred/first alone → full_name → email handle → "Unknown".
+ */
+export function displayName(
+  user:
+    | {
+        preferred_name?: string | null;
+        first_name?: string | null;
+        last_name?: string | null;
+        full_name?: string | null;
+        email?: string | null;
+      }
+    | null
+    | undefined
+): string {
+  if (!user) return "Unknown";
+  const front = user.preferred_name || user.first_name;
+  if (front && user.last_name) return `${front} ${user.last_name}`;
+  return (
+    front ||
+    user.full_name ||
+    user.email?.split("@")[0] ||
+    "Unknown"
+  );
+}
+
 export function hasRole(
   userRole: string,
   requiredRole: string

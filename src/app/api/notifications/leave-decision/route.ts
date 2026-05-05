@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
+import { getUniversalVars } from "@/lib/email/universal-vars";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -21,7 +22,9 @@ export async function POST(request: Request) {
   // Get leave request details with employee AND manager
   const { data: leave } = await admin
     .from("leave_requests")
-    .select("*, employee:users!leave_requests_employee_id_fkey(full_name, email, manager_id)")
+    .select(
+      "*, employee:users!leave_requests_employee_id_fkey(full_name, email, preferred_name, first_name, last_name, department, job_title, location, manager_id)"
+    )
     .eq("id", leave_id)
     .single();
 
@@ -41,28 +44,31 @@ export async function POST(request: Request) {
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const employeeName = leave.employee.full_name || leave.employee.email;
 
+  // Send to employee AND manager
+  const recipients: string[] = [leave.employee.email];
+  let manager: { email: string; full_name: string | null } | null = null;
+  if (leave.employee.manager_id) {
+    const { data: m } = await admin
+      .from("users")
+      .select("email, full_name")
+      .eq("id", leave.employee.manager_id)
+      .single();
+    if (m) {
+      manager = m;
+      recipients.push(m.email);
+    }
+  }
+
   const templateType = isApproved ? "leave_approved" : "leave_rejected";
   const { subject, html } = await loadAndRender(templateType, {
+    ...getUniversalVars(leave.employee, manager, APP_URL),
     employee_name: employeeName,
     leave_type: leaveLabels[leave.leave_type] ?? leave.leave_type,
     start_date: leave.start_date,
     end_date: leave.end_date,
     reason: leave.reason,
     notes: notes || "",
-    app_url: APP_URL,
   });
-
-  // Send to employee AND manager
-  const recipients: string[] = [leave.employee.email];
-
-  if (leave.employee.manager_id) {
-    const { data: manager } = await admin
-      .from("users")
-      .select("email")
-      .eq("id", leave.employee.manager_id)
-      .single();
-    if (manager) recipients.push(manager.email);
-  }
 
   // Include reviewer if different
   const { data: reviewer } = await admin

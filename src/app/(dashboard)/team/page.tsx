@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TeamDirectory } from "@/components/team/team-directory";
+import { displayName } from "@/lib/utils";
 
 export default async function TeamPage() {
   await getCurrentUser();
@@ -9,7 +10,9 @@ export default async function TeamPage() {
 
   const { data: users } = await supabase
     .from("users")
-    .select("id, full_name, email, role, department, job_title, location, manager_id")
+    .select(
+      "id, full_name, preferred_name, first_name, last_name, email, role, department, job_title, location, manager_id"
+    )
     .eq("is_active", true)
     .order("full_name");
 
@@ -26,11 +29,11 @@ export default async function TeamPage() {
   if (managerIds.length > 0) {
     const { data: managers } = await supabase
       .from("users")
-      .select("id, full_name, email")
+      .select("id, full_name, preferred_name, first_name, last_name, email")
       .in("id", managerIds);
 
     managerMap = Object.fromEntries(
-      (managers ?? []).map((m) => [m.id, m.full_name || m.email])
+      (managers ?? []).map((m) => [m.id, displayName(m)])
     );
   }
 

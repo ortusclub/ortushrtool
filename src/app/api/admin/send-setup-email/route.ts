@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
+import { getUniversalVars } from "@/lib/email/universal-vars";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -45,7 +46,16 @@ export async function POST(request: Request) {
 
   const resetLink = data.properties?.action_link || "";
 
+  const { data: recipient } = await admin
+    .from("users")
+    .select(
+      "full_name, email, preferred_name, first_name, last_name, department, job_title, location"
+    )
+    .eq("email", email)
+    .maybeSingle();
+
   const { subject, html } = await loadAndRender("welcome", {
+    ...getUniversalVars(recipient ?? { full_name, email }),
     employee_name: full_name || "there",
     reset_link: resetLink,
   });

@@ -10,25 +10,39 @@ export default async function FlagsPage() {
   const isManager = hasRole(user.role, "manager");
 
   // Build the visible employee set for filter dropdown + initial query
-  let employees: { id: string; full_name: string; email: string }[] = [];
+  let employees: {
+    id: string;
+    full_name: string;
+    preferred_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string;
+  }[] = [];
   if (isAdmin) {
     const { data } = await supabase
       .from("users")
-      .select("id, full_name, email")
+      .select("id, full_name, preferred_name, first_name, last_name, email")
       .eq("is_active", true)
       .order("full_name");
     employees = data ?? [];
   } else if (isManager) {
     const { data } = await supabase
       .from("users")
-      .select("id, full_name, email")
+      .select("id, full_name, preferred_name, first_name, last_name, email")
       .or(`manager_id.eq.${user.id},id.eq.${user.id}`)
       .eq("is_active", true)
       .order("full_name");
     employees = data ?? [];
   } else {
     employees = [
-      { id: user.id, full_name: user.full_name ?? "", email: user.email },
+      {
+        id: user.id,
+        full_name: user.full_name ?? "",
+        preferred_name: user.preferred_name ?? null,
+        first_name: user.first_name ?? null,
+        last_name: user.last_name ?? null,
+        email: user.email,
+      },
     ];
   }
 
@@ -38,7 +52,7 @@ export default async function FlagsPage() {
     ? await supabase
         .from("attendance_flags")
         .select(
-          "*, employee:users!attendance_flags_employee_id_fkey(full_name, email, manager_id)"
+          "*, employee:users!attendance_flags_employee_id_fkey(full_name, preferred_name, first_name, last_name, email, manager_id)"
         )
         .in("employee_id", employeeIds)
         .order("flag_date", { ascending: false })
