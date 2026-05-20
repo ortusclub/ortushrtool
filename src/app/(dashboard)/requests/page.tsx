@@ -4,6 +4,7 @@ import { hasRole, formatDate, formatTime, displayName } from "@/lib/utils";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
 import { AdjustmentActions } from "@/components/adjustments/adjustment-actions";
 import { LeaveActions } from "@/components/leave/leave-actions";
+import { DeleteApprovedLeave } from "@/components/leave/delete-approved-leave";
 import { HolidayWorkActions } from "@/components/holiday-work/holiday-work-actions";
 import { OvertimeActions } from "@/components/overtime/overtime-actions";
 import { CancelRequest } from "@/components/shared/cancel-request";
@@ -26,53 +27,37 @@ export default async function RequestsPage() {
   const supabase = await createClient();
   const isReviewer = hasRole(user.role, "manager");
 
-  // Fetch schedule adjustments (include role for office day threshold)
+  // Build the 4 list queries and run them in parallel.
   let adjQuery = supabase
     .from("schedule_adjustments")
     .select("*, employee:users!schedule_adjustments_employee_id_fkey(full_name, preferred_name, first_name, last_name, email, role)")
     .order("created_at", { ascending: false });
-
-  if (!isReviewer) {
-    adjQuery = adjQuery.eq("employee_id", user.id);
-  }
-
-  const { data: adjustments } = await adjQuery;
-
-  // Fetch leave requests
   let leaveQuery = supabase
     .from("leave_requests")
     .select("*, employee:users!leave_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email)")
     .order("created_at", { ascending: false });
-
-  if (!isReviewer) {
-    leaveQuery = leaveQuery.eq("employee_id", user.id);
-  }
-
-  const { data: leaveRequests } = await leaveQuery;
-
-  // Fetch holiday work requests
   let hwQuery = supabase
     .from("holiday_work_requests")
     .select("*, employee:users!holiday_work_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email), holiday:holidays!holiday_work_requests_holiday_id_fkey(name)")
     .order("created_at", { ascending: false });
-
-  if (!isReviewer) {
-    hwQuery = hwQuery.eq("employee_id", user.id);
-  }
-
-  const { data: holidayWorkRequests } = await hwQuery;
-
-  // Fetch overtime requests
   let otQuery = supabase
     .from("overtime_requests")
     .select("*, employee:users!overtime_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email)")
     .order("created_at", { ascending: false });
 
   if (!isReviewer) {
+    adjQuery = adjQuery.eq("employee_id", user.id);
+    leaveQuery = leaveQuery.eq("employee_id", user.id);
+    hwQuery = hwQuery.eq("employee_id", user.id);
     otQuery = otQuery.eq("employee_id", user.id);
   }
 
-  const { data: overtimeRequests } = await otQuery;
+  const [
+    { data: adjustments },
+    { data: leaveRequests },
+    { data: holidayWorkRequests },
+    { data: overtimeRequests },
+  ] = await Promise.all([adjQuery, leaveQuery, hwQuery, otQuery]);
 
   const pendingOT = (overtimeRequests ?? []).filter((o) => o.status === "pending");
   const pastOT = (overtimeRequests ?? []).filter((o) => o.status !== "pending");
@@ -553,6 +538,11 @@ export default async function RequestsPage() {
                   {isReviewer && (
                     <LeaveActions leaveId={leave.id} currentStatus={leave.status} />
                   )}
+                  <DeleteApprovedLeave
+                    leaveId={leave.id}
+                    startDate={leave.start_date}
+                    currentStatus={leave.status}
+                  />
                   <StatusBadge status={leave.status} />
                 </div>
               </div>

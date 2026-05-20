@@ -28,15 +28,19 @@ export function WeeklyScheduleEditor({
   schedules,
   canEdit,
   submitMode,
+  defaultEditing = false,
+  onSubmitted,
 }: {
   employeeId: string;
   schedules: Row[];
   canEdit: boolean;
   submitMode: "direct" | "queue";
+  defaultEditing?: boolean;
+  onSubmitted?: (queued: boolean) => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(defaultEditing);
   const [error, setError] = useState<string | null>(null);
   const [queued, setQueued] = useState(false);
 
@@ -107,6 +111,7 @@ export function WeeklyScheduleEditor({
     } else {
       router.refresh();
     }
+    onSubmitted?.(Boolean(data.queued));
   };
 
   const cancel = () => {
@@ -265,14 +270,16 @@ export function WeeklyScheduleEditor({
                 ? "Submit change request"
                 : "Save changes"}
           </button>
-          <button
-            type="button"
-            onClick={cancel}
-            disabled={busy}
-            className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            <X size={14} /> Cancel
-          </button>
+          {!defaultEditing && (
+            <button
+              type="button"
+              onClick={cancel}
+              disabled={busy}
+              className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <X size={14} /> Cancel
+            </button>
+          )}
         </div>
       )}
     </div>

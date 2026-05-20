@@ -17,30 +17,20 @@ export default async function TeamPage() {
     )
     .order("full_name");
 
-  // Fetch manager names for display
-  const managerIds = [
-    ...new Set(
-      (users ?? [])
-        .map((u) => u.manager_id)
-        .filter((id): id is string => id !== null)
-    ),
-  ];
-
-  let managerMap: Record<string, string> = {};
-  if (managerIds.length > 0) {
-    const { data: managers } = await supabase
-      .from("users")
-      .select("id, full_name, preferred_name, first_name, last_name, email")
-      .in("id", managerIds);
-
-    managerMap = Object.fromEntries(
-      (managers ?? []).map((m) => [m.id, displayName(m)])
-    );
-  }
+  // Managers are already in the result set — look them up locally instead of
+  // doing a second round-trip.
+  const usersById = new Map(
+    (users ?? []).map((u) => [u.id, u])
+  );
 
   const usersWithManager = (users ?? []).map((u) => ({
     ...u,
-    manager_name: u.manager_id ? managerMap[u.manager_id] ?? null : null,
+    manager_name: u.manager_id
+      ? (() => {
+          const m = usersById.get(u.manager_id);
+          return m ? displayName(m) : null;
+        })()
+      : null,
   }));
 
   return (

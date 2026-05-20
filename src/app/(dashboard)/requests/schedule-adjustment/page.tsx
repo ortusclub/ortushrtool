@@ -6,6 +6,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus, X, AlertTriangle } from "lucide-react";
 import type { ScheduleAdjustmentType, WorkLocation } from "@/types/database";
+import { WeeklyScheduleEditor } from "@/components/profile/weekly-schedule-editor";
+
+type ScheduleRow = {
+  id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_rest_day: boolean;
+  work_location: string;
+};
 
 interface OfficeWarning {
   date: string;
@@ -29,6 +39,32 @@ export default function ScheduleAdjustmentPage() {
   const [requestedLocation, setRequestedLocation] = useState<WorkLocation>("office");
   const [reason, setReason] = useState("");
   const [officeWarnings, setOfficeWarnings] = useState<OfficeWarning[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [currentSchedules, setCurrentSchedules] = useState<ScheduleRow[]>([]);
+  const [schedulesLoaded, setSchedulesLoaded] = useState(false);
+
+  useEffect(() => {
+    const loadSchedules = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setSchedulesLoaded(true);
+        return;
+      }
+      setUserId(user.id);
+      const today = new Date().toISOString().split("T")[0];
+      const { data } = await supabase
+        .from("schedules")
+        .select("id, day_of_week, start_time, end_time, is_rest_day, work_location")
+        .eq("employee_id", user.id)
+        .lte("effective_from", today)
+        .or(`effective_until.is.null,effective_until.gte.${today}`)
+        .order("day_of_week", { ascending: true });
+      setCurrentSchedules(data ?? []);
+      setSchedulesLoaded(true);
+    };
+    loadSchedules();
+  }, []);
 
   const addDate = () => setDates([...dates, ""]);
   const removeDate = (idx: number) =>
@@ -36,8 +72,10 @@ export default function ScheduleAdjustmentPage() {
   const updateDate = (idx: number, value: string) =>
     setDates(dates.map((d, i) => (i === idx ? value : d)));
 
-  const showTimeFields = adjustmentType === "time" || adjustmentType === "both";
-  const showLocationField = adjustmentType === "location" || adjustmentType === "both";
+  const showTimeFields =
+    !isPermanent && (adjustmentType === "time" || adjustmentType === "both");
+  const showLocationField =
+    !isPermanent && (adjustmentType === "location" || adjustmentType === "both");
 
   // Expand date range to individual weekday (Mon-Fri) date strings
   function getWeekdaysInRange(start: string, end: string): string[] {
@@ -199,10 +237,11 @@ export default function ScheduleAdjustmentPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isPermanent) return; // weekly editor submits independently
     setLoading(true);
     setError("");
 
-    if (!isPermanent && validDates.length === 0) {
+    if (validDates.length === 0) {
       setError(dateMode === "range" ? "Please select a valid date range." : "Please select at least one date.");
       setLoading(false);
       return;
@@ -225,84 +264,41 @@ export default function ScheduleAdjustmentPage() {
       return;
     }
 
-    if (isPermanent) {
-      const today = new Date().toISOString().split("T")[0];
+    for (const date of validDates) {
+      const dateObj = new Date(date);
+      const dayOfWeek = (dateObj.getDay() + 6) % 7;
 
-      for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
-        const { data: existing } = await supabase
-          .from("schedules")
-          .select("id")
-          .eq("employee_id", user.id)
-          .eq("day_of_week", dayIdx)
-          .lte("effective_from", today)
-          .or(`effective_until.is.null,effective_until.gte.${today}`)
-          .limit(1)
-          .maybeSingle();
+      const { data: schedule } = await supabase
+        .from("schedules")
+        .select("start_time, end_time")
+        .eq("employee_id", user.id)
+        .eq("day_of_week", dayOfWeek)
+        .lte("effective_from", date)
+        .or(`effective_until.is.null,effective_until.gte.${date}`)
+        .limit(1)
+        .maybeSingle();
 
-        if (existing) {
-          await supabase
-            .from("schedules")
-            .update({ effective_until: today })
-            .eq("id", existing.id);
-        }
-      }
+      const originalStart = schedule?.start_time ?? "09:00";
+      const originalEnd = schedule?.end_time ?? "18:00";
 
       const { error: insertError } = await supabase
         .from("schedule_adjustments")
         .insert({
           employee_id: user.id,
-          requested_date: "9999-12-31",
+          requested_date: date,
           adjustment_type: adjustmentType,
-          original_start_time: "00:00",
-          original_end_time: "00:00",
-          requested_start_time: showTimeFields ? requestedStart : "00:00",
-          requested_end_time: showTimeFields ? requestedEnd : "00:00",
+          original_start_time: originalStart,
+          original_end_time: originalEnd,
+          requested_start_time: showTimeFields ? requestedStart : originalStart,
+          requested_end_time: showTimeFields ? requestedEnd : originalEnd,
           requested_work_location: showLocationField ? requestedLocation : null,
-          reason: `[PERMANENT CHANGE] ${reason}`,
+          reason,
         });
 
       if (insertError) {
         setError(insertError.message);
         setLoading(false);
         return;
-      }
-    } else {
-      for (const date of validDates) {
-        const dateObj = new Date(date);
-        const dayOfWeek = (dateObj.getDay() + 6) % 7;
-
-        const { data: schedule } = await supabase
-          .from("schedules")
-          .select("start_time, end_time")
-          .eq("employee_id", user.id)
-          .eq("day_of_week", dayOfWeek)
-          .lte("effective_from", date)
-          .or(`effective_until.is.null,effective_until.gte.${date}`)
-          .limit(1)
-          .maybeSingle();
-
-        const originalStart = schedule?.start_time ?? "09:00";
-        const originalEnd = schedule?.end_time ?? "18:00";
-
-        const { error: insertError } = await supabase
-          .from("schedule_adjustments")
-          .insert({
-            employee_id: user.id,
-            requested_date: date,
-            adjustment_type: adjustmentType,
-            original_start_time: originalStart,
-            original_end_time: originalEnd,
-            requested_start_time: showTimeFields ? requestedStart : originalStart,
-            requested_end_time: showTimeFields ? requestedEnd : originalEnd,
-            requested_work_location: showLocationField ? requestedLocation : null,
-            reason,
-          });
-
-        if (insertError) {
-          setError(insertError.message);
-          setLoading(false);
-          return;
-        }
       }
     }
 
@@ -311,16 +307,14 @@ export default function ScheduleAdjustmentPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          requested_date: isPermanent
-            ? "Permanent change"
-            : validDates.join(", "),
+          requested_date: validDates.join(", "),
           original_time: "Current schedule",
           requested_time: showTimeFields
             ? `${requestedStart} - ${requestedEnd}`
             : "No time change",
           requested_location: showLocationField ? requestedLocation : null,
           adjustment_type: adjustmentType,
-          reason: isPermanent ? `[PERMANENT] ${reason}` : reason,
+          reason,
         }),
       });
     } catch {
@@ -391,43 +385,45 @@ export default function ScheduleAdjustmentPage() {
         </div>
 
         {/* What are you changing? */}
-        <div className="rounded-lg border border-gray-200 p-4">
-          <p className="mb-3 text-sm font-medium text-gray-700">
-            What would you like to change?
-          </p>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="adjustment_type"
-                checked={adjustmentType === "time"}
-                onChange={() => setAdjustmentType("time")}
-                className="h-4 w-4 text-blue-600"
-              />
-              <span className="text-sm text-gray-700">Time</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="adjustment_type"
-                checked={adjustmentType === "location"}
-                onChange={() => setAdjustmentType("location")}
-                className="h-4 w-4 text-blue-600"
-              />
-              <span className="text-sm text-gray-700">Working Location</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="adjustment_type"
-                checked={adjustmentType === "both"}
-                onChange={() => setAdjustmentType("both")}
-                className="h-4 w-4 text-blue-600"
-              />
-              <span className="text-sm text-gray-700">Both</span>
-            </label>
+        {!isPermanent && (
+          <div className="rounded-lg border border-gray-200 p-4">
+            <p className="mb-3 text-sm font-medium text-gray-700">
+              What would you like to change?
+            </p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="adjustment_type"
+                  checked={adjustmentType === "time"}
+                  onChange={() => setAdjustmentType("time")}
+                  className="h-4 w-4 text-blue-600"
+                />
+                <span className="text-sm text-gray-700">Time</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="adjustment_type"
+                  checked={adjustmentType === "location"}
+                  onChange={() => setAdjustmentType("location")}
+                  className="h-4 w-4 text-blue-600"
+                />
+                <span className="text-sm text-gray-700">Working Location</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="adjustment_type"
+                  checked={adjustmentType === "both"}
+                  onChange={() => setAdjustmentType("both")}
+                  className="h-4 w-4 text-blue-600"
+                />
+                <span className="text-sm text-gray-700">Both</span>
+              </label>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Date selection (only for temporary) */}
         {!isPermanent && (
@@ -527,11 +523,31 @@ export default function ScheduleAdjustmentPage() {
         )}
 
         {isPermanent && (
-          <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
-            <p className="text-sm text-amber-800">
-              This will permanently change your base schedule once approved by
-              your manager. Your new {adjustmentType === "time" ? "hours" : adjustmentType === "location" ? "work location" : "hours and work location"} will apply to all future working days.
-            </p>
+          <div className="space-y-4">
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+              <p className="text-sm text-amber-800">
+                Edit each day below. Your changes will be submitted to an admin
+                for approval and will apply to all future working days once
+                approved.
+              </p>
+            </div>
+            {!schedulesLoaded ? (
+              <p className="text-sm text-gray-500">Loading your schedule…</p>
+            ) : userId ? (
+              <WeeklyScheduleEditor
+                employeeId={userId}
+                schedules={currentSchedules}
+                canEdit
+                submitMode="queue"
+                defaultEditing
+                onSubmitted={() => {
+                  router.push("/requests");
+                  router.refresh();
+                }}
+              />
+            ) : (
+              <p className="text-sm text-red-600">Not authenticated.</p>
+            )}
           </div>
         )}
 
@@ -610,28 +626,32 @@ export default function ScheduleAdjustmentPage() {
           </div>
         )}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Why do you need this adjustment?
-          </label>
-          <textarea
-            required
-            rows={4}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Please explain the reason for your schedule change..."
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        {!isPermanent && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Why do you need this adjustment?
+            </label>
+            <textarea
+              required
+              rows={4}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Please explain the reason for your schedule change..."
+              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        )}
 
         <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? "Submitting..." : "Submit Request"}
-          </button>
+          {!isPermanent && (
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? "Submitting..." : "Submit Request"}
+            </button>
+          )}
           <Link
             href="/requests"
             className="rounded-lg border border-gray-300 px-6 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"

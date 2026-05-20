@@ -15,11 +15,43 @@ export default async function PerformanceOverviewPage() {
   const user = await getCurrentUser();
   const admin = createAdminClient();
 
-  // Reviews in cycles the user participates in
-  const { data: reviewsData } = await admin
-    .from("reviews")
-    .select("id, cycle_id, status")
-    .eq("employee_id", user.id);
+  // Reviews + independent counts can run in parallel. Cycles depend on
+  // reviews so it's a second round-trip.
+  const [
+    { data: reviewsData },
+    { count: pendingPeerCount },
+    { data: kudosRows },
+    { count: kpiCount },
+    { count: oneOnOneCount },
+  ] = await Promise.all([
+    admin
+      .from("reviews")
+      .select("id, cycle_id, status")
+      .eq("employee_id", user.id),
+    admin
+      .from("peer_feedback_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("reviewer_id", user.id)
+      .eq("status", "pending"),
+    admin
+      .from("kudos")
+      .select(
+        "*, sender:users!kudos_sender_id_fkey(full_name, preferred_name, first_name, last_name, email)"
+      )
+      .eq("recipient_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(3),
+    admin
+      .from("kpi_assignments")
+      .select("id", { count: "exact", head: true })
+      .eq("employee_id", user.id)
+      .eq("status", "active"),
+    admin
+      .from("one_on_ones")
+      .select("id", { count: "exact", head: true })
+      .or(`employee_id.eq.${user.id},manager_id.eq.${user.id}`),
+  ]);
+
   const myReviews = (reviewsData ?? []) as Pick<
     Review,
     "id" | "cycle_id" | "status"
@@ -45,22 +77,6 @@ export default async function PerformanceOverviewPage() {
     cyclesById.set(c.id, c);
   }
 
-  // Pending peer feedback requests
-  const { count: pendingPeerCount } = await admin
-    .from("peer_feedback_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("reviewer_id", user.id)
-    .eq("status", "pending");
-
-  // Recent kudos
-  const { data: kudosRows } = await admin
-    .from("kudos")
-    .select(
-      "*, sender:users!kudos_sender_id_fkey(full_name, preferred_name, first_name, last_name, email)"
-    )
-    .eq("recipient_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(3);
   type RawKudosRow = Omit<KudosWithUsers, "sender" | "recipient"> & {
     sender: Array<{ full_name: string; preferred_name: string | null; first_name: string | null; last_name: string | null; email: string }> | null;
   };
@@ -68,19 +84,6 @@ export default async function PerformanceOverviewPage() {
     ...k,
     sender: Array.isArray(k.sender) && k.sender.length > 0 ? k.sender[0] : null,
   }));
-
-  // Active KPIs count
-  const { count: kpiCount } = await admin
-    .from("kpi_assignments")
-    .select("id", { count: "exact", head: true })
-    .eq("employee_id", user.id)
-    .eq("status", "active");
-
-  // Recent 1-on-1s count
-  const { count: oneOnOneCount } = await admin
-    .from("one_on_ones")
-    .select("id", { count: "exact", head: true })
-    .or(`employee_id.eq.${user.id},manager_id.eq.${user.id}`);
 
   const reviewBlocks = myReviews.map((r) => {
     const c = cyclesById.get(r.cycle_id);
