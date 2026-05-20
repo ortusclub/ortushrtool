@@ -1,7 +1,8 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { DAYS_OF_WEEK, LEAVE_TYPE_LABELS } from "@/lib/constants";
-import { formatTime, formatDate, cn } from "@/lib/utils";
+import { formatTime, formatDate, cn, hasNightDifferentialHours } from "@/lib/utils";
+import { NightDiffNote } from "@/components/shared/night-diff-note";
 import type { Schedule } from "@/types/database";
 import { HOLIDAY_COUNTRY_LABELS } from "@/types/database";
 import Link from "next/link";
@@ -123,6 +124,8 @@ export default async function SchedulePage() {
           time: `${formatTime(hw.start_time)} - ${formatTime(hw.end_time)}`,
           location: hw.work_location,
           note: `Working on ${holidayName}`,
+          startTime: hw.start_time,
+          endTime: hw.end_time,
         };
       }
       return { type: "holiday" as const, label: holidayName };
@@ -147,6 +150,8 @@ export default async function SchedulePage() {
         type: "adjusted" as const,
         time: `${formatTime(adj.requested_start_time)} - ${formatTime(adj.requested_end_time)}`,
         location: adj.requested_work_location ?? schedule?.work_location ?? null,
+        startTime: adj.requested_start_time,
+        endTime: adj.requested_end_time,
       };
     }
 
@@ -156,6 +161,8 @@ export default async function SchedulePage() {
         type: "schedule" as const,
         time: `${formatTime(schedule.start_time)} - ${formatTime(schedule.end_time)}`,
         location: schedule.work_location,
+        startTime: schedule.start_time,
+        endTime: schedule.end_time,
       };
     }
 
@@ -225,6 +232,9 @@ export default async function SchedulePage() {
                     <p className="text-sm text-gray-700">
                       {formatTime(schedule.end_time)}
                     </p>
+                    {hasNightDifferentialHours(schedule.start_time, schedule.end_time) && (
+                      <NightDiffNote size="xs" />
+                    )}
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-gray-400">Not set</p>
@@ -283,6 +293,9 @@ export default async function SchedulePage() {
                         </span>
                       )}
                       <p className="text-sm text-gray-700">{"time" in info && info.time}</p>
+                      {"startTime" in info && hasNightDifferentialHours(info.startTime, info.endTime) && (
+                        <NightDiffNote size="xs" />
+                      )}
                     </div>
                   )}
 
@@ -301,6 +314,9 @@ export default async function SchedulePage() {
                         </span>
                       )}
                       <p className="text-sm text-gray-700">{"time" in info && info.time}</p>
+                      {"startTime" in info && hasNightDifferentialHours(info.startTime, info.endTime) && (
+                        <NightDiffNote size="xs" />
+                      )}
                       <span className="inline-block rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] font-medium text-cyan-700">
                         Adjusted
                       </span>
@@ -322,6 +338,9 @@ export default async function SchedulePage() {
                         </span>
                       )}
                       <p className="text-sm text-gray-700">{"time" in info && info.time}</p>
+                      {"startTime" in info && hasNightDifferentialHours(info.startTime, info.endTime) && (
+                        <NightDiffNote size="xs" />
+                      )}
                       <span className="inline-block rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-700">
                         {"note" in info && info.note}
                       </span>

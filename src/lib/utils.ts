@@ -69,3 +69,23 @@ export function hasRole(
   };
   return (hierarchy[userRole] ?? 0) >= (hierarchy[requiredRole] ?? 0);
 }
+
+/**
+ * Returns true when a shift's working hours overlap the night-differential
+ * window (22:00–06:00). Handles:
+ *   - shifts that end at midnight (end="00:00" treated as 24:00)
+ *   - overnight shifts that wrap past midnight (end <= start)
+ *   - non-wrapping shifts where either end > 22:00 or start < 06:00
+ * Accepts "HH:MM" or "HH:MM:SS" strings.
+ */
+export function hasNightDifferentialHours(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined
+): boolean {
+  if (!startTime || !endTime) return false;
+  const start = startTime.slice(0, 5);
+  // Treat midnight-end as end of day so it sorts after 22:00.
+  const end = endTime.slice(0, 5) === "00:00" ? "24:00" : endTime.slice(0, 5);
+  if (end <= start) return true; // wraps past midnight
+  return end > "22:00" || start < "06:00";
+}

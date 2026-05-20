@@ -5,7 +5,10 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { DAYS_OF_WEEK } from "@/lib/constants";
 import { Search, Pencil, Flag } from "lucide-react";
-import { displayName } from "@/lib/utils";
+import { displayName, hasNightDifferentialHours } from "@/lib/utils";
+import { HeaderFilter } from "@/components/shared/header-filter";
+import { SortButton, type SortDir } from "@/components/shared/sort-button";
+import { NightDiffNote } from "@/components/shared/night-diff-note";
 
 interface UserRow {
   id: string;
@@ -61,6 +64,19 @@ export function SchedulesTable({
   const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split("T")[0];
   });
+  const [managerFilter, setManagerFilter] = useState<Set<string>>(new Set());
+  const [tzFilter, setTzFilter] = useState<Set<string>>(new Set());
+  type SortColumn = "person" | "manager";
+  const [sort, setSort] = useState<{ column: SortColumn; dir: SortDir } | null>(
+    null
+  );
+  const toggleSort = (col: SortColumn) =>
+    setSort((prev) => {
+      if (!prev || prev.column !== col) return { column: col, dir: "asc" };
+      if (prev.dir === "asc") return { column: col, dir: "desc" };
+      return null;
+    });
+  const sortDir = (col: SortColumn) => (sort?.column === col ? sort.dir : null);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
   const [flagNotes, setFlagNotes] = useState<Record<string, string>>({});
@@ -149,17 +165,49 @@ export function SchedulesTable({
     return map;
   }, [leaves]);
 
-  // Filter users
+  // Filter + sort users
+  const managerOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of users) if (u.manager_id) s.add(u.manager_id);
+    return [...s]
+      .map((id) => ({ value: id, label: managerMap[id] ?? "—" }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [users, managerMap]);
+  const tzOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of users) s.add(u.timezone);
+    return [...s].sort().map((v) => ({ value: v, label: v }));
+  }, [users]);
+
   const filteredUsers = useMemo(() => {
-    if (!search.trim()) return users;
     const q = search.toLowerCase();
-    return users.filter(
-      (u) =>
-        displayName(u).toLowerCase().includes(q) ||
-        (u.full_name?.toLowerCase().includes(q) ?? false) ||
-        u.email.toLowerCase().includes(q)
-    );
-  }, [users, search]);
+    const result = users.filter((u) => {
+      if (q) {
+        const match =
+          displayName(u).toLowerCase().includes(q) ||
+          (u.full_name?.toLowerCase().includes(q) ?? false) ||
+          u.email.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      if (managerFilter.size > 0 && !managerFilter.has(u.manager_id ?? "")) return false;
+      if (tzFilter.size > 0 && !tzFilter.has(u.timezone)) return false;
+      return true;
+    });
+    if (sort) {
+      const key = (u: UserRow) =>
+        sort.column === "person"
+          ? displayName(u).toLowerCase()
+          : (managerMap[u.manager_id ?? ""] ?? "").toLowerCase();
+      result.sort((a, b) => {
+        const ka = key(a);
+        const kb = key(b);
+        if (ka < kb) return sort.dir === "asc" ? -1 : 1;
+        if (ka > kb) return sort.dir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return result;
+  }, [users, search, managerFilter, tzFilter, sort, managerMap]);
 
   // Get selected date's day of week
   const selectedDayOfWeek = useMemo(() => {
@@ -221,13 +269,17 @@ export function SchedulesTable({
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50 text-left">
               <th className="sticky left-0 bg-gray-50 px-4 py-3 font-medium text-gray-600 min-w-[160px]">
-                Person
+                <span className="align-middle">Person</span>
+                <SortButton label="Person" active={sortDir("person")} onClick={() => toggleSort("person")} />
               </th>
               <th className="px-4 py-3 font-medium text-gray-600 min-w-[120px]">
-                Manager
+                <span className="align-middle">Manager</span>
+                <SortButton label="Manager" active={sortDir("manager")} onClick={() => toggleSort("manager")} />
+                <HeaderFilter label="Manager" options={managerOptions} selected={managerFilter} onChange={setManagerFilter} />
               </th>
               <th className="px-4 py-3 font-medium text-gray-600 min-w-[60px]">
-                TZ
+                <span className="align-middle">TZ</span>
+                <HeaderFilter label="TZ" options={tzOptions} selected={tzFilter} onChange={setTzFilter} />
               </th>
               {dayHeaders.map((day, idx) => (
                 <th
@@ -415,6 +467,11 @@ export function SchedulesTable({
                           {sched.start_time.slice(0, 5)} -{" "}
                           {sched.end_time.slice(0, 5)}
                         </p>
+                        {hasNightDifferentialHours(sched.start_time, sched.end_time) && (
+                          <div className="mt-0.5">
+                            <NightDiffNote size="xs" />
+                          </div>
+                        )}
                       </td>
                     );
                   })}
@@ -428,6 +485,9 @@ export function SchedulesTable({
                           {adjustment.requested_start_time.slice(0, 5)} -{" "}
                           {adjustment.requested_end_time.slice(0, 5)}
                         </p>
+                        {hasNightDifferentialHours(adjustment.requested_start_time, adjustment.requested_end_time) && (
+                          <NightDiffNote size="xs" />
+                        )}
                       </div>
                     )}
                     {leave && (

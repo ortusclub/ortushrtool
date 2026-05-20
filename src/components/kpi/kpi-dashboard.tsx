@@ -20,6 +20,8 @@ import { KpiAssignForm } from "./kpi-assign-form";
 import { KpiUpdateForm } from "./kpi-update-form";
 import { KpiHistoryModal } from "./kpi-history-modal";
 import { UserNameLink } from "@/components/shared/user-name-link";
+import { HeaderFilter } from "@/components/shared/header-filter";
+import { SortButton, type SortDir } from "@/components/shared/sort-button";
 
 interface TeamMember {
   id: string;
@@ -60,11 +62,20 @@ export function KpiDashboard({
   const isAdmin = hasRole(currentUser.role, "hr_admin");
 
   const [activeTab, setActiveTab] = useState<TabKey>("my");
-  const [periodFilter, setPeriodFilter] = useState<KpiPeriodType | "">("");
-  const [statusFilter, setStatusFilter] = useState<KpiAssignmentStatus | "">(
-    ""
+  const [periodFilter, setPeriodFilter] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const [employeeFilter, setEmployeeFilter] = useState<Set<string>>(new Set());
+  type SortColumn = "kpi" | "employee" | "period" | "progress" | "status";
+  const [sort, setSort] = useState<{ column: SortColumn; dir: SortDir } | null>(
+    null
   );
-  const [employeeFilter, setEmployeeFilter] = useState("");
+  const toggleSort = (col: SortColumn) =>
+    setSort((prev) => {
+      if (!prev || prev.column !== col) return { column: col, dir: "asc" };
+      if (prev.dir === "asc") return { column: col, dir: "desc" };
+      return null;
+    });
+  const sortDir = (col: SortColumn) => (sort?.column === col ? sort.dir : null);
   const [showCreateDef, setShowCreateDef] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
   const [editingAssignment, setEditingAssignment] =
@@ -103,20 +114,51 @@ export function KpiDashboard({
     allEmployees,
   ]);
 
-  // Apply filters
+  // Apply filters + sort
   const filtered = useMemo(() => {
-    let result = assignments;
-    if (periodFilter) {
-      result = result.filter((a) => a.period_type === periodFilter);
-    }
-    if (statusFilter) {
-      result = result.filter((a) => a.status === statusFilter);
-    }
-    if (employeeFilter) {
-      result = result.filter((a) => a.employee_id === employeeFilter);
+    const result = assignments.filter((a) => {
+      if (periodFilter.size > 0 && !periodFilter.has(a.period_type)) return false;
+      if (statusFilter.size > 0 && !statusFilter.has(a.status)) return false;
+      if (employeeFilter.size > 0 && !employeeFilter.has(a.employee_id)) return false;
+      return true;
+    });
+    if (sort) {
+      const cmp = (a: number | string, b: number | string) => {
+        if (a < b) return sort.dir === "asc" ? -1 : 1;
+        if (a > b) return sort.dir === "asc" ? 1 : -1;
+        return 0;
+      };
+      const key = (a: typeof result[number]): number | string => {
+        switch (sort.column) {
+          case "kpi":
+            return (a.kpi_definition?.name ?? "").toLowerCase();
+          case "employee":
+            return a.employee ? displayName(a.employee).toLowerCase() : "";
+          case "period":
+            return a.period_type;
+          case "progress":
+            return a.target_value > 0 ? (a.current_value / a.target_value) : -1;
+          case "status":
+            return a.status;
+        }
+      };
+      result.sort((a, b) => cmp(key(a), key(b)));
     }
     return result;
-  }, [assignments, periodFilter, statusFilter, employeeFilter]);
+  }, [assignments, periodFilter, statusFilter, employeeFilter, sort]);
+
+  const periodOptions = Object.entries(KPI_PERIOD_TYPES).map(([k, v]) => ({
+    value: k,
+    label: v.label,
+  }));
+  const statusOptions = Object.entries(KPI_STATUS_LABELS).map(([k, v]) => ({
+    value: k,
+    label: v,
+  }));
+  const employeeOptions = teamMembers.map((m) => ({
+    value: m.id,
+    label: displayName(m),
+  }));
 
   // Summary stats
   const stats = useMemo(() => {
@@ -182,7 +224,7 @@ export function KpiDashboard({
             key={tab.key}
             onClick={() => {
               setActiveTab(tab.key);
-              setEmployeeFilter("");
+              setEmployeeFilter(new Set());
             }}
             className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === tab.key
@@ -198,87 +240,25 @@ export function KpiDashboard({
         ))}
       </div>
 
-      {/* Filters + Actions */}
-      <div className="flex flex-wrap items-end gap-4 rounded-xl border border-gray-200 bg-white p-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-600">
-            Period
-          </label>
-          <select
-            value={periodFilter}
-            onChange={(e) =>
-              setPeriodFilter(e.target.value as KpiPeriodType | "")
-            }
-            className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+      {/* Actions */}
+      {isManager && (
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => setShowCreateDef(true)}
+            className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            <option value="">All Periods</option>
-            {Object.entries(KPI_PERIOD_TYPES).map(([key, { label }]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-600">
-            Status
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(e.target.value as KpiAssignmentStatus | "")
-            }
-            className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            <Plus size={16} />
+            New KPI
+          </button>
+          <button
+            onClick={() => setShowAssign(true)}
+            className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            <option value="">All Statuses</option>
-            {Object.entries(KPI_STATUS_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
+            <Target size={16} />
+            Assign KPI
+          </button>
         </div>
-
-        {showTeamColumn && teamMembers.length > 0 && (
-          <div>
-            <label className="block text-xs font-medium text-gray-600">
-              Employee
-            </label>
-            <select
-              value={employeeFilter}
-              onChange={(e) => setEmployeeFilter(e.target.value)}
-              className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="">All Employees</option>
-              {teamMembers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {displayName(m)}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {isManager && (
-          <div className="ml-auto flex gap-2">
-            <button
-              onClick={() => setShowCreateDef(true)}
-              className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <Plus size={16} />
-              New KPI
-            </button>
-            <button
-              onClick={() => setShowAssign(true)}
-              className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              <Target size={16} />
-              Assign KPI
-            </button>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-4">
@@ -295,20 +275,32 @@ export function KpiDashboard({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left">
-                  <th className="px-6 py-3 font-medium text-gray-600">KPI</th>
+                  <th className="px-6 py-3 font-medium text-gray-600">
+                    <span className="align-middle">KPI</span>
+                    <SortButton label="KPI" active={sortDir("kpi")} onClick={() => toggleSort("kpi")} />
+                  </th>
                   {showTeamColumn && (
                     <th className="px-6 py-3 font-medium text-gray-600">
-                      Employee
+                      <span className="align-middle">Employee</span>
+                      <SortButton label="Employee" active={sortDir("employee")} onClick={() => toggleSort("employee")} />
+                      {teamMembers.length > 0 && (
+                        <HeaderFilter label="Employee" options={employeeOptions} selected={employeeFilter} onChange={setEmployeeFilter} />
+                      )}
                     </th>
                   )}
                   <th className="px-6 py-3 font-medium text-gray-600">
-                    Period
+                    <span className="align-middle">Period</span>
+                    <SortButton label="Period" active={sortDir("period")} onClick={() => toggleSort("period")} />
+                    <HeaderFilter label="Period" options={periodOptions} selected={periodFilter} onChange={setPeriodFilter} />
                   </th>
                   <th className="px-6 py-3 font-medium text-gray-600">
-                    Progress
+                    <span className="align-middle">Progress</span>
+                    <SortButton label="Progress" active={sortDir("progress")} onClick={() => toggleSort("progress")} />
                   </th>
                   <th className="px-6 py-3 font-medium text-gray-600">
-                    Status
+                    <span className="align-middle">Status</span>
+                    <SortButton label="Status" active={sortDir("status")} onClick={() => toggleSort("status")} />
+                    <HeaderFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} align="right" />
                   </th>
                   <th className="px-6 py-3 font-medium text-gray-600">
                     Actions

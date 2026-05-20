@@ -2,6 +2,8 @@ import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { SyncDesktimeButton } from "@/components/admin/sync-desktime-button";
 import { AllAttendanceTable } from "@/components/attendance/all-attendance-table";
+import { BiometricUpload } from "@/components/admin/biometric-upload";
+import { Fingerprint, ChevronDown } from "lucide-react";
 
 export default async function AllAttendancePage() {
   await requireRole("hr_admin");
@@ -24,6 +26,25 @@ export default async function AllAttendancePage() {
       </div>
 
       <SyncDesktimeButton />
+
+      <details className="group rounded-xl border border-gray-200 bg-white">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-gray-800 hover:bg-gray-50">
+          <span className="flex items-center gap-2">
+            <Fingerprint size={16} className="text-indigo-600" />
+            Upload biometric data
+            <span className="text-xs font-normal text-gray-500">
+              (overrides Actual Location for the matching dates — DeskTime unaffected)
+            </span>
+          </span>
+          <ChevronDown
+            size={16}
+            className="text-gray-500 transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <div className="border-t border-gray-200 p-4">
+          <BiometricUpload />
+        </div>
+      </details>
 
       <AllAttendanceTable users={users ?? []} />
     </div>

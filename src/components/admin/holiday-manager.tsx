@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Upload, Download } from "lucide-react";
 import type { Holiday, HolidayCountry } from "@/types/database";
 import { HOLIDAY_COUNTRY_LABELS } from "@/types/database";
 import { format, parseISO } from "date-fns";
+import { HeaderFilter } from "@/components/shared/header-filter";
+import { SortButton, type SortDir } from "@/components/shared/sort-button";
 
 const COUNTRIES: HolidayCountry[] = ["PH", "XK", "IT", "AE"];
 const VALID_COUNTRIES = new Set<string>(COUNTRIES);
@@ -14,9 +16,19 @@ const VALID_COUNTRIES = new Set<string>(COUNTRIES);
 export function HolidayManager({ holidays }: { holidays: Holiday[] }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [filterCountry, setFilterCountry] = useState<HolidayCountry | "all">(
-    "all"
+  const [filterCountry, setFilterCountry] = useState<Set<string>>(new Set());
+  const [filterRecurring, setFilterRecurring] = useState<Set<string>>(new Set());
+  type SortColumn = "date" | "name" | "country";
+  const [sort, setSort] = useState<{ column: SortColumn; dir: SortDir } | null>(
+    null
   );
+  const toggleSort = (col: SortColumn) =>
+    setSort((prev) => {
+      if (!prev || prev.column !== col) return { column: col, dir: "asc" };
+      if (prev.dir === "asc") return { column: col, dir: "desc" };
+      return null;
+    });
+  const sortDir = (col: SortColumn) => (sort?.column === col ? sort.dir : null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -31,10 +43,45 @@ export function HolidayManager({ holidays }: { holidays: Holiday[] }) {
   const [country, setCountry] = useState<HolidayCountry>("PH");
   const [isRecurring, setIsRecurring] = useState(false);
 
-  const filtered =
-    filterCountry === "all"
-      ? holidays
-      : holidays.filter((h) => h.country === filterCountry);
+  const filtered = useMemo(() => {
+    const result = holidays.filter((h) => {
+      if (filterCountry.size > 0 && !filterCountry.has(h.country)) return false;
+      if (filterRecurring.size > 0) {
+        const tag = h.is_recurring ? "recurring" : "one_off";
+        if (!filterRecurring.has(tag)) return false;
+      }
+      return true;
+    });
+    if (sort) {
+      const key = (h: Holiday): string => {
+        switch (sort.column) {
+          case "date":
+            return h.date;
+          case "name":
+            return h.name.toLowerCase();
+          case "country":
+            return (HOLIDAY_COUNTRY_LABELS[h.country] ?? h.country).toLowerCase();
+        }
+      };
+      result.sort((a, b) => {
+        const ka = key(a);
+        const kb = key(b);
+        if (ka < kb) return sort.dir === "asc" ? -1 : 1;
+        if (ka > kb) return sort.dir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return result;
+  }, [holidays, filterCountry, filterRecurring, sort]);
+
+  const countryOptions = COUNTRIES.map((c) => ({
+    value: c,
+    label: HOLIDAY_COUNTRY_LABELS[c],
+  }));
+  const recurringOptions = [
+    { value: "recurring", label: "Recurring" },
+    { value: "one_off", label: "One-off" },
+  ];
 
   const allFilteredSelected =
     filtered.length > 0 && filtered.every((h) => selected.has(h.id));
@@ -258,21 +305,6 @@ export function HolidayManager({ holidays }: { holidays: Holiday[] }) {
 
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
-        <select
-          value={filterCountry}
-          onChange={(e) =>
-            setFilterCountry(e.target.value as HolidayCountry | "all")
-          }
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="all">All Countries</option>
-          {COUNTRIES.map((c) => (
-            <option key={c} value={c}>
-              {HOLIDAY_COUNTRY_LABELS[c]}
-            </option>
-          ))}
-        </select>
-
         <button
           onClick={() => setShowForm(!showForm)}
           className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -429,10 +461,23 @@ export function HolidayManager({ holidays }: { holidays: Holiday[] }) {
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th className="px-6 py-3 font-medium">Date</th>
-                <th className="px-6 py-3 font-medium">Holiday</th>
-                <th className="px-6 py-3 font-medium">Country</th>
-                <th className="px-6 py-3 font-medium">Recurring</th>
+                <th className="px-6 py-3 font-medium">
+                  <span className="align-middle">Date</span>
+                  <SortButton label="Date" active={sortDir("date")} onClick={() => toggleSort("date")} />
+                </th>
+                <th className="px-6 py-3 font-medium">
+                  <span className="align-middle">Holiday</span>
+                  <SortButton label="Holiday" active={sortDir("name")} onClick={() => toggleSort("name")} />
+                </th>
+                <th className="px-6 py-3 font-medium">
+                  <span className="align-middle">Country</span>
+                  <SortButton label="Country" active={sortDir("country")} onClick={() => toggleSort("country")} />
+                  <HeaderFilter label="Country" options={countryOptions} selected={filterCountry} onChange={setFilterCountry} />
+                </th>
+                <th className="px-6 py-3 font-medium">
+                  <span className="align-middle">Recurring</span>
+                  <HeaderFilter label="Recurring" options={recurringOptions} selected={filterRecurring} onChange={setFilterRecurring} align="right" />
+                </th>
                 <th className="px-6 py-3 font-medium">Actions</th>
               </tr>
             </thead>

@@ -1,10 +1,11 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
-import { hasRole, formatDate, formatTime, displayName } from "@/lib/utils";
+import { hasRole, formatDate, formatTime, displayName, hasNightDifferentialHours } from "@/lib/utils";
 import { AdjustmentActions } from "@/components/adjustments/adjustment-actions";
 import { CancelRequest } from "@/components/shared/cancel-request";
 import Link from "next/link";
 import { UserNameLink } from "@/components/shared/user-name-link";
+import { NightDiffNote } from "@/components/shared/night-diff-note";
 
 export default async function AdjustmentsPage() {
   const user = await getCurrentUser();
@@ -88,6 +89,9 @@ export default async function AdjustmentsPage() {
                           <span className="font-medium">Requested:</span>{" "}
                           {formatTime(adj.requested_start_time)} -{" "}
                           {formatTime(adj.requested_end_time)}
+                          {hasNightDifferentialHours(adj.requested_start_time, adj.requested_end_time) && (
+                            <span className="ml-2"><NightDiffNote size="xs" /></span>
+                          )}
                         </p>
                       </>
                     )}
@@ -145,6 +149,9 @@ export default async function AdjustmentsPage() {
                       <span className={`ml-2 inline-block rounded px-1.5 py-0.5 text-xs font-medium ${adj.requested_work_location === "office" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
                         {adj.requested_work_location === "office" ? "Office" : "Online"}
                       </span>
+                    )}
+                    {(adj.adjustment_type === "time" || adj.adjustment_type === "both" || !adj.adjustment_type) && hasNightDifferentialHours(adj.requested_start_time, adj.requested_end_time) && (
+                      <span className="ml-2"><NightDiffNote size="xs" /></span>
                     )}
                   </p>
                   <p className="text-sm text-gray-600">{adj.reason}</p>

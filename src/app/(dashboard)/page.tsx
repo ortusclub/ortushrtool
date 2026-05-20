@@ -28,6 +28,21 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   const supabase = await createClient();
   const isReviewer = hasRole(user.role, "manager");
+  const isAdmin = hasRole(user.role, "hr_admin");
+
+  // Reviewers (managers + admins) may have direct reports; fetch them so
+  // we can scope counts. Admins with reports see BOTH org-wide and team
+  // counts. Managers (non-admin) see team only. Employees see own only.
+  let managerReportIds: string[] = [];
+  if (isReviewer) {
+    const { data: reports } = await supabase
+      .from("users")
+      .select("id")
+      .eq("manager_id", user.id)
+      .eq("is_active", true);
+    managerReportIds = (reports ?? []).map((r) => r.id);
+  }
+  const showAdminTeamBreakdown = isAdmin && managerReportIds.length > 0;
 
   const now = new Date();
   const today = format(now, "yyyy-MM-dd");
@@ -36,12 +51,29 @@ export default async function DashboardPage() {
   const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd");
   const nextWeekEnd = format(addDays(parseISO(weekEnd), 7), "yyyy-MM-dd");
 
+  // Helper: a guaranteed-zero count promise — used for team-scoped queries
+  // when the current viewer has no direct reports (admins without a team).
+  const zeroCount = Promise.resolve({ count: 0 });
+  // Build a team-scoped count query for the given table — only used when
+  // the viewer is an admin who also has direct reports.
+  const teamCount = (table: ReturnType<typeof supabase.from>) =>
+    scopedCount(table, {
+      isAdmin: false,
+      isReviewer: true,
+      userId: user.id,
+      directReportIds: managerReportIds,
+    });
+
   // --- Fetch all data in parallel ---
   const [
     pendingAdjResult,
     pendingLeaveResult,
     pendingHWResult,
     unflaggedResult,
+    pendingAdjTeamResult,
+    pendingLeaveTeamResult,
+    pendingHWTeamResult,
+    unflaggedTeamResult,
     myLeavesThisYear,
     myUpcomingLeaves,
     myPendingLeaves,
@@ -50,53 +82,46 @@ export default async function DashboardPage() {
     myActivatedLeaveTypes,
     myAssignedPlans,
   ] = await Promise.all([
-    // Pending schedule adjustments
-    isReviewer
-      ? supabase
-          .from("schedule_adjustments")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "pending")
-      : supabase
-          .from("schedule_adjustments")
-          .select("id", { count: "exact", head: true })
-          .eq("employee_id", user.id)
-          .eq("status", "pending"),
+    // Pending schedule adjustments — scope: admins see org-wide; managers
+    // see their direct reports; employees see their own.
+    scopedCount(
+      supabase.from("schedule_adjustments"),
+      { isAdmin, isReviewer, userId: user.id, directReportIds: managerReportIds }
+    ).eq("status", "pending"),
 
     // Pending leave requests
-    isReviewer
-      ? supabase
-          .from("leave_requests")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "pending")
-      : supabase
-          .from("leave_requests")
-          .select("id", { count: "exact", head: true })
-          .eq("employee_id", user.id)
-          .eq("status", "pending"),
+    scopedCount(
+      supabase.from("leave_requests"),
+      { isAdmin, isReviewer, userId: user.id, directReportIds: managerReportIds }
+    ).eq("status", "pending"),
 
     // Pending holiday work requests
-    isReviewer
-      ? supabase
-          .from("holiday_work_requests")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "pending")
-      : supabase
-          .from("holiday_work_requests")
-          .select("id", { count: "exact", head: true })
-          .eq("employee_id", user.id)
-          .eq("status", "pending"),
+    scopedCount(
+      supabase.from("holiday_work_requests"),
+      { isAdmin, isReviewer, userId: user.id, directReportIds: managerReportIds }
+    ).eq("status", "pending"),
 
-    // Unacknowledged flags (for managers: their team; for employees: their own)
-    isReviewer
-      ? supabase
-          .from("attendance_flags")
-          .select("id", { count: "exact", head: true })
-          .eq("acknowledged", false)
-      : supabase
-          .from("attendance_flags")
-          .select("id", { count: "exact", head: true })
-          .eq("employee_id", user.id)
-          .eq("acknowledged", false),
+    // Unacknowledged flags
+    scopedCount(
+      supabase.from("attendance_flags"),
+      { isAdmin, isReviewer, userId: user.id, directReportIds: managerReportIds }
+    ).eq("acknowledged", false),
+
+    // Team-scoped variants — only meaningful when the viewer is an admin
+    // who also manages a team. Otherwise resolve to 0 so the destructure
+    // stays positional.
+    showAdminTeamBreakdown
+      ? teamCount(supabase.from("schedule_adjustments")).eq("status", "pending")
+      : zeroCount,
+    showAdminTeamBreakdown
+      ? teamCount(supabase.from("leave_requests")).eq("status", "pending")
+      : zeroCount,
+    showAdminTeamBreakdown
+      ? teamCount(supabase.from("holiday_work_requests")).eq("status", "pending")
+      : zeroCount,
+    showAdminTeamBreakdown
+      ? teamCount(supabase.from("attendance_flags")).eq("acknowledged", false)
+      : zeroCount,
 
     // My approved leaves (past 2 years to cover any renewal date)
     supabase
@@ -190,6 +215,12 @@ export default async function DashboardPage() {
   const pendingHW = pendingHWResult.count ?? 0;
   const totalPending = pendingAdj + pendingLeave + pendingHW;
   const unflagged = unflaggedResult.count ?? 0;
+  // Team-scoped versions — only populated when showAdminTeamBreakdown.
+  const pendingAdjTeam = pendingAdjTeamResult.count ?? 0;
+  const pendingLeaveTeam = pendingLeaveTeamResult.count ?? 0;
+  const pendingHWTeam = pendingHWTeamResult.count ?? 0;
+  const totalPendingTeam = pendingAdjTeam + pendingLeaveTeam + pendingHWTeam;
+  const unflaggedTeam = unflaggedTeamResult.count ?? 0;
   const hasAttention = totalPending > 0 || unflagged > 0;
 
   // --- Leave Balance ---
@@ -492,14 +523,21 @@ export default async function DashboardPage() {
                 href="/requests"
                 className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm transition-shadow hover:shadow-md"
               >
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm text-amber-800">
                       {isReviewer ? "Pending Approvals" : "My Pending Requests"}
                     </p>
-                    <p className="mt-1 text-3xl font-bold text-amber-900">
-                      {totalPending}
-                    </p>
+                    {showAdminTeamBreakdown ? (
+                      <div className="mt-1 space-y-1">
+                        <ScopeCount label="Org-wide" value={totalPending} accent="amber" />
+                        <ScopeCount label="Your team" value={totalPendingTeam} accent="amber" />
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-3xl font-bold text-amber-900">
+                        {totalPending}
+                      </p>
+                    )}
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-amber-700">
                       {pendingAdj > 0 && <span>{pendingAdj} adjustment{pendingAdj !== 1 ? "s" : ""}</span>}
                       {pendingLeave > 0 && <span>{pendingLeave} leave</span>}
@@ -517,14 +555,21 @@ export default async function DashboardPage() {
                 href={isReviewer ? "/flags" : "/flags"}
                 className="rounded-xl border border-red-200 bg-red-50 p-5 shadow-sm transition-shadow hover:shadow-md"
               >
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm text-red-800">
                       {isReviewer ? "Unacknowledged Flags" : "My Unacknowledged Flags"}
                     </p>
-                    <p className="mt-1 text-3xl font-bold text-red-900">
-                      {unflagged}
-                    </p>
+                    {showAdminTeamBreakdown ? (
+                      <div className="mt-1 space-y-1">
+                        <ScopeCount label="Org-wide" value={unflagged} accent="red" />
+                        <ScopeCount label="Your team" value={unflaggedTeam} accent="red" />
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-3xl font-bold text-red-900">
+                        {unflagged}
+                      </p>
+                    )}
                   </div>
                   <div className="rounded-lg bg-red-100 p-3">
                     <Flag className="text-red-600" size={24} />
@@ -715,4 +760,54 @@ export default async function DashboardPage() {
       <RecentKudos kudos={recentKudos} />
     </div>
   );
+}
+
+function ScopeCount({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent: "amber" | "red";
+}) {
+  const labelClass = accent === "amber" ? "text-amber-700" : "text-red-700";
+  const valueClass = accent === "amber" ? "text-amber-900" : "text-red-900";
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className={`text-xs ${labelClass}`}>{label}</span>
+      <span className={`text-2xl font-bold ${valueClass}`}>{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Scope a count query by the viewer's role:
+ * - admin: org-wide (no employee filter)
+ * - manager: filter to their direct reports (returns a guaranteed-zero
+ *   query when the manager has no reports, so the dashboard counter
+ *   still resolves to 0 instead of leaking org-wide rows)
+ * - employee: only their own rows
+ */
+function scopedCount<T extends { select: (sel: string, opts: { count: "exact"; head: true }) => unknown }>(
+  table: T,
+  ctx: {
+    isAdmin: boolean;
+    isReviewer: boolean;
+    userId: string;
+    directReportIds: string[];
+  }
+) {
+  type Q = ReturnType<T["select"]> & {
+    eq: (col: string, val: unknown) => Q;
+    in: (col: string, vals: string[]) => Q;
+  };
+  const q = table.select("id", { count: "exact", head: true }) as Q;
+  if (ctx.isAdmin) return q;
+  if (ctx.isReviewer) {
+    // Manager with no reports → match an impossible employee_id so the count is 0.
+    if (ctx.directReportIds.length === 0) return q.eq("employee_id", "__none__");
+    return q.in("employee_id", ctx.directReportIds);
+  }
+  return q.eq("employee_id", ctx.userId);
 }

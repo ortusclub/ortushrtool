@@ -7,6 +7,8 @@ import Link from "next/link";
 import { ArrowLeft, Plus, X, AlertTriangle } from "lucide-react";
 import type { ScheduleAdjustmentType, WorkLocation } from "@/types/database";
 import { WeeklyScheduleEditor } from "@/components/profile/weekly-schedule-editor";
+import { hasNightDifferentialHours } from "@/lib/utils";
+import { NightDiffBanner } from "@/components/shared/night-diff-banner";
 
 type ScheduleRow = {
   id: string;
@@ -553,31 +555,36 @@ export default function ScheduleAdjustmentPage() {
 
         {/* Time fields */}
         {showTimeFields && (
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                What time would you like to start?
-              </label>
-              <input
-                type="time"
-                required
-                value={requestedStart}
-                onChange={(e) => setRequestedStart(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  What time would you like to start?
+                </label>
+                <input
+                  type="time"
+                  required
+                  value={requestedStart}
+                  onChange={(e) => setRequestedStart(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  What time would you like to finish?
+                </label>
+                <input
+                  type="time"
+                  required
+                  value={requestedEnd}
+                  onChange={(e) => setRequestedEnd(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                What time would you like to finish?
-              </label>
-              <input
-                type="time"
-                required
-                value={requestedEnd}
-                onChange={(e) => setRequestedEnd(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
+            {hasNightDifferentialHours(requestedStart, requestedEnd) && (
+              <NightDiffBanner />
+            )}
           </div>
         )}
 

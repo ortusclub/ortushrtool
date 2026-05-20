@@ -95,6 +95,7 @@ export interface User {
   avatar_url: string | null;
   desktime_employee_id: number | null;
   desktime_url: string | null;
+  biometric_id: number | null;
   timezone: string;
   holiday_country: HolidayCountry;
   is_active: boolean;

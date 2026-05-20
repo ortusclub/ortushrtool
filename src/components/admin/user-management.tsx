@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -9,6 +9,8 @@ import { EmployeeLeaveTypesModal } from "./employee-leave-types";
 import type { User, UserRole, HolidayCountry, Company } from "@/types/database";
 import { HOLIDAY_COUNTRY_LABELS, COMPANY_OPTIONS } from "@/types/database";
 import { displayName } from "@/lib/utils";
+import { HeaderFilter } from "@/components/shared/header-filter";
+import { SortButton, type SortDir } from "@/components/shared/sort-button";
 
 const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE"];
 
@@ -35,22 +37,135 @@ export function UserManagement({
   const [search, setSearch] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const filteredUsers = users.filter((u) => {
+  type SortColumn =
+    | "preferred_name"
+    | "email"
+    | "role"
+    | "company"
+    | "department"
+    | "job_title"
+    | "country"
+    | "hire_date";
+  const [sort, setSort] = useState<{ column: SortColumn; dir: SortDir } | null>(
+    null
+  );
+  const toggleSort = (column: SortColumn) =>
+    setSort((prev) => {
+      if (!prev || prev.column !== column) return { column, dir: "asc" };
+      if (prev.dir === "asc") return { column, dir: "desc" };
+      return null;
+    });
+
+  const [roleFilter, setRoleFilter] = useState<Set<string>>(new Set());
+  const [companyFilter, setCompanyFilter] = useState<Set<string>>(new Set());
+  const [departmentFilter, setDepartmentFilter] = useState<Set<string>>(new Set());
+  const [jobTitleFilter, setJobTitleFilter] = useState<Set<string>>(new Set());
+  const [countryFilter, setCountryFilter] = useState<Set<string>>(new Set());
+  const [activeFilter, setActiveFilter] = useState<Set<string>>(new Set());
+
+  const departmentOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of users) if (u.department) s.add(u.department);
+    return [...s].sort().map((v) => ({ value: v, label: v }));
+  }, [users]);
+  const jobTitleOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of users) if (u.job_title) s.add(u.job_title);
+    return [...s].sort().map((v) => ({ value: v, label: v }));
+  }, [users]);
+  const countryOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const u of users) if (u.holiday_country) s.add(u.holiday_country);
+    return [...s].sort().map((v) => ({
+      value: v,
+      label: HOLIDAY_COUNTRY_LABELS[v as HolidayCountry] ?? v,
+    }));
+  }, [users]);
+  const roleFilterOptions = [
+    { value: "employee", label: "Employee" },
+    { value: "manager", label: "Manager" },
+    { value: "hr_admin", label: "HR Admin" },
+    { value: "super_admin", label: "Super Admin" },
+  ];
+  const companyFilterOptions = COMPANY_OPTIONS.map((c) => ({ value: c, label: c }));
+  const activeOptions = [
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+  ];
+
+  const filteredUsers = useMemo(() => {
     const q = search.toLowerCase();
-    if (!q) return true;
-    return (
-      displayName(u).toLowerCase().includes(q) ||
-      (u.full_name?.toLowerCase().includes(q) ?? false) ||
-      (u.preferred_name?.toLowerCase().includes(q) ?? false) ||
-      (u.first_name?.toLowerCase().includes(q) ?? false) ||
-      (u.middle_name?.toLowerCase().includes(q) ?? false) ||
-      (u.last_name?.toLowerCase().includes(q) ?? false) ||
-      u.email.toLowerCase().includes(q) ||
-      (u.company ?? "").toLowerCase().includes(q) ||
-      (u.department ?? "").toLowerCase().includes(q) ||
-      (u.job_title ?? "").toLowerCase().includes(q)
-    );
-  });
+    const result = users.filter((u) => {
+      if (q) {
+        const match =
+          displayName(u).toLowerCase().includes(q) ||
+          (u.full_name?.toLowerCase().includes(q) ?? false) ||
+          (u.preferred_name?.toLowerCase().includes(q) ?? false) ||
+          (u.first_name?.toLowerCase().includes(q) ?? false) ||
+          (u.middle_name?.toLowerCase().includes(q) ?? false) ||
+          (u.last_name?.toLowerCase().includes(q) ?? false) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.company ?? "").toLowerCase().includes(q) ||
+          (u.department ?? "").toLowerCase().includes(q) ||
+          (u.job_title ?? "").toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      if (roleFilter.size > 0 && !roleFilter.has(u.role)) return false;
+      if (companyFilter.size > 0 && !companyFilter.has(u.company ?? "")) return false;
+      if (departmentFilter.size > 0 && !departmentFilter.has(u.department ?? "")) return false;
+      if (jobTitleFilter.size > 0 && !jobTitleFilter.has(u.job_title ?? "")) return false;
+      if (countryFilter.size > 0 && !countryFilter.has(u.holiday_country)) return false;
+      if (activeFilter.size > 0) {
+        const tag = u.is_active ? "active" : "inactive";
+        if (!activeFilter.has(tag)) return false;
+      }
+      return true;
+    });
+
+    if (sort) {
+      const key = (u: User): string => {
+        switch (sort.column) {
+          case "preferred_name":
+            return (u.preferred_name ?? u.first_name ?? u.full_name ?? "").toLowerCase();
+          case "email":
+            return u.email.toLowerCase();
+          case "role":
+            return u.role;
+          case "company":
+            return (u.company ?? "").toLowerCase();
+          case "department":
+            return (u.department ?? "").toLowerCase();
+          case "job_title":
+            return (u.job_title ?? "").toLowerCase();
+          case "country":
+            return (HOLIDAY_COUNTRY_LABELS[u.holiday_country] ?? "").toLowerCase();
+          case "hire_date":
+            return u.hire_date ?? "";
+        }
+      };
+      result.sort((a, b) => {
+        const ka = key(a);
+        const kb = key(b);
+        if (ka < kb) return sort.dir === "asc" ? -1 : 1;
+        if (ka > kb) return sort.dir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return result;
+  }, [
+    users,
+    search,
+    roleFilter,
+    companyFilter,
+    departmentFilter,
+    jobTitleFilter,
+    countryFilter,
+    activeFilter,
+    sort,
+  ]);
+
+  const sortDir = (col: SortColumn) =>
+    sort?.column === col ? sort.dir : null;
 
   const startEdit = (user: User) => {
     setEditingId(user.id);
@@ -67,6 +182,7 @@ export function UserManagement({
       manager_id: user.manager_id,
       desktime_employee_id: user.desktime_employee_id,
       desktime_url: user.desktime_url,
+      biometric_id: user.biometric_id,
       holiday_country: user.holiday_country,
       timezone: user.timezone,
       is_active: user.is_active,
@@ -367,25 +483,58 @@ export function UserManagement({
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th className="px-4 py-3 font-medium text-gray-600">Preferred Name</th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Preferred Name</span>
+                  <SortButton label="Preferred Name" active={sortDir("preferred_name")} onClick={() => toggleSort("preferred_name")} />
+                </th>
                 <th className="px-4 py-3 font-medium text-gray-600">Given Name(s)</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Middle Name</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Last Name</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Email</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Role</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Company</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Department</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Job Title</th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Email</span>
+                  <SortButton label="Email" active={sortDir("email")} onClick={() => toggleSort("email")} />
+                </th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Role</span>
+                  <SortButton label="Role" active={sortDir("role")} onClick={() => toggleSort("role")} />
+                  <HeaderFilter label="Role" options={roleFilterOptions} selected={roleFilter} onChange={setRoleFilter} />
+                </th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Company</span>
+                  <SortButton label="Company" active={sortDir("company")} onClick={() => toggleSort("company")} />
+                  <HeaderFilter label="Company" options={companyFilterOptions} selected={companyFilter} onChange={setCompanyFilter} />
+                </th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Department</span>
+                  <SortButton label="Department" active={sortDir("department")} onClick={() => toggleSort("department")} />
+                  <HeaderFilter label="Department" options={departmentOptions} selected={departmentFilter} onChange={setDepartmentFilter} />
+                </th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Job Title</span>
+                  <SortButton label="Job Title" active={sortDir("job_title")} onClick={() => toggleSort("job_title")} />
+                  <HeaderFilter label="Job Title" options={jobTitleOptions} selected={jobTitleFilter} onChange={setJobTitleFilter} />
+                </th>
                 <th className="px-4 py-3 font-medium text-gray-600">Manager</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Country</th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Country</span>
+                  <SortButton label="Country" active={sortDir("country")} onClick={() => toggleSort("country")} />
+                  <HeaderFilter label="Country" options={countryOptions} selected={countryFilter} onChange={setCountryFilter} />
+                </th>
                 <th className="px-4 py-3 font-medium text-gray-600">Timezone</th>
                 <th className="px-4 py-3 font-medium text-gray-600">DeskTime ID</th>
                 <th className="px-4 py-3 font-medium text-gray-600">DeskTime URL</th>
+                <th className="px-4 py-3 font-medium text-gray-600">Biometric ID</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Birthday</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Hire Date</th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Hire Date</span>
+                  <SortButton label="Hire Date" active={sortDir("hire_date")} onClick={() => toggleSort("hire_date")} />
+                </th>
                 <th className="px-4 py-3 font-medium text-gray-600">Regularization</th>
                 <th className="px-4 py-3 font-medium text-gray-600">End Date</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Active</th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Active</span>
+                  <HeaderFilter label="Active" options={activeOptions} selected={activeFilter} onChange={setActiveFilter} align="right" />
+                </th>
                 <th className="px-4 py-3 font-medium text-gray-600">OT Eligible</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Actions</th>
               </tr>
@@ -655,6 +804,25 @@ export function UserManagement({
                         </a>
                       ) : (
                         "-"
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={editForm.biometric_id ?? ""}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              biometric_id: e.target.value
+                                ? parseInt(e.target.value)
+                                : null,
+                            })
+                          }
+                          className="w-24 rounded border px-2 py-1 text-sm"
+                        />
+                      ) : (
+                        user.biometric_id ?? "-"
                       )}
                     </td>
                     <td className="px-4 py-3">

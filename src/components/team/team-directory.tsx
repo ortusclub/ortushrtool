@@ -8,6 +8,8 @@ import {
 } from "@/types/database";
 import { Search, LayoutGrid, List } from "lucide-react";
 import { cn, displayName } from "@/lib/utils";
+import { HeaderFilter } from "@/components/shared/header-filter";
+import { SortButton, type SortDir } from "@/components/shared/sort-button";
 
 interface TeamUser {
   id: string;
@@ -61,15 +63,36 @@ function getInitials(user: TeamUser): string {
 
 type ViewMode = "grid" | "list";
 
+type SortColumn =
+  | "name"
+  | "email"
+  | "job_title"
+  | "department"
+  | "country"
+  | "manager"
+  | "status";
+
 export function TeamDirectory({ users }: { users: TeamUser[] }) {
   const [search, setSearch] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("");
-  const [countryFilter, setCountryFilter] = useState("");
-  const [jobTitleFilter, setJobTitleFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState<EmploymentStatus | "all">(
-    "active"
+  const [departmentFilter, setDepartmentFilter] = useState<Set<string>>(new Set());
+  const [countryFilter, setCountryFilter] = useState<Set<string>>(new Set());
+  const [jobTitleFilter, setJobTitleFilter] = useState<Set<string>>(new Set());
+  const [managerFilter, setManagerFilter] = useState<Set<string>>(new Set());
+  // Default to "active" only — matches the prior single-select behaviour.
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(
+    new Set(["active"])
   );
   const [view, setView] = useState<ViewMode>("grid");
+  const [sort, setSort] = useState<{ column: SortColumn; dir: SortDir } | null>(
+    null
+  );
+
+  const toggleSort = (column: SortColumn) =>
+    setSort((prev) => {
+      if (!prev || prev.column !== column) return { column, dir: "asc" };
+      if (prev.dir === "asc") return { column, dir: "desc" };
+      return null;
+    });
 
   const departments = useMemo(() => {
     const s = new Set<string>();
@@ -89,20 +112,38 @@ export function TeamDirectory({ users }: { users: TeamUser[] }) {
     return Array.from(s).sort();
   }, [users]);
 
+  // Unique managers: map manager_id -> display name (from manager_name on
+  // each report). Anyone who appears as someone's manager shows up here,
+  // plus a "(No manager)" entry for unmanaged reports.
+  const managerOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    let hasUnmanaged = false;
+    for (const u of users) {
+      if (u.manager_id && u.manager_name) {
+        map.set(u.manager_id, u.manager_name);
+      } else if (!u.manager_id) {
+        hasUnmanaged = true;
+      }
+    }
+    const opts = [...map.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    if (hasUnmanaged) opts.push({ value: "__none__", label: "(No manager)" });
+    return opts;
+  }, [users]);
+
   const filtered = useMemo(() => {
-    let result = users;
-    if (statusFilter !== "all") {
-      result = result.filter((u) => statusFor(u) === statusFilter);
-    }
-    if (departmentFilter) {
-      result = result.filter((u) => u.department === departmentFilter);
-    }
-    if (jobTitleFilter) {
-      result = result.filter((u) => u.job_title === jobTitleFilter);
-    }
-    if (countryFilter) {
-      result = result.filter((u) => u.holiday_country === countryFilter);
-    }
+    let result = users.filter((u) => {
+      if (statusFilter.size > 0 && !statusFilter.has(statusFor(u))) return false;
+      if (departmentFilter.size > 0 && !departmentFilter.has(u.department ?? "")) return false;
+      if (jobTitleFilter.size > 0 && !jobTitleFilter.has(u.job_title ?? "")) return false;
+      if (countryFilter.size > 0 && !countryFilter.has(u.holiday_country)) return false;
+      if (managerFilter.size > 0) {
+        const key = u.manager_id ?? "__none__";
+        if (!managerFilter.has(key)) return false;
+      }
+      return true;
+    });
     if (search) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -114,6 +155,33 @@ export function TeamDirectory({ users }: { users: TeamUser[] }) {
           (u.job_title && u.job_title.toLowerCase().includes(q))
       );
     }
+    if (sort) {
+      const key = (u: TeamUser) => {
+        switch (sort.column) {
+          case "name":
+            return displayName(u).toLowerCase();
+          case "email":
+            return u.email.toLowerCase();
+          case "job_title":
+            return (u.job_title ?? "").toLowerCase();
+          case "department":
+            return (u.department ?? "").toLowerCase();
+          case "country":
+            return (HOLIDAY_COUNTRY_LABELS[u.holiday_country] ?? "").toLowerCase();
+          case "manager":
+            return (u.manager_name ?? "").toLowerCase();
+          case "status":
+            return statusFor(u);
+        }
+      };
+      result = [...result].sort((a, b) => {
+        const ka = key(a);
+        const kb = key(b);
+        if (ka < kb) return sort.dir === "asc" ? -1 : 1;
+        if (ka > kb) return sort.dir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
     return result;
   }, [
     users,
@@ -121,8 +189,22 @@ export function TeamDirectory({ users }: { users: TeamUser[] }) {
     departmentFilter,
     jobTitleFilter,
     countryFilter,
+    managerFilter,
     search,
+    sort,
   ]);
+
+  const statusOptions = [
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+    { value: "terminated", label: "Terminated" },
+  ];
+  const countryOptions = countries.map((c) => ({
+    value: c,
+    label: HOLIDAY_COUNTRY_LABELS[c],
+  }));
+  const departmentOptions = departments.map((d) => ({ value: d, label: d }));
+  const jobTitleOptions = jobTitles.map((t) => ({ value: t, label: t }));
 
   return (
     <div className="space-y-4">
@@ -177,95 +259,131 @@ export function TeamDirectory({ users }: { users: TeamUser[] }) {
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-gray-600">
-            Status
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(e.target.value as EmploymentStatus | "all")
+        <div className="ml-auto flex items-center gap-3">
+          <FilterChip
+            label="Status"
+            count={statusFilter.size}
+            filter={
+              <HeaderFilter
+                label="Status"
+                options={statusOptions}
+                selected={statusFilter}
+                onChange={setStatusFilter}
+                align="right"
+              />
             }
-            className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="all">All</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="terminated">Terminated</option>
-          </select>
+          />
+          {countries.length > 0 && (
+            <FilterChip
+              label="Country"
+              count={countryFilter.size}
+              filter={
+                <HeaderFilter
+                  label="Country"
+                  options={countryOptions}
+                  selected={countryFilter}
+                  onChange={setCountryFilter}
+                  align="right"
+                />
+              }
+            />
+          )}
+          {departments.length > 0 && (
+            <FilterChip
+              label="Department"
+              count={departmentFilter.size}
+              filter={
+                <HeaderFilter
+                  label="Department"
+                  options={departmentOptions}
+                  selected={departmentFilter}
+                  onChange={setDepartmentFilter}
+                  align="right"
+                />
+              }
+            />
+          )}
+          {jobTitles.length > 0 && (
+            <FilterChip
+              label="Position"
+              count={jobTitleFilter.size}
+              filter={
+                <HeaderFilter
+                  label="Position"
+                  options={jobTitleOptions}
+                  selected={jobTitleFilter}
+                  onChange={setJobTitleFilter}
+                  align="right"
+                />
+              }
+            />
+          )}
+          {managerOptions.length > 0 && (
+            <FilterChip
+              label="Reports To"
+              count={managerFilter.size}
+              filter={
+                <HeaderFilter
+                  label="Reports To"
+                  options={managerOptions}
+                  selected={managerFilter}
+                  onChange={setManagerFilter}
+                  align="right"
+                />
+              }
+            />
+          )}
+          <p className="text-sm text-gray-500">
+            {filtered.length} {filtered.length === 1 ? "person" : "people"}
+          </p>
         </div>
-
-        {countries.length > 0 && (
-          <div>
-            <label className="block text-xs font-medium text-gray-600">
-              Country
-            </label>
-            <select
-              value={countryFilter}
-              onChange={(e) => setCountryFilter(e.target.value)}
-              className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="">All</option>
-              {countries.map((c) => (
-                <option key={c} value={c}>
-                  {HOLIDAY_COUNTRY_LABELS[c]}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {departments.length > 0 && (
-          <div>
-            <label className="block text-xs font-medium text-gray-600">
-              Department
-            </label>
-            <select
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="">All</option>
-              {departments.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {jobTitles.length > 0 && (
-          <div>
-            <label className="block text-xs font-medium text-gray-600">
-              Position
-            </label>
-            <select
-              value={jobTitleFilter}
-              onChange={(e) => setJobTitleFilter(e.target.value)}
-              className="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="">All</option>
-              {jobTitles.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <p className="ml-auto text-sm text-gray-500">
-          {filtered.length} {filtered.length === 1 ? "person" : "people"}
-        </p>
       </div>
 
       {/* Content */}
       {view === "list" ? (
-        <ListView users={filtered} />
+        <ListView
+          users={filtered}
+          sort={sort}
+          toggleSort={toggleSort}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          statusOptions={statusOptions}
+          countryFilter={countryFilter}
+          setCountryFilter={setCountryFilter}
+          countryOptions={countryOptions}
+          departmentFilter={departmentFilter}
+          setDepartmentFilter={setDepartmentFilter}
+          departmentOptions={departmentOptions}
+          jobTitleFilter={jobTitleFilter}
+          setJobTitleFilter={setJobTitleFilter}
+          jobTitleOptions={jobTitleOptions}
+          managerFilter={managerFilter}
+          setManagerFilter={setManagerFilter}
+          managerOptions={managerOptions}
+        />
       ) : (
         <GridView users={filtered} />
       )}
+    </div>
+  );
+}
+
+function FilterChip({
+  label,
+  count,
+  filter,
+}: {
+  label: string;
+  count: number;
+  filter: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1 text-xs">
+      <span className={cn("text-gray-600", count > 0 && "font-medium text-blue-700")}>
+        {label}
+        {count > 0 && ` (${count})`}
+      </span>
+      {filter}
     </div>
   );
 }
@@ -353,7 +471,47 @@ function GridView({ users }: { users: TeamUser[] }) {
 
 /* ─── List View ─── */
 
-function ListView({ users }: { users: TeamUser[] }) {
+interface ListViewProps {
+  users: TeamUser[];
+  sort: { column: SortColumn; dir: SortDir } | null;
+  toggleSort: (col: SortColumn) => void;
+  statusFilter: Set<string>;
+  setStatusFilter: (s: Set<string>) => void;
+  statusOptions: { value: string; label: string }[];
+  countryFilter: Set<string>;
+  setCountryFilter: (s: Set<string>) => void;
+  countryOptions: { value: string; label: string }[];
+  departmentFilter: Set<string>;
+  setDepartmentFilter: (s: Set<string>) => void;
+  departmentOptions: { value: string; label: string }[];
+  jobTitleFilter: Set<string>;
+  setJobTitleFilter: (s: Set<string>) => void;
+  jobTitleOptions: { value: string; label: string }[];
+  managerFilter: Set<string>;
+  setManagerFilter: (s: Set<string>) => void;
+  managerOptions: { value: string; label: string }[];
+}
+
+function ListView({
+  users,
+  sort,
+  toggleSort,
+  statusFilter,
+  setStatusFilter,
+  statusOptions,
+  countryFilter,
+  setCountryFilter,
+  countryOptions,
+  departmentFilter,
+  setDepartmentFilter,
+  departmentOptions,
+  jobTitleFilter,
+  setJobTitleFilter,
+  jobTitleOptions,
+  managerFilter,
+  setManagerFilter,
+  managerOptions,
+}: ListViewProps) {
   if (users.length === 0) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-500">
@@ -362,20 +520,74 @@ function ListView({ users }: { users: TeamUser[] }) {
     );
   }
 
+  const sortDir = (col: SortColumn) =>
+    sort?.column === col ? sort.dir : null;
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-left">
-              <th className="px-6 py-3 font-medium text-gray-600">Name</th>
-              <th className="px-6 py-3 font-medium text-gray-600">Email</th>
-              <th className="px-6 py-3 font-medium text-gray-600">Position</th>
-              <th className="px-6 py-3 font-medium text-gray-600">Department</th>
-              <th className="px-6 py-3 font-medium text-gray-600">Country</th>
-              <th className="px-6 py-3 font-medium text-gray-600">Working Location</th>
-              <th className="px-6 py-3 font-medium text-gray-600">Reports To</th>
-              <th className="px-6 py-3 font-medium text-gray-600">Status</th>
+              <th className="px-6 py-3 font-medium text-gray-600">
+                <span className="align-middle">Name</span>
+                <SortButton label="Name" active={sortDir("name")} onClick={() => toggleSort("name")} />
+              </th>
+              <th className="px-6 py-3 font-medium text-gray-600">
+                <span className="align-middle">Email</span>
+                <SortButton label="Email" active={sortDir("email")} onClick={() => toggleSort("email")} />
+              </th>
+              <th className="px-6 py-3 font-medium text-gray-600">
+                <span className="align-middle">Position</span>
+                <SortButton label="Position" active={sortDir("job_title")} onClick={() => toggleSort("job_title")} />
+                <HeaderFilter
+                  label="Position"
+                  options={jobTitleOptions}
+                  selected={jobTitleFilter}
+                  onChange={setJobTitleFilter}
+                />
+              </th>
+              <th className="px-6 py-3 font-medium text-gray-600">
+                <span className="align-middle">Department</span>
+                <SortButton label="Department" active={sortDir("department")} onClick={() => toggleSort("department")} />
+                <HeaderFilter
+                  label="Department"
+                  options={departmentOptions}
+                  selected={departmentFilter}
+                  onChange={setDepartmentFilter}
+                />
+              </th>
+              <th className="px-6 py-3 font-medium text-gray-600">
+                <span className="align-middle">Country</span>
+                <SortButton label="Country" active={sortDir("country")} onClick={() => toggleSort("country")} />
+                <HeaderFilter
+                  label="Country"
+                  options={countryOptions}
+                  selected={countryFilter}
+                  onChange={setCountryFilter}
+                />
+              </th>
+              <th className="px-6 py-3 font-medium text-gray-600">
+                <span className="align-middle">Reports To</span>
+                <SortButton label="Reports To" active={sortDir("manager")} onClick={() => toggleSort("manager")} />
+                <HeaderFilter
+                  label="Reports To"
+                  options={managerOptions}
+                  selected={managerFilter}
+                  onChange={setManagerFilter}
+                />
+              </th>
+              <th className="px-6 py-3 font-medium text-gray-600">
+                <span className="align-middle">Status</span>
+                <SortButton label="Status" active={sortDir("status")} onClick={() => toggleSort("status")} />
+                <HeaderFilter
+                  label="Status"
+                  options={statusOptions}
+                  selected={statusFilter}
+                  onChange={setStatusFilter}
+                  align="right"
+                />
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -405,9 +617,6 @@ function ListView({ users }: { users: TeamUser[] }) {
                   </td>
                   <td className="px-6 py-3 text-gray-600">
                     {HOLIDAY_COUNTRY_LABELS[user.holiday_country] ?? "—"}
-                  </td>
-                  <td className="px-6 py-3 text-gray-600">
-                    {user.location || "—"}
                   </td>
                   <td className="px-6 py-3 text-gray-600">
                     {user.manager_name && user.manager_id ? (

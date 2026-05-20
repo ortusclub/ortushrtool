@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Search, ChevronLeft, ChevronRight, ChevronDown, Download, ExternalLink } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Download, ExternalLink } from "lucide-react";
 import { HOLIDAY_COUNTRY_LABELS, type HolidayCountry } from "@/types/database";
 import { UserNameLink } from "@/components/shared/user-name-link";
-import { displayName } from "@/lib/utils";
+import { displayName, hasNightDifferentialHours } from "@/lib/utils";
+import { HeaderFilter } from "@/components/shared/header-filter";
+import { SortButton, type SortDir } from "@/components/shared/sort-button";
+import { NightDiffNote } from "@/components/shared/night-diff-note";
 
 interface UserRow {
   id: string;
@@ -212,58 +215,6 @@ function getDisplayStatus(
   return log.status;
 }
 
-// Dropdown filter component for table headers
-function HeaderFilter({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`inline-flex items-center gap-1 font-medium ${value ? "text-blue-600" : "text-gray-600"}`}
-      >
-        {label}
-        <ChevronDown size={14} className={`transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-30 mt-1 min-w-[140px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-            <button
-              type="button"
-              onClick={() => { onChange(""); setOpen(false); }}
-              className={`block w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 ${!value ? "font-semibold text-blue-600" : "text-gray-600"}`}
-            >
-              All
-            </button>
-            {options.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => { onChange(opt.value); setOpen(false); }}
-                className={`block w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 ${value === opt.value ? "font-semibold text-blue-600" : "text-gray-600"}`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 const PAGE_SIZE = 50;
 
 interface AllAttendanceTableProps {
@@ -285,13 +236,39 @@ export function AllAttendanceTable({
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([]);
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
+  // Set of `${employee_id}|YYYY-MM-DD` (Asia/Manila) for every biometric punch
+  // in the range. Used to derive Actual Location per row.
+  const [biometricPresence, setBiometricPresence] = useState<Set<string>>(new Set());
+  // Earliest biometric punch per (employee, Asia/Manila date). Used to
+  // override Clock In when an employee tagged in physically before starting
+  // DeskTime (the most common arrival-mismatch case).
+  const [biometricInByDay, setBiometricInByDay] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
 
   // Column filters
-  const [countryFilter, setCountryFilter] = useState("");
-  const [locationFilter, setLocationFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [tzFilter, setTzFilter] = useState("");
+  const [countryFilter, setCountryFilter] = useState<Set<string>>(new Set());
+  const [locationFilter, setLocationFilter] = useState<Set<string>>(new Set());
+  const [actualLocationFilter, setActualLocationFilter] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const [tzFilter, setTzFilter] = useState<Set<string>>(new Set());
+
+  type SortColumn =
+    | "name"
+    | "date"
+    | "clock_in"
+    | "clock_out"
+    | "late"
+    | "early";
+  const [sort, setSort] = useState<{ column: SortColumn; dir: SortDir } | null>(
+    null
+  );
+  const toggleSort = (column: SortColumn) =>
+    setSort((prev) => {
+      if (!prev || prev.column !== column) return { column, dir: "asc" };
+      if (prev.dir === "asc") return { column, dir: "desc" };
+      return null;
+    });
+  const sortDir = (col: SortColumn) => (sort?.column === col ? sort.dir : null);
 
   // Pagination
   const [pageIndex, setPageIndex] = useState(0);
@@ -311,7 +288,19 @@ export function AllAttendanceTable({
       if (dows.size === 7) break;
     }
 
-    const [logsResult, schedulesResult, adjustmentsResult, leavesResult] = await Promise.all([
+    // Biometric punches are stored in UTC but represent Asia/Manila local
+    // time. Extend the SQL range by ±1 day to account for the offset, then
+    // bucket each punch into its Manila-local date below.
+    const punchFrom = `${fromDate}T00:00:00+08:00`;
+    const punchTo = `${toDate}T23:59:59.999+08:00`;
+
+    const [
+      logsResult,
+      schedulesResult,
+      adjustmentsResult,
+      leavesResult,
+      punchesResult,
+    ] = await Promise.all([
       supabase
         .from("attendance_logs")
         .select("*")
@@ -335,12 +324,36 @@ export function AllAttendanceTable({
         .eq("status", "approved")
         .lte("start_date", toDate)
         .gte("end_date", fromDate),
+      supabase
+        .from("biometric_punches")
+        .select("employee_id, punch_time")
+        .gte("punch_time", punchFrom)
+        .lte("punch_time", punchTo),
     ]);
 
     setLogs(logsResult.data ?? []);
     setSchedules(schedulesResult.data ?? []);
     setAdjustments(adjustmentsResult.data ?? []);
     setLeaves(leavesResult.data ?? []);
+
+    // Bucket each punch into its Manila-local date so the row lookup is O(1).
+    // For each (employee, date), also remember the earliest punch_time so we
+    // can override Clock In.
+    const presence = new Set<string>();
+    const inByDay = new Map<string, string>();
+    for (const p of punchesResult.data ?? []) {
+      const manilaDate = new Date(p.punch_time).toLocaleDateString("en-CA", {
+        timeZone: "Asia/Manila",
+      });
+      const key = `${p.employee_id}|${manilaDate}`;
+      presence.add(key);
+      const current = inByDay.get(key);
+      if (!current || p.punch_time < current) {
+        inByDay.set(key, p.punch_time);
+      }
+    }
+    setBiometricPresence(presence);
+    setBiometricInByDay(inByDay);
     setLoading(false);
   }, [fromDate, toDate]);
 
@@ -456,9 +469,75 @@ export function AllAttendanceTable({
     return out;
   }, [isSingleDate, users, userById, logMap, logs, fromDate]);
 
+  /**
+   * Return a (possibly synthesized) AttendanceLog with biometric IN taking
+   * precedence over DeskTime's clock_in. Priority:
+   *   biometric punch  → use biometric as canonical IN, derive late + status
+   *   no biometric, DeskTime log  → return the DeskTime log unchanged
+   *   neither  → undefined (renders as no_data → absent on past dates)
+   *
+   * When biometric exists but DeskTime is missing OR inconclusive, we
+   * synthesize a log so the row still surfaces as present (on_time or
+   * late_arrival based on biometric vs scheduled_start).
+   */
+  function effectiveLog(row: { user: UserRow; log: AttendanceLog | undefined; date: string }): AttendanceLog | undefined {
+    const bioIn = biometricInByDay.get(`${row.user.id}|${row.date}`);
+    if (!bioIn) return row.log;
+
+    const tz = row.user.timezone || "Asia/Manila";
+    const schedTimes = getScheduleTimes(row.user.id, row.date);
+    const schedStart = row.log?.scheduled_start ?? schedTimes?.start ?? null;
+    const schedEnd = row.log?.scheduled_end ?? schedTimes?.end ?? null;
+
+    // Re-derive late from biometric IN vs scheduled_start.
+    let lateMinutes: number | null = row.log?.late_minutes ?? null;
+    if (schedStart) {
+      const hhmm = new Date(bioIn).toLocaleTimeString("en-GB", {
+        timeZone: tz,
+        hour12: false,
+      }).slice(0, 5);
+      const bioMinutes = timeToMinutes(hhmm);
+      const schedMinutes = timeToMinutes(schedStart.slice(0, 5));
+      lateMinutes = Math.max(0, bioMinutes - schedMinutes);
+    }
+
+    // Status: biometric data wins. Inconclusive/no_data get replaced by
+    // on_time or late_arrival; the early/late combo flips appropriately.
+    let nextStatus = row.log?.status ?? "on_time";
+    const punctuality: "on_time" | "late_arrival" =
+      (lateMinutes ?? 0) > 0 ? "late_arrival" : "on_time";
+    if (
+      !row.log ||
+      nextStatus === "inconclusive" ||
+      nextStatus === "no_data"
+    ) {
+      nextStatus = punctuality;
+    } else if (punctuality === "late_arrival") {
+      if (nextStatus === "on_time") nextStatus = "late_arrival";
+      else if (nextStatus === "early_departure") nextStatus = "late_and_early";
+    } else {
+      if (nextStatus === "late_arrival") nextStatus = "on_time";
+      else if (nextStatus === "late_and_early") nextStatus = "early_departure";
+    }
+
+    return {
+      id: row.log?.id ?? "",
+      employee_id: row.user.id,
+      date: row.date,
+      scheduled_start: schedStart,
+      scheduled_end: schedEnd,
+      clock_in: bioIn,
+      clock_out: row.log?.clock_out ?? null,
+      status: nextStatus,
+      late_minutes: lateMinutes,
+      early_departure_minutes: row.log?.early_departure_minutes ?? null,
+      raw_response: row.log?.raw_response ?? null,
+    };
+  }
+
   function rowDisplayStatus(row: { user: UserRow; log: AttendanceLog | undefined; date: string }): string {
     const tz = row.user.timezone || "Asia/Manila";
-    const raw = getDisplayStatus(row.log, tz, row.date === today);
+    const raw = getDisplayStatus(effectiveLog(row), tz, row.date === today);
     if (
       onLeaveByEmpDate.has(`${row.user.id}|${row.date}`) &&
       !["on_leave", "holiday", "rest_day"].includes(raw)
@@ -493,35 +572,75 @@ export function AllAttendanceTable({
       result = result.filter((r) => r.user.id === selectedEmployeeId);
     }
 
-    if (countryFilter) {
-      result = result.filter((r) => r.user.holiday_country === countryFilter);
+    if (countryFilter.size > 0) {
+      result = result.filter((r) => countryFilter.has(r.user.holiday_country));
     }
 
-    if (tzFilter) {
-      result = result.filter(
-        (r) => (r.user.timezone || "Asia/Manila") === tzFilter
+    if (tzFilter.size > 0) {
+      result = result.filter((r) =>
+        tzFilter.has(r.user.timezone || "Asia/Manila")
       );
     }
 
-    if (statusFilter) {
-      result = result.filter((r) => statusMatches(rowDisplayStatus(r), statusFilter));
-    }
-
-    if (locationFilter) {
+    if (statusFilter.size > 0) {
       result = result.filter((r) => {
         const ds = rowDisplayStatus(r);
-        return getLocation(r.user.id, r.date, ds) === locationFilter;
+        for (const f of statusFilter) if (statusMatches(ds, f)) return true;
+        return false;
       });
+    }
+
+    if (locationFilter.size > 0) {
+      result = result.filter((r) => {
+        const ds = rowDisplayStatus(r);
+        const loc = getLocation(r.user.id, r.date, ds);
+        return loc != null && locationFilter.has(loc);
+      });
+    }
+
+    if (actualLocationFilter.size > 0) {
+      result = result.filter((r) => {
+        const wasInOffice = biometricPresence.has(`${r.user.id}|${r.date}`);
+        const hadActivity = Boolean(r.log?.clock_in || r.log?.clock_out);
+        const actual = wasInOffice ? "office" : hadActivity ? "online" : "none";
+        return actualLocationFilter.has(actual);
+      });
+    }
+
+    if (sort) {
+      const cmp = (a: number | string, b: number | string) => {
+        if (a < b) return sort.dir === "asc" ? -1 : 1;
+        if (a > b) return sort.dir === "asc" ? 1 : -1;
+        return 0;
+      };
+      const key = (r: typeof result[number]): number | string => {
+        const eff = effectiveLog(r);
+        switch (sort.column) {
+          case "name":
+            return displayName(r.user).toLowerCase();
+          case "date":
+            return r.date;
+          case "clock_in":
+            return eff?.clock_in ?? "";
+          case "clock_out":
+            return eff?.clock_out ?? "";
+          case "late":
+            return eff?.late_minutes ?? -1;
+          case "early":
+            return eff?.early_departure_minutes ?? -1;
+        }
+      };
+      result = [...result].sort((a, b) => cmp(key(a), key(b)));
     }
 
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, employeePicker, search, selectedEmployeeId, countryFilter, tzFilter, statusFilter, locationFilter, onLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
+  }, [rawRows, employeePicker, search, selectedEmployeeId, countryFilter, tzFilter, statusFilter, locationFilter, actualLocationFilter, biometricPresence, sort, onLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
 
   // Reset to page 1 when filters / dates change
   useEffect(() => {
     setPageIndex(0);
-  }, [search, selectedEmployeeId, countryFilter, locationFilter, statusFilter, tzFilter, fromDate, toDate]);
+  }, [search, selectedEmployeeId, countryFilter, locationFilter, actualLocationFilter, statusFilter, tzFilter, fromDate, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const safePageIndex = Math.min(pageIndex, totalPages - 1);
@@ -561,7 +680,12 @@ export function AllAttendanceTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredRows, onLeaveByEmpDate]);
 
-  const hasActiveFilters = countryFilter || locationFilter || statusFilter || tzFilter;
+  const hasActiveFilters =
+    countryFilter.size > 0 ||
+    locationFilter.size > 0 ||
+    actualLocationFilter.size > 0 ||
+    statusFilter.size > 0 ||
+    tzFilter.size > 0;
 
   const exportCSV = () => {
     const headers = [
@@ -570,6 +694,7 @@ export function AllAttendanceTable({
       ...(isSingleDate ? [] : ["Date"]),
       "Country",
       "Working Location",
+      "Actual Location",
       "Schedule",
       "Timezone",
       "Clock In",
@@ -581,7 +706,8 @@ export function AllAttendanceTable({
       "Productive (s)",
     ];
     const rows = filteredRows.map((r) => {
-      const { user, log, date } = r;
+      const { user, date } = r;
+      const log = effectiveLog(r);
       const tz = user.timezone || "Asia/Manila";
       const raw = log?.raw_response as Record<string, unknown> | null;
       const desktimeSeconds = raw?.desktimeTime as number | undefined;
@@ -600,9 +726,13 @@ export function AllAttendanceTable({
         user.email,
       ];
       if (!isSingleDate) cells.push(date);
+      const wasInOffice = biometricPresence.has(`${user.id}|${date}`);
+      const hadActivity = Boolean(log?.clock_in || log?.clock_out);
+      const actualLocation = wasInOffice ? "Office" : hadActivity ? "Online" : "";
       cells.push(
         HOLIDAY_COUNTRY_LABELS[user.holiday_country] ?? user.holiday_country,
         location ?? "",
+        actualLocation,
         schedule,
         getTzLabel(tz),
         log ? formatClockTime(log.clock_in, tz) : "",
@@ -683,7 +813,7 @@ export function AllAttendanceTable({
           {hasActiveFilters && (
             <button
               type="button"
-              onClick={() => { setCountryFilter(""); setLocationFilter(""); setStatusFilter(""); setTzFilter(""); }}
+              onClick={() => { setCountryFilter(new Set()); setLocationFilter(new Set()); setActualLocationFilter(new Set()); setStatusFilter(new Set()); setTzFilter(new Set()); }}
               className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100"
             >
               Clear filters
@@ -764,16 +894,13 @@ export function AllAttendanceTable({
             { key: "no_data", label: "No Data", count: stats.noData, classes: "bg-gray-100 text-gray-500", ringClass: "ring-gray-400", alwaysShow: false },
           ] as const).map((p) => {
             if (!p.alwaysShow && p.count === 0) return null;
-            const active = statusFilter === p.key;
             return (
-              <button
+              <span
                 key={p.key}
-                type="button"
-                onClick={() => setStatusFilter(active ? "" : p.key)}
-                className={`rounded-full px-3 py-1 font-medium transition ${p.classes} ${active ? `ring-2 ring-offset-1 ${p.ringClass}` : "hover:opacity-80"}`}
+                className={`rounded-full px-3 py-1 font-medium ${p.classes}`}
               >
                 {p.count} {p.label}
-              </button>
+              </span>
             );
           })}
         </div>
@@ -787,35 +914,76 @@ export function AllAttendanceTable({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50 text-left">
-                <th className="px-4 py-3 font-medium text-gray-600">Preferred Name</th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Preferred Name</span>
+                  <SortButton label="Preferred Name" active={sortDir("name")} onClick={() => toggleSort("name")} />
+                </th>
                 <th className="px-4 py-3 font-medium text-gray-600">DeskTime URL</th>
                 {!isSingleDate && (
-                  <th className="px-4 py-3 font-medium text-gray-600">Date</th>
+                  <th className="px-4 py-3 font-medium text-gray-600">
+                    <span className="align-middle">Date</span>
+                    <SortButton label="Date" active={sortDir("date")} onClick={() => toggleSort("date")} />
+                  </th>
                 )}
-                <th className="px-4 py-3">
-                  <HeaderFilter label="Country" options={countryOptions} value={countryFilter} onChange={setCountryFilter} />
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Country</span>
+                  <HeaderFilter label="Country" options={countryOptions} selected={countryFilter} onChange={setCountryFilter} />
                 </th>
-                <th className="px-4 py-3">
-                  <HeaderFilter label="Working Location" options={locationOptions} value={locationFilter} onChange={setLocationFilter} />
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Working Location</span>
+                  <HeaderFilter label="Working Location" options={locationOptions} selected={locationFilter} onChange={setLocationFilter} />
+                </th>
+                <th
+                  className="px-4 py-3 font-medium text-gray-600"
+                  title="Actual location based on biometric punches (Office) or DeskTime activity (Online)"
+                >
+                  <span className="align-middle">Actual Location</span>
+                  <HeaderFilter
+                    label="Actual Location"
+                    options={[
+                      { value: "office", label: "Office" },
+                      { value: "online", label: "Online" },
+                      { value: "none", label: "No data" },
+                    ]}
+                    selected={actualLocationFilter}
+                    onChange={setActualLocationFilter}
+                  />
                 </th>
                 <th className="px-4 py-3 font-medium text-gray-600">Schedule</th>
-                <th className="px-4 py-3">
-                  <HeaderFilter label="TZ" options={tzOptions} value={tzFilter} onChange={setTzFilter} />
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">TZ</span>
+                  <HeaderFilter label="TZ" options={tzOptions} selected={tzFilter} onChange={setTzFilter} />
                 </th>
-                <th className="px-4 py-3 font-medium text-gray-600">Clock In</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Clock Out</th>
-                <th className="px-4 py-3">
-                  <HeaderFilter label="Status" options={statusOptions} value={statusFilter} onChange={setStatusFilter} />
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Clock In</span>
+                  <SortButton label="Clock In" active={sortDir("clock_in")} onClick={() => toggleSort("clock_in")} />
                 </th>
-                <th className="px-4 py-3 font-medium text-gray-600">Late</th>
-                <th className="px-4 py-3 font-medium text-gray-600">Early Out</th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Clock Out</span>
+                  <SortButton label="Clock Out" active={sortDir("clock_out")} onClick={() => toggleSort("clock_out")} />
+                </th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Status</span>
+                  <HeaderFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} align="right" />
+                </th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Late</span>
+                  <SortButton label="Late" active={sortDir("late")} onClick={() => toggleSort("late")} />
+                </th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Early Out</span>
+                  <SortButton label="Early Out" active={sortDir("early")} onClick={() => toggleSort("early")} />
+                </th>
                 <th className="px-4 py-3 font-medium text-gray-600">DeskTime</th>
                 <th className="px-4 py-3 font-medium text-gray-600">Productive</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {visibleRows.map((r) => {
-                const { user, log, date } = r;
+                const { user, date } = r;
+                // Use the biometric-overridden log everywhere we display
+                // clock_in, late_minutes, or status.
+                const log = effectiveLog(r);
                 const tz = user.timezone || "Asia/Manila";
                 const raw = log?.raw_response as Record<string, unknown> | null;
                 const desktimeSeconds = raw?.desktimeTime as number | undefined;
@@ -871,12 +1039,55 @@ export function AllAttendanceTable({
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const wasInOffice = biometricPresence.has(`${user.id}|${date}`);
+                        const hadActivity = Boolean(log?.clock_in || log?.clock_out);
+                        if (wasInOffice) {
+                          const mismatch = location && location !== "office";
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 ${
+                                mismatch ? "ring-1 ring-amber-400" : ""
+                              }`}
+                              title={mismatch ? "Different from planned location" : undefined}
+                            >
+                              Office
+                            </span>
+                          );
+                        }
+                        if (hadActivity) {
+                          const mismatch = location === "office";
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-teal-50 text-teal-700 ${
+                                mismatch ? "ring-1 ring-amber-400" : ""
+                              }`}
+                              title={mismatch ? "Planned to be in office" : undefined}
+                            >
+                              Online
+                            </span>
+                          );
+                        }
+                        return <span className="text-gray-400">-</span>;
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">
-                      {log?.scheduled_start && log?.scheduled_end
-                        ? `${log.scheduled_start.slice(0, 5)} - ${log.scheduled_end.slice(0, 5)}`
-                        : schedTimes
-                          ? `${schedTimes.start.slice(0, 5)} - ${schedTimes.end.slice(0, 5)}`
-                          : "-"}
+                      {(() => {
+                        const schedStart = log?.scheduled_start ?? schedTimes?.start ?? null;
+                        const schedEnd = log?.scheduled_end ?? schedTimes?.end ?? null;
+                        if (!schedStart || !schedEnd) return "-";
+                        return (
+                          <div className="space-y-0.5">
+                            <div>
+                              {schedStart.slice(0, 5)} - {schedEnd.slice(0, 5)}
+                            </div>
+                            {hasNightDifferentialHours(schedStart, schedEnd) && (
+                              <NightDiffNote size="xs" />
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {getTzLabel(tz)}

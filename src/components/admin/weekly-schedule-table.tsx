@@ -4,8 +4,11 @@ import { useState, useMemo } from "react";
 import { format, startOfWeek, addDays, eachDayOfInterval, isSameDay, parseISO, isWeekend } from "date-fns";
 import { Flag } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { displayName, formatTime, cn } from "@/lib/utils";
+import { displayName, formatTime, cn, hasNightDifferentialHours } from "@/lib/utils";
 import { UserNameLink } from "@/components/shared/user-name-link";
+import { HeaderFilter } from "@/components/shared/header-filter";
+import { SortButton } from "@/components/shared/sort-button";
+import { NightDiffNote } from "@/components/shared/night-diff-note";
 import { HOLIDAY_COUNTRY_LABELS } from "@/types/database";
 import type {
   User,
@@ -14,6 +17,7 @@ import type {
   LeaveRequest,
   ScheduleAdjustment,
   HolidayWorkRequest,
+  HolidayCountry,
 } from "@/types/database";
 
 interface Props {
@@ -34,6 +38,26 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
   const [adjustmentMap, setAdjustmentMap] = useState<Record<string, ScheduleAdjustment[]>>({});
   const [holidayWorkMap, setHolidayWorkMap] = useState<Record<string, HolidayWorkRequest[]>>({});
   const [loaded, setLoaded] = useState(false);
+
+  // Column filters. Empty set = no filter for that column.
+  const [teamFilter, setTeamFilter] = useState<Set<string>>(new Set());
+  const [countryFilter, setCountryFilter] = useState<Set<string>>(new Set());
+  // Per-day status filter keyed by yyyy-MM-dd. Values: "office" | "online" |
+  // "leave" | "holiday" | "rest".
+  const [dayFilters, setDayFilters] = useState<Record<string, Set<string>>>({});
+  // null = default order (full_name asc, as fetched). Click cycles asc -> desc -> null.
+  const [sort, setSort] = useState<{
+    column: "name" | "team" | "country";
+    dir: "asc" | "desc";
+  } | null>(null);
+
+  const toggleSort = (column: "name" | "team" | "country") => {
+    setSort((prev) => {
+      if (!prev || prev.column !== column) return { column, dir: "asc" };
+      if (prev.dir === "asc") return { column, dir: "desc" };
+      return null;
+    });
+  };
 
   // Generate weekday-only dates for the selected range
   const weekDates = useMemo(() => {
@@ -101,17 +125,66 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
     loadWeekData();
   }, [startDate, endDate]);
 
+  // Unique values for the Team and Country filter dropdowns.
+  const teamOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const u of users) if (u.department) set.add(u.department);
+    return [...set].sort();
+  }, [users]);
+
+  const countryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const u of users) if (u.holiday_country) set.add(u.holiday_country);
+    return [...set].sort();
+  }, [users]);
+
   const filteredUsers = useMemo(() => {
-    if (!search) return users;
     const q = search.toLowerCase();
-    return users.filter(
-      (u) =>
-        displayName(u).toLowerCase().includes(q) ||
-        (u.full_name?.toLowerCase().includes(q) ?? false) ||
-        u.email.toLowerCase().includes(q) ||
-        (u.department ?? "").toLowerCase().includes(q)
-    );
-  }, [users, search]);
+    const filtered = users.filter((u) => {
+      if (search) {
+        const matchText =
+          displayName(u).toLowerCase().includes(q) ||
+          (u.full_name?.toLowerCase().includes(q) ?? false) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.department ?? "").toLowerCase().includes(q);
+        if (!matchText) return false;
+      }
+      if (teamFilter.size > 0 && !teamFilter.has(u.department ?? "")) return false;
+      if (countryFilter.size > 0 && !countryFilter.has(u.holiday_country ?? "")) return false;
+      // Per-day status filters: row must match every active day filter.
+      for (const [dateStr, allowed] of Object.entries(dayFilters)) {
+        if (allowed.size === 0) continue;
+        const date = parseISO(dateStr);
+        const dayOfWeek = (date.getDay() + 6) % 7;
+        const cell = getCellContent(u, date, dayOfWeek);
+        const bucket = bucketCell(cell);
+        if (!allowed.has(bucket)) return false;
+      }
+      return true;
+    });
+
+    if (sort) {
+      const key = (u: User) => {
+        if (sort.column === "name") return displayName(u).toLowerCase();
+        if (sort.column === "team") return (u.department ?? "").toLowerCase();
+        return (
+          HOLIDAY_COUNTRY_LABELS[u.holiday_country] ?? u.holiday_country ?? ""
+        ).toLowerCase();
+      };
+      filtered.sort((a, b) => {
+        const ka = key(a);
+        const kb = key(b);
+        if (ka < kb) return sort.dir === "asc" ? -1 : 1;
+        if (ka > kb) return sort.dir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return filtered;
+    // getCellContent depends on the maps + schedules above; eslint will flag
+    // the missing dep, but those are stable for the life of this render and
+    // including the function reference would re-run on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [users, search, teamFilter, countryFilter, dayFilters, sort, leaveMap, adjustmentMap, holidayWorkMap, schedules, holidays]);
 
   // Build schedule lookup: userId -> dayOfWeek -> Schedule
   const scheduleMap = useMemo(() => {
@@ -165,6 +238,8 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
               label: `${formatTime(hw.start_time)} - ${formatTime(hw.end_time)}`,
               location: hw.work_location,
               holidayName: h.name,
+              startTime: hw.start_time,
+              endTime: hw.end_time,
             };
           }
           return { type: "holiday" as const, label: h.name };
@@ -197,6 +272,8 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
         type: "adjusted" as const,
         label: `${formatTime(adj.requested_start_time)} - ${formatTime(adj.requested_end_time)}`,
         location: adj.requested_work_location ?? (schedule?.work_location || null),
+        startTime: adj.requested_start_time,
+        endTime: adj.requested_end_time,
       };
     }
 
@@ -205,6 +282,8 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
         type: "schedule" as const,
         label: `${formatTime(schedule.start_time)} - ${formatTime(schedule.end_time)}`,
         location: schedule.work_location,
+        startTime: schedule.start_time,
+        endTime: schedule.end_time,
       };
     }
 
@@ -212,6 +291,26 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
   }
 
   const isToday = (date: Date) => isSameDay(date, new Date());
+
+  // Collapse a cell into one of the filter buckets shown in the per-day
+  // dropdown. Returns "" for the "none" type (no schedule data) so those
+  // rows can never match an active filter.
+  function bucketCell(cell: ReturnType<typeof getCellContent>): string {
+    switch (cell.type) {
+      case "schedule":
+      case "adjusted":
+      case "holiday_work":
+        return "location" in cell && cell.location === "online" ? "online" : "office";
+      case "leave":
+        return "leave";
+      case "holiday":
+        return "holiday";
+      case "rest":
+        return "rest";
+      default:
+        return "";
+    }
+  }
 
   /** Count office days in the current Mon–Fri of the week containing `refDate`. */
   function getOfficeDaysInWeek(user: User, refDate: Date): number {
@@ -314,24 +413,78 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="sticky left-0 z-10 bg-gray-50 px-4 py-3 text-left font-semibold text-gray-700">
-                Name
+                <span className="align-middle">Name</span>
+                <SortButton
+                  label="Name"
+                  active={sort?.column === "name" ? sort.dir : null}
+                  onClick={() => toggleSort("name")}
+                />
               </th>
-              <th className="px-3 py-3 text-left font-semibold text-gray-700">Team</th>
-              <th className="px-3 py-3 text-left font-semibold text-gray-700">Country</th>
-              {weekDates.map((date, i) => (
-                <th
-                  key={i}
-                  className={cn(
-                    "px-3 py-3 text-center font-semibold text-gray-700 min-w-[130px]",
-                    isToday(date) && "bg-blue-50"
-                  )}
-                >
-                  <div>{format(date, "EEE")}</div>
-                  <div className="text-xs font-normal text-gray-500">
-                    {format(date, "MMM d")}
-                  </div>
-                </th>
-              ))}
+              <th className="px-3 py-3 text-left font-semibold text-gray-700">
+                <span className="align-middle">Team</span>
+                <SortButton
+                  label="Team"
+                  active={sort?.column === "team" ? sort.dir : null}
+                  onClick={() => toggleSort("team")}
+                />
+                <HeaderFilter
+                  label="Team"
+                  options={teamOptions.map((t) => ({ value: t, label: t }))}
+                  selected={teamFilter}
+                  onChange={setTeamFilter}
+                />
+              </th>
+              <th className="px-3 py-3 text-left font-semibold text-gray-700">
+                <span className="align-middle">Country</span>
+                <SortButton
+                  label="Country"
+                  active={sort?.column === "country" ? sort.dir : null}
+                  onClick={() => toggleSort("country")}
+                />
+                <HeaderFilter
+                  label="Country"
+                  options={countryOptions.map((c) => ({
+                    value: c,
+                    label: HOLIDAY_COUNTRY_LABELS[c as HolidayCountry] ?? c,
+                  }))}
+                  selected={countryFilter}
+                  onChange={setCountryFilter}
+                />
+              </th>
+              {weekDates.map((date, i) => {
+                const dateStr = format(date, "yyyy-MM-dd");
+                const daySel = dayFilters[dateStr] ?? new Set<string>();
+                return (
+                  <th
+                    key={i}
+                    className={cn(
+                      "px-3 py-3 text-center font-semibold text-gray-700 min-w-[130px]",
+                      isToday(date) && "bg-blue-50"
+                    )}
+                  >
+                    <div className="flex items-center justify-center">
+                      <span>{format(date, "EEE")}</span>
+                      <HeaderFilter
+                        label={format(date, "EEE")}
+                        options={DAY_FILTER_OPTIONS}
+                        selected={daySel}
+                        onChange={(next) =>
+                          setDayFilters((prev) => {
+                            const copy = { ...prev };
+                            if (next.size === 0) delete copy[dateStr];
+                            else copy[dateStr] = next;
+                            return copy;
+                          })
+                        }
+                        align="center"
+                      />
+                    </div>
+                    <div className="text-xs font-normal text-gray-500">
+                      {format(date, "MMM d")}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -379,6 +532,11 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                               {cell.location === "online" ? "Online" : "Office"}
                             </span>
                           )}
+                          {hasNightDifferentialHours(cell.startTime, cell.endTime) && (
+                            <div className="mt-0.5">
+                              <NightDiffNote size="xs" />
+                            </div>
+                          )}
                           <div className="mt-0.5 text-[10px] text-teal-600">Working on {"holidayName" in cell ? cell.holidayName : "Holiday"}</div>
                         </div>
                       )}
@@ -410,6 +568,11 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                               {cell.location === "online" ? "Online" : "Office"}
                             </span>
                           )}
+                          {hasNightDifferentialHours(cell.startTime, cell.endTime) && (
+                            <div className="mt-0.5">
+                              <NightDiffNote size="xs" />
+                            </div>
+                          )}
                           <div className="mt-0.5 text-[10px] text-cyan-500">Adjusted</div>
                         </div>
                       )}
@@ -425,6 +588,11 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                             )}>
                               {cell.location === "online" ? "Online" : "Office"}
                             </span>
+                          )}
+                          {hasNightDifferentialHours(cell.startTime, cell.endTime) && (
+                            <div className="mt-0.5">
+                              <NightDiffNote size="xs" />
+                            </div>
                           )}
                         </div>
                       )}
@@ -451,3 +619,11 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
     </div>
   );
 }
+
+const DAY_FILTER_OPTIONS = [
+  { value: "office", label: "Office" },
+  { value: "online", label: "Online" },
+  { value: "leave", label: "Leave" },
+  { value: "holiday", label: "Holiday" },
+  { value: "rest", label: "Rest Day" },
+];

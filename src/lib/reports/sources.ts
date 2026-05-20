@@ -77,6 +77,11 @@ const STATUS_PENDING_APPROVED_REJECTED = [
   { value: "rejected", label: "Rejected" },
 ];
 
+const STATUS_LEAVE = [
+  ...STATUS_PENDING_APPROVED_REJECTED,
+  { value: "cancelled", label: "Cancelled" },
+];
+
 /* -------------------------- Source definitions ------------------------ */
 
 export const SOURCES: SourceDef[] = [
@@ -164,7 +169,7 @@ export const SOURCES: SourceDef[] = [
         id: "status",
         label: "Status",
         type: "select",
-        options: [{ value: "any", label: "Any" }, ...STATUS_PENDING_APPROVED_REJECTED],
+        options: [{ value: "any", label: "Any" }, ...STATUS_LEAVE],
       },
       { id: "date_range", label: "Start date range", type: "date_range" },
     ],

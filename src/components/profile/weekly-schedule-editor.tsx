@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Save, X, MapPin } from "lucide-react";
 import { DAYS_OF_WEEK } from "@/lib/constants";
-import { formatTime } from "@/lib/utils";
+import { formatTime, hasNightDifferentialHours } from "@/lib/utils";
+import { NightDiffNote } from "@/components/shared/night-diff-note";
+import { NightDiffBanner } from "@/components/shared/night-diff-banner";
 
 type Row = {
   id: string;
@@ -164,6 +166,11 @@ export function WeeklyScheduleEditor({
                       <MapPin size={12} />
                       {day.work_location === "office" ? "Office" : "Online"}
                     </p>
+                    {hasNightDifferentialHours(day.start_time, day.end_time) && (
+                      <div className="mt-1">
+                        <NightDiffNote size="xs" />
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -174,6 +181,10 @@ export function WeeklyScheduleEditor({
     );
   }
 
+  const anyNightDiff = Object.values(days).some(
+    (d) => !d.is_rest_day && hasNightDifferentialHours(d.start_time, d.end_time)
+  );
+
   return (
     <div className="space-y-3">
       {error && (
@@ -181,6 +192,7 @@ export function WeeklyScheduleEditor({
           {error}
         </p>
       )}
+      {anyNightDiff && <NightDiffBanner />}
       <div className="overflow-hidden rounded-lg border border-gray-200">
         <table className="w-full text-sm">
           <thead>

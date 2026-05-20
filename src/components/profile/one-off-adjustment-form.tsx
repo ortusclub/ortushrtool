@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Save, X } from "lucide-react";
 import type { ScheduleAdjustmentType, WorkLocation } from "@/types/database";
+import { hasNightDifferentialHours } from "@/lib/utils";
+import { NightDiffBanner } from "@/components/shared/night-diff-banner";
 
 export function OneOffAdjustmentForm({
   employeeId,
@@ -210,6 +212,9 @@ export function OneOffAdjustmentForm({
           />
         </Field>
       </div>
+      {showTime && hasNightDifferentialHours(startTime, endTime) && (
+        <NightDiffBanner />
+      )}
       <div className="flex gap-2">
         <button
           type="button"
