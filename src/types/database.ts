@@ -42,7 +42,7 @@ export type LeaveType =
   | "maternity_paternity"
   | "solo_parent"
   | "bereavement";
-export type LeaveStatus = "pending" | "approved" | "rejected";
+export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
 export type HolidayCountry = "PH" | "XK" | "IT" | "AE";
 
 export const HOLIDAY_COUNTRY_LABELS: Record<HolidayCountry, string> = {

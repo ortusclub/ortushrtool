@@ -4,7 +4,7 @@ import { hasRole, formatDate, formatTime, displayName } from "@/lib/utils";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
 import { AdjustmentActions } from "@/components/adjustments/adjustment-actions";
 import { LeaveActions } from "@/components/leave/leave-actions";
-import { DeleteApprovedLeave } from "@/components/leave/delete-approved-leave";
+import { CancelApprovedLeave } from "@/components/leave/cancel-approved-leave";
 import { HolidayWorkActions } from "@/components/holiday-work/holiday-work-actions";
 import { OvertimeActions } from "@/components/overtime/overtime-actions";
 import { CancelRequest } from "@/components/shared/cancel-request";
@@ -538,7 +538,7 @@ export default async function RequestsPage() {
                   {isReviewer && (
                     <LeaveActions leaveId={leave.id} currentStatus={leave.status} />
                   )}
-                  <DeleteApprovedLeave
+                  <CancelApprovedLeave
                     leaveId={leave.id}
                     startDate={leave.start_date}
                     currentStatus={leave.status}
@@ -628,6 +628,7 @@ function StatusBadge({ status }: { status: string }) {
     pending: "bg-yellow-100 text-yellow-700",
     approved: "bg-green-100 text-green-700",
     rejected: "bg-red-100 text-red-700",
+    cancelled: "bg-gray-100 text-gray-600",
   };
   return (
     <span className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${styles[status] ?? "bg-gray-100"}`}>

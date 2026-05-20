@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { Ban } from "lucide-react";
+import type { LeaveStatus } from "@/types/database";
 
 interface Props {
   leaveId: string;
   startDate: string;
-  currentStatus: "pending" | "approved" | "rejected";
+  currentStatus: LeaveStatus;
 }
 
-export function DeleteApprovedLeave({ leaveId, startDate, currentStatus }: Props) {
+export function CancelApprovedLeave({ leaveId, startDate, currentStatus }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -21,7 +22,7 @@ export function DeleteApprovedLeave({ leaveId, startDate, currentStatus }: Props
   const today = new Date().toISOString().split("T")[0];
   if (startDate < today) return null;
 
-  const handleDelete = async () => {
+  const handleCancel = async () => {
     if (!confirming) {
       setConfirming(true);
       return;
@@ -30,18 +31,19 @@ export function DeleteApprovedLeave({ leaveId, startDate, currentStatus }: Props
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const { error: deleteError, count } = await supabase
+    const { error: updateError, count } = await supabase
       .from("leave_requests")
-      .delete({ count: "exact" })
-      .eq("id", leaveId);
+      .update({ status: "cancelled" }, { count: "exact" })
+      .eq("id", leaveId)
+      .eq("status", "approved");
 
-    if (deleteError) {
-      setError(deleteError.message);
+    if (updateError) {
+      setError(updateError.message);
       setLoading(false);
       return;
     }
     if (count === 0) {
-      setError("You don't have permission to delete this leave.");
+      setError("You don't have permission to cancel this leave.");
       setLoading(false);
       return;
     }
@@ -54,11 +56,11 @@ export function DeleteApprovedLeave({ leaveId, startDate, currentStatus }: Props
       <div className="flex flex-col items-end gap-1">
         <div className="flex gap-2">
           <button
-            onClick={handleDelete}
+            onClick={handleCancel}
             disabled={loading}
             className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
           >
-            {loading ? "..." : "Confirm Delete"}
+            {loading ? "..." : "Confirm Cancel"}
           </button>
           <button
             onClick={() => {
@@ -77,11 +79,11 @@ export function DeleteApprovedLeave({ leaveId, startDate, currentStatus }: Props
 
   return (
     <button
-      onClick={handleDelete}
+      onClick={handleCancel}
       className="flex items-center gap-1 rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
     >
-      <Trash2 size={14} />
-      Delete
+      <Ban size={14} />
+      Cancel
     </button>
   );
 }
