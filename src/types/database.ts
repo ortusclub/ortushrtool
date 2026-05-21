@@ -44,6 +44,9 @@ export type LeaveType =
   | "bereavement";
 export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
 export type HolidayCountry = "PH" | "XK" | "IT" | "AE";
+export type EmploymentType = "employee" | "consultant";
+export type HolidayWorkCompensation = "holiday_pay" | "cto";
+export type HolidayWorkDuration = "full_day" | "half_day";
 
 export const HOLIDAY_COUNTRY_LABELS: Record<HolidayCountry, string> = {
   PH: "Philippines",
@@ -100,6 +103,7 @@ export interface User {
   holiday_country: HolidayCountry;
   is_active: boolean;
   overtime_eligible: boolean;
+  employment_type: EmploymentType;
   calendar_token: string | null;
   created_at: string;
   updated_at: string;
@@ -418,10 +422,100 @@ export interface HolidayWorkRequest {
   end_time: string;
   work_location: WorkLocation;
   reason: string;
+  duration: HolidayWorkDuration;
+  compensation: HolidayWorkCompensation;
   status: LeaveStatus;
   reviewed_by: string | null;
   reviewed_at: string | null;
   reviewer_notes: string | null;
+  created_at: string;
+}
+
+export interface CtoGrant {
+  id: string;
+  employee_id: string;
+  days: number;
+  granted_at: string;
+  granted_by: string | null;
+  source: string;
+  source_request_id: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export type IncidentType =
+  | "harassment"
+  | "safety"
+  | "theft"
+  | "misconduct"
+  | "discrimination"
+  | "other";
+export type IncidentStatus = "new" | "in_review" | "resolved" | "dismissed";
+
+export const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {
+  harassment: "Harassment",
+  safety: "Safety",
+  theft: "Theft",
+  misconduct: "Misconduct",
+  discrimination: "Discrimination",
+  other: "Other",
+};
+
+export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
+  new: "New",
+  in_review: "In Review",
+  resolved: "Resolved",
+  dismissed: "Dismissed",
+};
+
+export interface IncidentReport {
+  id: string;
+  reporter_id: string;
+  incident_date: string;
+  incident_type: IncidentType;
+  location: string | null;
+  people_involved_user_ids: string[];
+  people_involved_other: string | null;
+  summary: string;
+  outcome: string | null;
+  status: IncidentStatus;
+  handled_by: string | null;
+  handled_at: string | null;
+  handler_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IncidentReportAttachment {
+  id: string;
+  report_id: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  uploaded_by: string;
+  created_at: string;
+}
+
+export type FeedbackCategory = "general" | "compliment" | "concern" | "suggestion";
+export type FeedbackStatus = "new" | "reviewed" | "archived";
+
+export const FEEDBACK_CATEGORY_LABELS: Record<FeedbackCategory, string> = {
+  general: "General",
+  compliment: "Compliment",
+  concern: "Concern",
+  suggestion: "Suggestion",
+};
+
+export interface AnonymousFeedback {
+  id: string;
+  category: FeedbackCategory;
+  subject: string | null;
+  body: string;
+  status: FeedbackStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  handler_notes: string | null;
   created_at: string;
 }
 

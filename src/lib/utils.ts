@@ -89,3 +89,56 @@ export function hasNightDifferentialHours(
   if (end <= start) return true; // wraps past midnight
   return end > "22:00" || start < "06:00";
 }
+
+/**
+ * Compensation policy for a holiday-work request, given the requester's
+ * profile.
+ *
+ *   - PH employee with ≥ 1 yr tenure  →  choice between holiday pay and CTO.
+ *   - Everyone else (non-PH, consultant, or PH employee < 1 yr)  →  CTO is
+ *     the only option and the form should not even offer the radio.
+ *
+ * Missing hire_date is treated as "tenure unknown" and falls through to
+ * forced_cto.
+ */
+export type HolidayWorkPolicy =
+  | { kind: "forced_cto"; reason: "non_ph" | "consultant" }
+  | {
+      kind: "forced_cto";
+      reason: "under_one_year";
+      /** ISO date the employee becomes choice-eligible, or null if hire_date is missing. */
+      eligibleAt: string | null;
+    }
+  | { kind: "choice" };
+
+export function getHolidayWorkPolicy(args: {
+  holiday_country: string | null | undefined;
+  employment_type: string | null | undefined;
+  hire_date: string | null | undefined;
+  today?: Date;
+}): HolidayWorkPolicy {
+  if (args.holiday_country !== "PH") return { kind: "forced_cto", reason: "non_ph" };
+  if (args.employment_type !== "employee")
+    return { kind: "forced_cto", reason: "consultant" };
+
+  if (!args.hire_date)
+    return { kind: "forced_cto", reason: "under_one_year", eligibleAt: null };
+  const hire = new Date(args.hire_date + "T00:00:00");
+  if (Number.isNaN(hire.getTime()))
+    return { kind: "forced_cto", reason: "under_one_year", eligibleAt: null };
+  const now = args.today ?? new Date();
+  const oneYearLater = new Date(hire);
+  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+  if (now < oneYearLater) {
+    const yyyy = oneYearLater.getFullYear();
+    const mm = String(oneYearLater.getMonth() + 1).padStart(2, "0");
+    const dd = String(oneYearLater.getDate()).padStart(2, "0");
+    return {
+      kind: "forced_cto",
+      reason: "under_one_year",
+      eligibleAt: `${yyyy}-${mm}-${dd}`,
+    };
+  }
+
+  return { kind: "choice" };
+}

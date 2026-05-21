@@ -5,8 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { formatDate } from "@/lib/utils";
-import type { Holiday } from "@/types/database";
+import { formatDate, getHolidayWorkPolicy, type HolidayWorkPolicy } from "@/lib/utils";
+import type {
+  Holiday,
+  HolidayWorkCompensation,
+  HolidayWorkDuration,
+} from "@/types/database";
 
 export default function HolidayWorkRequestPage() {
   const router = useRouter();
@@ -14,14 +18,30 @@ export default function HolidayWorkRequestPage() {
   const [error, setError] = useState("");
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loadingHolidays, setLoadingHolidays] = useState(true);
+  const [policy, setPolicy] = useState<HolidayWorkPolicy>({
+    kind: "forced_cto",
+    reason: "under_one_year",
+    eligibleAt: null,
+  });
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    holiday_id: string;
+    holiday_date: string;
+    start_time: string;
+    end_time: string;
+    work_location: string;
+    reason: string;
+    duration: HolidayWorkDuration;
+    compensation: HolidayWorkCompensation;
+  }>({
     holiday_id: "",
     holiday_date: "",
     start_time: "09:00",
     end_time: "18:00",
     work_location: "office",
     reason: "",
+    duration: "full_day",
+    compensation: "holiday_pay",
   });
 
   useEffect(() => {
@@ -32,11 +52,19 @@ export default function HolidayWorkRequestPage() {
 
       const { data: userData } = await supabase
         .from("users")
-        .select("holiday_country")
+        .select("holiday_country, employment_type, hire_date")
         .eq("id", user.id)
         .single();
 
       if (!userData) return;
+
+      setPolicy(
+        getHolidayWorkPolicy({
+          holiday_country: userData.holiday_country,
+          employment_type: userData.employment_type,
+          hire_date: userData.hire_date,
+        })
+      );
 
       const today = new Date().toISOString().split("T")[0];
       const { data } = await supabase
@@ -77,6 +105,12 @@ export default function HolidayWorkRequestPage() {
       return;
     }
 
+    // Compensation always reflects the current policy:
+    //   - forced_cto → 'cto' regardless of form state
+    //   - choice     → whatever the user picked
+    const compensation: HolidayWorkCompensation =
+      policy.kind === "forced_cto" ? "cto" : form.compensation;
+
     const { error: insertError } = await supabase
       .from("holiday_work_requests")
       .insert({
@@ -87,6 +121,8 @@ export default function HolidayWorkRequestPage() {
         end_time: form.end_time,
         work_location: form.work_location,
         reason: form.reason,
+        duration: form.duration,
+        compensation,
       });
 
     if (insertError) {
@@ -172,6 +208,34 @@ export default function HolidayWorkRequestPage() {
           )}
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Duration</label>
+          <div className="mt-2 flex gap-4">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                name="duration"
+                value="full_day"
+                checked={form.duration === "full_day"}
+                onChange={() => setForm({ ...form, duration: "full_day" })}
+                className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">Full Day</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                name="duration"
+                value="half_day"
+                checked={form.duration === "half_day"}
+                onChange={() => setForm({ ...form, duration: "half_day" })}
+                className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">Half Day</span>
+            </label>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Start time</label>
@@ -222,6 +286,64 @@ export default function HolidayWorkRequestPage() {
             </label>
           </div>
         </div>
+
+        {policy.kind === "choice" ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Compensation
+            </label>
+            <p className="text-xs text-gray-500">
+              Choose how you&apos;d like to be compensated for working on this
+              holiday.
+            </p>
+            <div className="mt-2 flex gap-4">
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="radio"
+                  name="compensation"
+                  value="holiday_pay"
+                  checked={form.compensation === "holiday_pay"}
+                  onChange={() =>
+                    setForm({ ...form, compensation: "holiday_pay" })
+                  }
+                  className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Holiday Pay</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="radio"
+                  name="compensation"
+                  value="cto"
+                  checked={form.compensation === "cto"}
+                  onChange={() => setForm({ ...form, compensation: "cto" })}
+                  className="h-4 w-4 border-gray-300 text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-sm text-gray-700">
+                  CTO leave ({form.duration === "half_day" ? "0.5" : "1"} day,
+                  credited on approval)
+                </span>
+              </label>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">
+            <p>
+              You&apos;ll be credited{" "}
+              <span className="font-semibold">
+                {form.duration === "half_day" ? "0.5" : "1"} day of CTO leave
+              </span>{" "}
+              when your manager approves this request.
+            </p>
+            {policy.reason === "under_one_year" && (
+              <p className="mt-2 text-xs text-teal-800">
+                {policy.eligibleAt
+                  ? `Once you reach 1 year of tenure (${formatDate(policy.eligibleAt)}), you'll also be able to choose Holiday Pay instead of CTO.`
+                  : "Once you reach 1 year of tenure, you'll also be able to choose Holiday Pay instead of CTO."}
+              </p>
+            )}
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700">

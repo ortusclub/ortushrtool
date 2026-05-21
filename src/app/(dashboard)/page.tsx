@@ -81,6 +81,7 @@ export default async function DashboardPage() {
     upcomingHolidays,
     myActivatedLeaveTypes,
     myAssignedPlans,
+    myCtoGrants,
   ] = await Promise.all([
     // Pending schedule adjustments — scope: admins see org-wide; managers
     // see their direct reports; employees see their own.
@@ -174,6 +175,12 @@ export default async function DashboardPage() {
       .from("employee_leave_plans")
       .select("plan_id")
       .eq("employee_id", user.id),
+
+    // My earned CTO grants (from approved holiday-work with compensation=cto)
+    supabase
+      .from("cto_grants")
+      .select("days, granted_at")
+      .eq("employee_id", user.id),
   ]);
 
   // Fetch all users with date fields for upcoming events
@@ -243,7 +250,16 @@ export default async function DashboardPage() {
 
   // Fetch allocations from all assigned plans and sum per leave type
   const assignedPlanIds = (myAssignedPlans.data ?? []).map((p) => p.plan_id);
-  const hasPlan = assignedPlanIds.length > 0;
+  // Earned CTO (auto-granted from approved holiday-work) is a balance even
+  // when the user has no leave plan.
+  const earnedCtoDays = (myCtoGrants.data ?? []).reduce(
+    (sum, g) => sum + Number(g.days),
+    0
+  );
+  const earnedCtoEarliest = (myCtoGrants.data ?? [])
+    .map((g) => g.granted_at.slice(0, 10))
+    .sort()[0];
+  const hasPlan = assignedPlanIds.length > 0 || earnedCtoDays > 0;
 
   const planAllocations: Record<string, number> = {};
   // Track the renewal start date per leave type (earliest renewal across plans)
@@ -288,6 +304,19 @@ export default async function DashboardPage() {
       if (!leaveTypeRenewalStart[a.leave_type] || renewalStart < leaveTypeRenewalStart[a.leave_type]) {
         leaveTypeRenewalStart[a.leave_type] = renewalStart;
       }
+    }
+  }
+
+  // Add earned CTO into the allocated bucket. Earned credits don't expire, so
+  // collapse the CTO renewal_start to the earliest grant date — every approved
+  // CTO leave since then counts toward "used".
+  if (earnedCtoDays > 0) {
+    planAllocations.cto = (planAllocations.cto ?? 0) + earnedCtoDays;
+    if (
+      earnedCtoEarliest &&
+      (!leaveTypeRenewalStart.cto || earnedCtoEarliest < leaveTypeRenewalStart.cto)
+    ) {
+      leaveTypeRenewalStart.cto = earnedCtoEarliest;
     }
   }
 

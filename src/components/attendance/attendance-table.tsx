@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Search } from "lucide-react";
+import { Search, Flag } from "lucide-react";
 
 interface AttendanceLog {
   id: string;
@@ -34,10 +34,27 @@ interface AdjustmentInfo {
   requested_work_location: string | null;
 }
 
+interface PunchInfo {
+  punch_time: string;
+}
+
 interface Props {
   initialLogs: AttendanceLog[];
   userId: string;
   schedules: ScheduleInfo[];
+  initialPunches: PunchInfo[];
+}
+
+// Bucket each punch into its Asia/Manila local date (YYYY-MM-DD).
+function bucketPunchDates(punches: PunchInfo[]): Set<string> {
+  const set = new Set<string>();
+  for (const p of punches) {
+    const manilaDate = new Date(p.punch_time).toLocaleDateString("en-CA", {
+      timeZone: "Asia/Manila",
+    });
+    set.add(manilaDate);
+  }
+  return set;
 }
 
 function formatDate(dateStr: string): string {
@@ -59,9 +76,12 @@ function formatClockTime(iso: string | null): string {
   });
 }
 
-export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
+export function AttendanceTable({ initialLogs, userId, schedules, initialPunches }: Props) {
   const [logs, setLogs] = useState(initialLogs);
   const [adjustments, setAdjustments] = useState<AdjustmentInfo[]>([]);
+  const [biometricDates, setBiometricDates] = useState<Set<string>>(() =>
+    bucketPunchDates(initialPunches)
+  );
   const [loading, setLoading] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -103,23 +123,48 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
     return scheduleByDay.get(dayOfWeek) ?? null;
   }
 
-  const fetchAdjustments = async (from: string, to: string) => {
+  // Actual location based on biometric scanner (Office) or DeskTime activity
+  // alone (Online). Returns null for non-working days or when neither source
+  // recorded anything.
+  function getActualLocation(log: AttendanceLog): "office" | "online" | null {
+    if (["rest_day", "on_leave", "holiday", "absent", "no_schedule"].includes(log.status)) {
+      return null;
+    }
+    if (biometricDates.has(log.date)) return "office";
+    if (log.clock_in || log.clock_out) return "online";
+    return null;
+  }
+
+  const fetchAuxData = async (from: string, to: string) => {
     const supabase = createClient();
-    const { data } = await supabase
-      .from("schedule_adjustments")
-      .select("requested_date, requested_work_location")
-      .eq("employee_id", userId)
-      .eq("status", "approved")
-      .gte("requested_date", from)
-      .lte("requested_date", to);
-    setAdjustments(data ?? []);
+    const punchFrom = `${from}T00:00:00+08:00`;
+    const punchTo = `${to}T23:59:59.999+08:00`;
+    const [{ data: adj }, { data: punches }] = await Promise.all([
+      supabase
+        .from("schedule_adjustments")
+        .select("requested_date, requested_work_location")
+        .eq("employee_id", userId)
+        .eq("status", "approved")
+        .gte("requested_date", from)
+        .lte("requested_date", to),
+      supabase
+        .from("biometric_punches")
+        .select("punch_time")
+        .eq("employee_id", userId)
+        .gte("punch_time", punchFrom)
+        .lte("punch_time", punchTo),
+    ]);
+    setAdjustments(adj ?? []);
+    setBiometricDates(bucketPunchDates(punches ?? []));
   };
 
-  // Load adjustments for initial logs
+  // Re-fetch adjustments for the initial logs range. Biometric punches are
+  // seeded from initialPunches above, so we only refetch them if the user
+  // changes the date filter.
   useMemo(() => {
     if (initialLogs.length > 0) {
       const dates = initialLogs.map((l) => l.date).sort();
-      fetchAdjustments(dates[0], dates[dates.length - 1]);
+      fetchAuxData(dates[0], dates[dates.length - 1]);
     }
   }, []);
 
@@ -137,7 +182,7 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
         .gte("date", startDate)
         .lte("date", endDate)
         .order("date", { ascending: false }),
-      fetchAdjustments(startDate, endDate),
+      fetchAuxData(startDate, endDate),
     ]);
 
     setLogs(data ?? []);
@@ -164,7 +209,7 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
 
     if (newLogs.length > 0) {
       const dates = newLogs.map((l) => l.date).sort();
-      await fetchAdjustments(dates[0], dates[dates.length - 1]);
+      await fetchAuxData(dates[0], dates[dates.length - 1]);
     }
 
     setLoading(false);
@@ -226,6 +271,12 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
                   <th className="px-6 py-3 font-medium text-gray-600">Date</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Scheduled</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Working Location</th>
+                  <th
+                    className="px-6 py-3 font-medium text-gray-600"
+                    title="Actual location based on biometric punches (Office) or DeskTime activity (Online)"
+                  >
+                    Actual Location
+                  </th>
                   <th className="px-6 py-3 font-medium text-gray-600">Clock In</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Clock Out</th>
                   <th className="px-6 py-3 font-medium text-gray-600">Status</th>
@@ -236,6 +287,7 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
               <tbody className="divide-y divide-gray-100">
                 {logs.map((log) => {
                   const location = getLocation(log);
+                  const actual = getActualLocation(log);
                   return (
                     <tr key={log.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">{formatDate(log.date)}</td>
@@ -259,6 +311,36 @@ export function AttendanceTable({ initialLogs, userId, schedules }: Props) {
                           >
                             {location === "office" ? "Office" : "Online"}
                           </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {actual ? (
+                          (() => {
+                            const mismatch = location != null && location !== actual;
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                                  actual === "office"
+                                    ? "bg-indigo-50 text-indigo-700"
+                                    : "bg-teal-50 text-teal-700"
+                                } ${mismatch ? "ring-1 ring-red-500" : ""}`}
+                                title={
+                                  mismatch
+                                    ? actual === "office"
+                                      ? "Different from planned location"
+                                      : "Planned to be in office"
+                                    : undefined
+                                }
+                              >
+                                {mismatch && (
+                                  <Flag size={12} className="fill-red-500 text-red-500" />
+                                )}
+                                {actual === "office" ? "Office" : "Online"}
+                              </span>
+                            );
+                          })()
                         ) : (
                           <span className="text-xs text-gray-400">-</span>
                         )}

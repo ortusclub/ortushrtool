@@ -385,12 +385,27 @@ export default async function RequestsPage() {
                     </p>
                     <p className="text-sm text-gray-700">
                       <span className="font-medium">Hours:</span>{" "}
-                      {formatTime(hw.start_time)} - {formatTime(hw.end_time)}
+                      {formatTime(hw.start_time)} - {formatTime(hw.end_time)}{" "}
+                      <span className="ml-1 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
+                        {hw.duration === "half_day" ? "Half Day" : "Full Day"}
+                      </span>
                     </p>
                     <p className="text-sm text-gray-700">
                       <span className="font-medium">Location:</span>{" "}
                       <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${hw.work_location === "online" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
                         {hw.work_location === "online" ? "Online" : "Office"}
+                      </span>
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      <span className="font-medium">Compensation:</span>{" "}
+                      <span
+                        className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
+                          hw.compensation === "cto"
+                            ? "bg-teal-100 text-teal-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {hw.compensation === "cto" ? "CTO Leave" : "Holiday Pay"}
                       </span>
                     </p>
                     <p className="text-sm text-gray-600">{hw.reason}</p>
@@ -566,7 +581,22 @@ export default async function RequestsPage() {
                   </div>
                   <p className="text-sm text-gray-700">
                     {formatDate(hw.holiday_date)} &mdash;{" "}
-                    {formatTime(hw.start_time)} - {formatTime(hw.end_time)}
+                    {formatTime(hw.start_time)} - {formatTime(hw.end_time)}{" "}
+                    <span className="ml-1 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
+                      {hw.duration === "half_day" ? "Half Day" : "Full Day"}
+                    </span>
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Compensation:{" "}
+                    <span
+                      className={
+                        hw.compensation === "cto"
+                          ? "font-medium text-teal-700"
+                          : "font-medium text-amber-700"
+                      }
+                    >
+                      {hw.compensation === "cto" ? "CTO Leave" : "Holiday Pay"}
+                    </span>
                   </p>
                   {hw.reviewer_notes && (
                     <p className="text-sm text-gray-500 italic">

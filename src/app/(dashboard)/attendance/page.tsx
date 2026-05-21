@@ -8,7 +8,14 @@ export default async function AttendancePage() {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const [{ data: logs }, { data: schedules }] = await Promise.all([
+  // Biometric punches are stored UTC but represent Asia/Manila local time.
+  // Use a 60-day window to cover the initial 30-log set comfortably; the
+  // client re-queries when the user changes the date filter.
+  const punchFromDate = new Date();
+  punchFromDate.setDate(punchFromDate.getDate() - 60);
+  const punchFrom = `${punchFromDate.toISOString().split("T")[0]}T00:00:00+08:00`;
+
+  const [{ data: logs }, { data: schedules }, { data: punches }] = await Promise.all([
     supabase
       .from("attendance_logs")
       .select("*")
@@ -21,6 +28,11 @@ export default async function AttendancePage() {
       .eq("employee_id", user.id)
       .lte("effective_from", today)
       .or(`effective_until.is.null,effective_until.gte.${today}`),
+    supabase
+      .from("biometric_punches")
+      .select("punch_time")
+      .eq("employee_id", user.id)
+      .gte("punch_time", punchFrom),
   ]);
 
   return (
@@ -33,6 +45,7 @@ export default async function AttendancePage() {
         initialLogs={logs ?? []}
         userId={user.id}
         schedules={schedules ?? []}
+        initialPunches={punches ?? []}
       />
     </div>
   );

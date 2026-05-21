@@ -9,6 +9,7 @@ import {
   COMPANY_OPTIONS,
   HOLIDAY_COUNTRY_LABELS,
   type Company,
+  type EmploymentType,
   type HolidayCountry,
   type User,
   type UserRole,
@@ -77,6 +78,7 @@ export function UserProfileForm({
       end_date: form.end_date || null,
       is_active: form.is_active,
       overtime_eligible: form.overtime_eligible,
+      employment_type: form.employment_type,
     };
 
     const { error } = await supabase
@@ -232,6 +234,21 @@ export function UserProfileForm({
               </option>
             ))}
           </select>
+        </Field>
+        <Field label="Employment Type">
+          <select
+            value={form.employment_type}
+            onChange={(e) =>
+              update("employment_type", e.target.value as EmploymentType)
+            }
+            className={inputClass}
+          >
+            <option value="employee">Employee</option>
+            <option value="consultant">Consultant</option>
+          </select>
+          <p className="mt-1 text-xs text-gray-400">
+            Consultants don&apos;t get CTO compensation for holiday work.
+          </p>
         </Field>
         <Field label="Department">
           <input

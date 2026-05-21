@@ -94,6 +94,16 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
   const [bulkNote, setBulkNote] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  // True when the user has expanded selection beyond the visible page to all
+  // pending flags matching current filters (Gmail-style "Select all").
+  const [selectAllMatching, setSelectAllMatching] = useState(false);
+  const [matchingCount, setMatchingCount] = useState<number | null>(null);
+  const [selectingAllMatching, setSelectingAllMatching] = useState(false);
+
+  const resetMatchingSelection = () => {
+    setSelectAllMatching(false);
+    setMatchingCount(null);
+  };
 
   const employeeIds = employees.map((e) => e.id);
 
@@ -196,6 +206,77 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
     });
   };
 
+  // Query every pending flag matching the current filters that the viewer can
+  // acknowledge. Mirrors the visible-flags filter chain plus the client-side
+  // employee search.
+  const fetchAllMatchingPendingIds = async (): Promise<string[]> => {
+    const supabase = createClient();
+    let query = supabase
+      .from("attendance_flags")
+      .select(
+        "id, employee:users!attendance_flags_employee_id_fkey(full_name, preferred_name, first_name, last_name, email)"
+      )
+      .in("employee_id", employeeIds)
+      .eq("acknowledged", false)
+      .neq("employee_id", currentUserId);
+
+    if (selectedType) query = query.eq("flag_type", selectedType);
+    if (startDate && endDate) {
+      query = query.gte("flag_date", startDate).lte("flag_date", endDate);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+
+    const q = employeeSearch.trim().toLowerCase();
+    const rows = (data ?? []) as {
+      id: string;
+      employee:
+        | {
+            full_name: string;
+            preferred_name: string | null;
+            first_name: string | null;
+            last_name: string | null;
+            email: string;
+          }
+        | { full_name: string; preferred_name: string | null; first_name: string | null; last_name: string | null; email: string }[]
+        | null;
+    }[];
+    const filtered = !q
+      ? rows
+      : rows.filter((f) => {
+          const e = Array.isArray(f.employee) ? f.employee[0] : f.employee;
+          if (!e) return false;
+          const haystack = [
+            e.full_name,
+            e.preferred_name,
+            e.first_name,
+            e.last_name,
+            e.email,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(q);
+        });
+    return filtered.map((f) => f.id);
+  };
+
+  const handleSelectAllMatching = async () => {
+    setSelectingAllMatching(true);
+    setBulkMessage(null);
+    try {
+      const ids = await fetchAllMatchingPendingIds();
+      setSelectedIds(new Set(ids));
+      setMatchingCount(ids.length);
+      setSelectAllMatching(true);
+    } catch (err) {
+      setBulkMessage(err instanceof Error ? err.message : "Failed to load matching flags");
+    } finally {
+      setSelectingAllMatching(false);
+    }
+  };
+
   const handleBulkAcknowledge = async () => {
     setBulkLoading(true);
     setBulkMessage(null);
@@ -218,6 +299,7 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
       `Acknowledged ${data.acknowledged}.${skipped > 0 ? ` Skipped ${skipped}.` : ""}`
     );
     setSelectedIds(new Set());
+    resetMatchingSelection();
     setBulkNote("");
     setBulkLoading(false);
     router.refresh();
@@ -255,6 +337,7 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
     setFiltered(true);
     setLoading(false);
     setSelectedIds(new Set());
+    resetMatchingSelection();
   };
 
   const handleReset = async () => {
@@ -277,6 +360,7 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
     setFiltered(false);
     setLoading(false);
     setSelectedIds(new Set());
+    resetMatchingSelection();
   };
 
   return (
@@ -293,7 +377,13 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
             <input
               type="search"
               value={employeeSearch}
-              onChange={(e) => setEmployeeSearch(e.target.value)}
+              onChange={(e) => {
+                setEmployeeSearch(e.target.value);
+                if (selectAllMatching) {
+                  setSelectedIds(new Set());
+                  resetMatchingSelection();
+                }
+              }}
               placeholder="Search by name or email..."
               className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
@@ -379,11 +469,18 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
-              checked={allSelectableSelected}
-              onChange={toggleAll}
+              checked={allSelectableSelected || selectAllMatching}
+              onChange={() => {
+                if (selectAllMatching) {
+                  setSelectedIds(new Set());
+                  resetMatchingSelection();
+                } else {
+                  toggleAll();
+                }
+              }}
               className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
-            Select all pending ({selectableFlags.length})
+            Select all pending on this page ({selectableFlags.length})
           </label>
           {selectedIds.size > 0 && (
             <>
@@ -412,6 +509,7 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
                 onClick={() => {
                   setSelectedIds(new Set());
                   setBulkNote("");
+                  resetMatchingSelection();
                 }}
                 className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
@@ -421,6 +519,42 @@ export function FlagsTable({ initialFlags, employees, currentUserId, viewerIsAdm
           )}
           {bulkMessage && (
             <span className="text-xs text-gray-500">{bulkMessage}</span>
+          )}
+
+          {/* Gmail-style "Select all matching" prompt */}
+          {allSelectableSelected && !selectAllMatching && (
+            <div className="w-full rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900">
+              All {selectableFlags.length} pending flag
+              {selectableFlags.length === 1 ? "" : "s"} on this page
+              {selectableFlags.length === 1 ? " is" : " are"} selected.
+              <button
+                type="button"
+                onClick={handleSelectAllMatching}
+                disabled={selectingAllMatching}
+                className="ml-2 font-medium underline hover:text-blue-700 disabled:opacity-60"
+              >
+                {selectingAllMatching
+                  ? "Loading…"
+                  : "Select all pending flags matching current filters"}
+              </button>
+            </div>
+          )}
+          {selectAllMatching && matchingCount !== null && (
+            <div className="w-full rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900">
+              All {matchingCount} pending flag
+              {matchingCount === 1 ? "" : "s"} matching current filters
+              {matchingCount === 1 ? " is" : " are"} selected.
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedIds(new Set());
+                  resetMatchingSelection();
+                }}
+                className="ml-2 font-medium underline hover:text-blue-700"
+              >
+                Clear selection
+              </button>
+            </div>
           )}
         </div>
       )}

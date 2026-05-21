@@ -41,18 +41,41 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const isAdmin = hasRole(caller.role, "hr_admin");
 
-  const { data: flags } = await admin
-    .from("attendance_flags")
-    .select(
-      "id, employee_id, acknowledged, employee:users!attendance_flags_employee_id_fkey(manager_id)"
-    )
-    .in("id", cleanIds);
+  // PostgREST puts .in() values in the query string; ~200 UUIDs keeps each
+  // request well under typical 8KB URL limits.
+  const BATCH_SIZE = 200;
 
+  type FlagRow = {
+    id: string;
+    employee_id: string;
+    acknowledged: boolean;
+    employee:
+      | { manager_id: string | null }
+      | { manager_id: string | null }[]
+      | null;
+  };
+
+  const flags: FlagRow[] = [];
+  for (let i = 0; i < cleanIds.length; i += BATCH_SIZE) {
+    const chunk = cleanIds.slice(i, i + BATCH_SIZE);
+    const { data, error } = await admin
+      .from("attendance_flags")
+      .select(
+        "id, employee_id, acknowledged, employee:users!attendance_flags_employee_id_fkey(manager_id)"
+      )
+      .in("id", chunk);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    flags.push(...((data ?? []) as FlagRow[]));
+  }
+
+  const flagById = new Map(flags.map((f) => [f.id, f]));
   const acknowledgedIds: string[] = [];
   const skipped: { id: string; reason: string }[] = [];
 
   for (const id of cleanIds) {
-    const flag = (flags ?? []).find((f) => f.id === id);
+    const flag = flagById.get(id);
     if (!flag) {
       skipped.push({ id, reason: "Flag not found" });
       continue;
@@ -76,11 +99,12 @@ export async function POST(request: Request) {
     acknowledgedIds.push(id);
   }
 
-  if (acknowledgedIds.length > 0) {
+  for (let i = 0; i < acknowledgedIds.length; i += BATCH_SIZE) {
+    const chunk = acknowledgedIds.slice(i, i + BATCH_SIZE);
     const { error } = await admin
       .from("attendance_flags")
       .update({ acknowledged: true, notes: notes || null })
-      .in("id", acknowledgedIds);
+      .in("id", chunk);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

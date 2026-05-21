@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Search, ChevronLeft, ChevronRight, Download, ExternalLink } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Download, ExternalLink, Flag } from "lucide-react";
 import { HOLIDAY_COUNTRY_LABELS, type HolidayCountry } from "@/types/database";
 import { UserNameLink } from "@/components/shared/user-name-link";
 import { displayName, hasNightDifferentialHours } from "@/lib/utils";
@@ -1048,10 +1048,13 @@ export function AllAttendanceTable({
                           return (
                             <span
                               className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 ${
-                                mismatch ? "ring-1 ring-amber-400" : ""
+                                mismatch ? "ring-1 ring-red-500" : ""
                               }`}
                               title={mismatch ? "Different from planned location" : undefined}
                             >
+                              {mismatch && (
+                                <Flag size={12} className="fill-red-500 text-red-500" />
+                              )}
                               Office
                             </span>
                           );
@@ -1061,10 +1064,13 @@ export function AllAttendanceTable({
                           return (
                             <span
                               className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium bg-teal-50 text-teal-700 ${
-                                mismatch ? "ring-1 ring-amber-400" : ""
+                                mismatch ? "ring-1 ring-red-500" : ""
                               }`}
                               title={mismatch ? "Planned to be in office" : undefined}
                             >
+                              {mismatch && (
+                                <Flag size={12} className="fill-red-500 text-red-500" />
+                              )}
                               Online
                             </span>
                           );

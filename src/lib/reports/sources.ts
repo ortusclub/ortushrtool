@@ -362,7 +362,7 @@ export const SOURCES: SourceDef[] = [
     description: "Employees who worked (or asked to work) on a holiday.",
     table: "holiday_work_requests",
     select:
-      "id, holiday_date, start_time, end_time, work_location, reason, status, reviewer_notes, created_at, employee:users!holiday_work_requests_employee_id_fkey(full_name, email), holiday:holidays!holiday_work_requests_holiday_id_fkey(name)",
+      "id, holiday_date, start_time, end_time, work_location, duration, compensation, reason, status, reviewer_notes, created_at, employee:users!holiday_work_requests_employee_id_fkey(full_name, email), holiday:holidays!holiday_work_requests_holiday_id_fkey(name)",
     orderBy: { column: "created_at", ascending: false },
     columns: [
       ...employeeColumns,
@@ -375,13 +375,43 @@ export const SOURCES: SourceDef[] = [
       { id: "holiday_date", label: "Date", value: (r) => r.holiday_date ?? "" },
       { id: "start_time", label: "Start", value: (r) => r.start_time ?? "" },
       { id: "end_time", label: "End", value: (r) => r.end_time ?? "" },
+      {
+        id: "duration",
+        label: "Duration",
+        value: (r) => (r.duration === "half_day" ? "Half Day" : "Full Day"),
+      },
       { id: "work_location", label: "Location", value: (r) => r.work_location ?? "" },
+      {
+        id: "compensation",
+        label: "Compensation",
+        value: (r) =>
+          r.compensation === "cto" ? "CTO Leave" : "Holiday Pay",
+      },
+      {
+        id: "compensation_days",
+        label: "CTO Days Credited",
+        // Earned-CTO equivalent for payroll reconciliation: 0 for holiday_pay,
+        // 0.5 / 1 for cto depending on duration. Only meaningful when status
+        // is approved (a pending/rejected row never grants).
+        value: (r) => {
+          if (r.compensation !== "cto" || r.status !== "approved") return 0;
+          return r.duration === "half_day" ? 0.5 : 1;
+        },
+      },
       { id: "status", label: "Status", value: (r) => r.status ?? "" },
       { id: "reason", label: "Reason", value: (r) => r.reason ?? "" },
       { id: "reviewer_notes", label: "Reviewer Notes", value: (r) => r.reviewer_notes ?? "" },
       { id: "created_at", label: "Submitted At", value: (r) => r.created_at?.slice(0, 19).replace("T", " ") ?? "" },
     ],
-    defaultColumns: ["employee_name", "holiday_name", "holiday_date", "start_time", "end_time", "status"],
+    defaultColumns: [
+      "employee_name",
+      "holiday_name",
+      "holiday_date",
+      "duration",
+      "compensation",
+      "compensation_days",
+      "status",
+    ],
     filters: [
       {
         id: "status",
@@ -389,10 +419,21 @@ export const SOURCES: SourceDef[] = [
         type: "select",
         options: [{ value: "any", label: "Any" }, ...STATUS_PENDING_APPROVED_REJECTED],
       },
+      {
+        id: "compensation",
+        label: "Compensation",
+        type: "select",
+        options: [
+          { value: "any", label: "Any" },
+          { value: "holiday_pay", label: "Holiday Pay" },
+          { value: "cto", label: "CTO Leave" },
+        ],
+      },
       { id: "date_range", label: "Holiday date range", type: "date_range" },
     ],
     applyFilter: (q, id, v) => {
       if (id === "status" && typeof v === "string" && v !== "any") return q.eq("status", v);
+      if (id === "compensation" && typeof v === "string" && v !== "any") return q.eq("compensation", v);
       if (id === "date_range" && v && typeof v === "object") {
         if (v.from) q = q.gte("holiday_date", v.from);
         if (v.to) q = q.lte("holiday_date", v.to);

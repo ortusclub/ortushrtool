@@ -30,6 +30,7 @@ import {
   Inbox,
   Trophy,
   CalendarClock,
+  ShieldAlert,
 } from "lucide-react";
 import { useState } from "react";
 import type { UserRole } from "@/types/database";
@@ -72,6 +73,7 @@ const navSections: NavSection[] = [
       { label: "Team Directory", href: "/team", icon: <UsersRound size={20} />, minRole: "employee" },
       { label: "KPIs", href: "/kpis", icon: <Target size={20} />, minRole: "employee" },
       { label: "Performance", href: "/performance", icon: <Trophy size={20} />, minRole: "employee" },
+      { label: "Report a Concern", href: "/concerns", icon: <ShieldAlert size={20} />, minRole: "employee" },
       { label: "Help & Guide", href: "/help", icon: <HelpCircle size={20} />, minRole: "employee" },
     ],
   },
@@ -96,6 +98,7 @@ const navSections: NavSection[] = [
       { label: "Document Requests", href: "/admin/document-requests", icon: <FileText size={20} />, minRole: "hr_admin" },
       { label: "Bulk Import", href: "/admin/bulk-import", icon: <Upload size={20} />, minRole: "hr_admin", roles: ["hr_support", "hr_admin", "super_admin"] },
       { label: "Pending Changes", href: "/admin/pending-changes", icon: <Inbox size={20} />, minRole: "hr_admin" },
+      { label: "Concerns", href: "/concerns/admin", icon: <ShieldAlert size={20} />, minRole: "hr_admin" },
       { label: "Performance", href: "/admin/performance", icon: <Trophy size={20} />, minRole: "hr_admin" },
       { label: "Users", href: "/admin/users", icon: <Users size={20} />, minRole: "hr_admin" },
     ],
