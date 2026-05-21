@@ -34,6 +34,10 @@ interface ParsedRow {
   durationFrom: DurationToken;
   durationTo: DurationToken;
   expectedTotalDays: number | null;
+  // Per-row override of the import-level auto-approve toggle. Undefined
+  // means "fall back to the UI checkbox"; "approved" / "pending" set the
+  // row explicitly.
+  statusOverride?: "approved" | "pending";
   reason: string;
   parseError?: string;
 }
@@ -151,6 +155,7 @@ function parseCSV(csvText: string): ParsedRow[] {
   const durFromIdx = col(["duration (from)", "duration from", "from duration"]);
   const durToIdx = col(["duration (to)", "duration to", "to duration"]);
   const totalIdx = col(["leave duration", "total duration", "total days", "days"]);
+  const statusIdx = col(["status", "approval status", "leave status"]);
   const reasonIdx = col(["reason", "notes"]);
 
   if (
@@ -211,6 +216,21 @@ function parseCSV(csvText: string): ParsedRow[] {
     }
 
     const expectedTotalDays = totalIdx >= 0 ? parseTotalDays(parts[totalIdx] || "") : null;
+
+    let statusOverride: "approved" | "pending" | undefined;
+    if (statusIdx >= 0) {
+      const raw = (parts[statusIdx] || "").trim().toLowerCase();
+      if (raw === "") {
+        // Blank cell — fall back to the import-level auto-approve toggle.
+      } else if (raw === "approved") {
+        statusOverride = "approved";
+      } else if (raw === "pending") {
+        statusOverride = "pending";
+      } else if (!parseError) {
+        parseError = `invalid status "${parts[statusIdx]}" (use: approved / pending, or leave blank)`;
+      }
+    }
+
     const reason = reasonIdx >= 0 ? (parts[reasonIdx] || "Bulk import") : "Bulk import";
 
     rows.push({
@@ -222,6 +242,7 @@ function parseCSV(csvText: string): ParsedRow[] {
       durationFrom,
       durationTo,
       expectedTotalDays,
+      statusOverride,
       reason,
       ...(parseError ? { parseError } : {}),
     });
@@ -369,6 +390,9 @@ export async function POST(request: Request) {
       }
 
       const splits = decomposeRow(row);
+      const effectiveStatus =
+        row.statusOverride ?? (autoApprove ? "approved" : "pending");
+      const isApproved = effectiveStatus === "approved";
       const dbInserts = splits.map((s) => ({
         employee_id: userId,
         leave_type: row.leaveType,
@@ -377,9 +401,9 @@ export async function POST(request: Request) {
         leave_duration: s.duration,
         half_day_period: s.period,
         reason: row.reason,
-        status: autoApprove ? "approved" : "pending",
-        reviewed_by: autoApprove ? authUser.id : null,
-        reviewed_at: autoApprove ? new Date().toISOString() : null,
+        status: effectiveStatus,
+        reviewed_by: isApproved ? authUser.id : null,
+        reviewed_at: isApproved ? new Date().toISOString() : null,
       }));
 
       // Dedup: skip the whole CSV row if any of its splits collide with
