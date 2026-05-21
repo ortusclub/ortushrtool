@@ -21,14 +21,114 @@ const LEAVE_TYPE_ALIASES: Record<string, string> = {
   "bereavement leave": "bereavement",
 };
 
+// Duration token used by the CSV: `full` = whole day, `am` / `pm` = half
+// day on that period.
+type DurationToken = "full" | "am" | "pm";
+
 interface ParsedRow {
+  rowNum: number;
   email: string;
   leaveType: string;
   startDate: string;
   endDate: string;
-  duration: "full_day" | "half_day";
-  halfDayPeriod: "am" | "pm" | null;
+  durationFrom: DurationToken;
+  durationTo: DurationToken;
+  expectedTotalDays: number | null;
   reason: string;
+  parseError?: string;
+}
+
+type Split = {
+  startDate: string;
+  endDate: string;
+  duration: "full_day" | "half_day";
+  period: "am" | "pm" | null;
+};
+
+function parseDurationToken(raw: string): DurationToken | null {
+  const v = raw.trim().toLowerCase();
+  if (v === "full") return "full";
+  if (v === "am") return "am";
+  if (v === "pm") return "pm";
+  return null;
+}
+
+function parseTotalDays(raw: string): number | null {
+  const m = raw.match(/(\d+(?:[.,]\d+)?)/);
+  return m ? parseFloat(m[1].replace(",", ".")) : null;
+}
+
+function addDays(date: string, n: number): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function countWeekdays(start: string, end: string): number {
+  const s = new Date(start + "T00:00:00Z");
+  const e = new Date(end + "T00:00:00Z");
+  let count = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    const day = cur.getUTCDay();
+    if (day !== 0 && day !== 6) count++;
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return count;
+}
+
+function computeExpectedTotal(
+  startDate: string,
+  endDate: string,
+  durFrom: DurationToken,
+  durTo: DurationToken
+): { ok: true; total: number } | { ok: false; error: string } {
+  if (startDate > endDate) {
+    return { ok: false, error: `end date "${endDate}" is before start date "${startDate}"` };
+  }
+  if (startDate === endDate) {
+    return { ok: true, total: durFrom === "full" ? 1 : 0.5 };
+  }
+  const weekdays = countWeekdays(startDate, endDate);
+  if (weekdays < 2) {
+    return {
+      ok: false,
+      error: `range ${startDate}..${endDate} has only ${weekdays} weekday(s); needs at least 2 for a multi-day leave`,
+    };
+  }
+  const startContrib = durFrom === "full" ? 1 : 0.5;
+  const endContrib = durTo === "full" ? 1 : 0.5;
+  return { ok: true, total: startContrib + (weekdays - 2) + endContrib };
+}
+
+function decomposeRow(row: ParsedRow): Split[] {
+  const { startDate, endDate, durationFrom, durationTo } = row;
+  if (startDate === endDate) {
+    if (durationFrom === "full") {
+      return [{ startDate, endDate, duration: "full_day", period: null }];
+    }
+    return [{ startDate, endDate, duration: "half_day", period: durationFrom }];
+  }
+  const startIsHalf = durationFrom !== "full";
+  const endIsHalf = durationTo !== "full";
+  const splits: Split[] = [];
+
+  if (!startIsHalf && !endIsHalf) {
+    splits.push({ startDate, endDate, duration: "full_day", period: null });
+    return splits;
+  }
+  if (startIsHalf) {
+    splits.push({ startDate, endDate: startDate, duration: "half_day", period: durationFrom });
+  }
+  const midStart = startIsHalf ? addDays(startDate, 1) : startDate;
+  const midEnd = endIsHalf ? addDays(endDate, -1) : endDate;
+  if (midStart <= midEnd) {
+    splits.push({ startDate: midStart, endDate: midEnd, duration: "full_day", period: null });
+  }
+  if (endIsHalf) {
+    splits.push({ startDate: endDate, endDate, duration: "half_day", period: durationTo });
+  }
+  return splits;
 }
 
 function parseCSV(csvText: string): ParsedRow[] {
@@ -46,12 +146,23 @@ function parseCSV(csvText: string): ParsedRow[] {
 
   const emailIdx = col(["email"]);
   const typeIdx = col(["leave type", "leave_type", "type"]);
-  const startIdx = col(["start date", "start_date", "from"]);
-  const endIdx = col(["end date", "end_date", "to"]);
-  const durationIdx = col(["duration", "leave_duration"]);
+  const startIdx = col(["from", "start date", "start_date"]);
+  const endIdx = col(["to", "end date", "end_date"]);
+  const durFromIdx = col(["duration (from)", "duration from", "from duration"]);
+  const durToIdx = col(["duration (to)", "duration to", "to duration"]);
+  const totalIdx = col(["leave duration", "total duration", "total days", "days"]);
   const reasonIdx = col(["reason", "notes"]);
 
-  if (emailIdx === -1 || typeIdx === -1 || startIdx === -1) return [];
+  if (
+    emailIdx === -1 ||
+    typeIdx === -1 ||
+    startIdx === -1 ||
+    endIdx === -1 ||
+    durFromIdx === -1 ||
+    durToIdx === -1
+  ) {
+    return [];
+  }
 
   const rows: ParsedRow[] = [];
 
@@ -68,27 +179,52 @@ function parseCSV(csvText: string): ParsedRow[] {
 
     const email = parts[emailIdx] || "";
     if (!email) continue;
-
-    // Skip OPTIONS row
     if (email.toUpperCase().startsWith("OPTIONS")) continue;
 
     const rawType = (parts[typeIdx] || "").toLowerCase();
     const leaveType = LEAVE_TYPE_ALIASES[rawType] ?? rawType;
 
     const startDate = parts[startIdx] || "";
-    const endDate = endIdx >= 0 ? (parts[endIdx] || startDate) : startDate;
+    const endDate = parts[endIdx] || startDate;
 
-    const rawDuration = durationIdx >= 0 ? (parts[durationIdx] || "").toLowerCase() : "";
-    let duration: "full_day" | "half_day" = "full_day";
-    let halfDayPeriod: "am" | "pm" | null = null;
-    if (rawDuration.includes("half") || rawDuration === "am" || rawDuration === "pm") {
-      duration = "half_day";
-      halfDayPeriod = rawDuration.includes("pm") || rawDuration === "pm" ? "pm" : "am";
+    const rawFrom = parts[durFromIdx] || "";
+    const rawTo = parts[durToIdx] || "";
+    const tokFrom = parseDurationToken(rawFrom);
+    let durationFrom: DurationToken = "full";
+    let durationTo: DurationToken = "full";
+    let parseError: string | null = null;
+    if (!tokFrom) {
+      parseError = `invalid "duration (from)" value "${rawFrom}" (use: full / am / pm)`;
+    } else if (startDate === endDate) {
+      // Single-date row: duration (to) is ignored — the first column
+      // describes the whole day.
+      durationFrom = tokFrom;
+      durationTo = tokFrom;
+    } else {
+      const tokTo = parseDurationToken(rawTo);
+      if (!tokTo) {
+        parseError = `invalid "duration (to)" value "${rawTo}" (use: full / am / pm)`;
+      } else {
+        durationFrom = tokFrom;
+        durationTo = tokTo;
+      }
     }
 
+    const expectedTotalDays = totalIdx >= 0 ? parseTotalDays(parts[totalIdx] || "") : null;
     const reason = reasonIdx >= 0 ? (parts[reasonIdx] || "Bulk import") : "Bulk import";
 
-    rows.push({ email, leaveType, startDate, endDate, duration, halfDayPeriod, reason });
+    rows.push({
+      rowNum: i + 1,
+      email,
+      leaveType,
+      startDate,
+      endDate,
+      durationFrom,
+      durationTo,
+      expectedTotalDays,
+      reason,
+      ...(parseError ? { parseError } : {}),
+    });
   }
 
   return rows;
@@ -125,7 +261,10 @@ export async function POST(request: Request) {
 
   if (rows.length === 0) {
     return Response.json(
-      { error: "No valid rows found. Ensure CSV has Email, Leave Type, and Start Date columns." },
+      {
+        error:
+          "No valid rows found. CSV must include columns: Email, Leave Type, From, To, Duration (From), Duration (To). Optional: Leave Duration, Reason.",
+      },
       { status: 400 }
     );
   }
@@ -140,7 +279,6 @@ export async function POST(request: Request) {
   };
 
   try {
-    // Batch lookup all emails
     const allEmails = [...new Set(rows.map((r) => r.email))];
     const { data: users } = await admin
       .from("users")
@@ -152,12 +290,32 @@ export async function POST(request: Request) {
       emailToId.set(u.email, u.id);
     }
 
-    // Build leave inserts
-    const inserts: Record<string, unknown>[] = [];
+    // Fetch existing leaves up front so dedup checks don't hit the DB
+    // per CSV row. Use the set of resolvable user IDs only.
+    const candidateUserIds = [...new Set(
+      rows.map((r) => emailToId.get(r.email)).filter((id): id is string => !!id)
+    )];
+    const { data: existingLeaves } = candidateUserIds.length > 0
+      ? await admin
+          .from("leave_requests")
+          .select("employee_id, leave_type, start_date, end_date")
+          .in("employee_id", candidateUserIds)
+      : { data: [] };
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNum = i + 2; // CSV row number (1-indexed header + 1)
+    const seenKeys = new Set<string>(
+      (existingLeaves ?? []).map(
+        (r) => `${r.employee_id}|${r.leave_type}|${r.start_date}|${r.end_date}`
+      )
+    );
+
+    for (const row of rows) {
+      const rowNum = row.rowNum;
+
+      if (row.parseError) {
+        results.errors.push(`Row ${rowNum}: ${row.parseError}`);
+        results.skipped++;
+        continue;
+      }
 
       const userId = emailToId.get(row.email);
       if (!userId) {
@@ -167,7 +325,9 @@ export async function POST(request: Request) {
       }
 
       if (!VALID_LEAVE_TYPES.has(row.leaveType)) {
-        results.errors.push(`Row ${rowNum}: invalid leave type "${row.leaveType}" (use: ${[...VALID_LEAVE_TYPES].join(", ")})`);
+        results.errors.push(
+          `Row ${rowNum}: invalid leave type "${row.leaveType}" (use: ${[...VALID_LEAVE_TYPES].join(", ")})`
+        );
         results.skipped++;
         continue;
       }
@@ -184,58 +344,67 @@ export async function POST(request: Request) {
         continue;
       }
 
-      inserts.push({
+      const compute = computeExpectedTotal(
+        row.startDate, row.endDate, row.durationFrom, row.durationTo
+      );
+      if (!compute.ok) {
+        results.errors.push(`Row ${rowNum}: ${compute.error}`);
+        results.skipped++;
+        continue;
+      }
+
+      // Validate provided total against computed total (if column present).
+      // Tolerance handles floating-point drift on values like 0.5+1+0.5.
+      if (
+        row.expectedTotalDays !== null &&
+        Math.abs(row.expectedTotalDays - compute.total) > 0.001
+      ) {
+        results.errors.push(
+          `Row ${rowNum}: "Leave Duration" column says ${row.expectedTotalDays} but durations ` +
+          `(${row.durationFrom}/${row.durationTo} over ${row.startDate}..${row.endDate}) ` +
+          `compute to ${compute.total}. Please recheck the source data.`
+        );
+        results.skipped++;
+        continue;
+      }
+
+      const splits = decomposeRow(row);
+      const dbInserts = splits.map((s) => ({
         employee_id: userId,
         leave_type: row.leaveType,
-        start_date: row.startDate,
-        end_date: row.endDate,
-        leave_duration: row.duration,
-        half_day_period: row.halfDayPeriod,
+        start_date: s.startDate,
+        end_date: s.endDate,
+        leave_duration: s.duration,
+        half_day_period: s.period,
         reason: row.reason,
         status: autoApprove ? "approved" : "pending",
         reviewed_by: autoApprove ? authUser.id : null,
         reviewed_at: autoApprove ? new Date().toISOString() : null,
-      });
-    }
+      }));
 
-    // Skip duplicates: rows that already exist for the same
-    // (employee_id, leave_type, start_date, end_date) — including duplicates
-    // within this CSV upload itself.
-    const candidateEmployeeIds = [
-      ...new Set(inserts.map((r) => r.employee_id as string)),
-    ];
-    const { data: existingLeaves } = await admin
-      .from("leave_requests")
-      .select("employee_id, leave_type, start_date, end_date")
-      .in("employee_id", candidateEmployeeIds);
-
-    const seenKeys = new Set(
-      (existingLeaves ?? []).map(
-        (r) =>
-          `${r.employee_id}|${r.leave_type}|${r.start_date}|${r.end_date}`
-      )
-    );
-
-    const dedupedInserts: Record<string, unknown>[] = [];
-    for (const ins of inserts) {
-      const key = `${ins.employee_id}|${ins.leave_type}|${ins.start_date}|${ins.end_date}`;
-      if (seenKeys.has(key)) {
+      // Dedup: skip the whole CSV row if any of its splits collide with
+      // an existing leave or another row we've already queued. Partial
+      // duplicates are treated as full duplicates to keep semantics
+      // simple — re-running an import is idempotent.
+      const splitKeys = dbInserts.map(
+        (i) => `${i.employee_id}|${i.leave_type}|${i.start_date}|${i.end_date}`
+      );
+      if (splitKeys.some((k) => seenKeys.has(k))) {
         results.duplicates_skipped++;
         continue;
       }
-      seenKeys.add(key);
-      dedupedInserts.push(ins);
-    }
 
-    // Batch insert in chunks of 50
-    for (let i = 0; i < dedupedInserts.length; i += 50) {
-      const batch = dedupedInserts.slice(i, i + 50);
-      const { error } = await admin.from("leave_requests").insert(batch);
+      // Insert all splits for this CSV row as one Postgres statement —
+      // Supabase makes this atomic, so partial failure can't leave
+      // orphan halves of a multi-row decomposition.
+      const { error } = await admin.from("leave_requests").insert(dbInserts);
       if (error) {
-        results.errors.push(`Insert error: ${error.message}`);
-      } else {
-        results.created += batch.length;
+        results.errors.push(`Row ${rowNum}: insert failed — ${error.message}`);
+        results.skipped++;
+        continue;
       }
+      splitKeys.forEach((k) => seenKeys.add(k));
+      results.created += dbInserts.length;
     }
   } catch (err) {
     results.errors.push(`Fatal error: ${err instanceof Error ? err.message : "unknown"}`);

@@ -11,11 +11,12 @@ interface ImportResult {
   errors: string[];
 }
 
-const SAMPLE_CSV = `Email,Leave Type,Start Date,End Date,Duration,Reason
-OPTIONS:,(annual / birthday / cto / trinity / anniversary / maternity_paternity / solo_parent / bereavement),(YYYY-MM-DD),(YYYY-MM-DD),(full_day / half_day_am / half_day_pm),(free text)
-juan@ortusclub.com,annual,2026-05-01,2026-05-02,full_day,Family vacation
-maria@ortusclub.com,birthday,2026-06-15,2026-06-15,full_day,Birthday leave
-pedro@ortusclub.com,cto,2026-05-10,2026-05-10,half_day_am,Morning appointment`;
+const SAMPLE_CSV = `Email,Leave Type,From,Duration (From),To,Duration (To),Leave Duration,Reason
+OPTIONS:,(annual / birthday / cto / trinity / anniversary / maternity_paternity / solo_parent / bereavement),(YYYY-MM-DD),(full / am / pm),(YYYY-MM-DD),(full / am / pm),(e.g. "1.5 days" — optional double-check),(free text)
+juan@ortusclub.com,annual,2026-05-01,full,2026-05-02,full,2 days,Family vacation
+maria@ortusclub.com,birthday,2026-06-15,full,2026-06-15,full,1 day,Birthday leave
+pedro@ortusclub.com,cto,2026-05-10,am,2026-05-10,am,0.5 days,Morning appointment
+lisa@ortusclub.com,annual,2026-07-01,pm,2026-07-03,am,2 days,Half PM Mon + full Tue + half AM Wed`;
 
 export function LeaveCsvImport() {
   const router = useRouter();
@@ -84,7 +85,10 @@ export function LeaveCsvImport() {
             Upload a CSV to create leave requests for multiple employees at once.
           </p>
           <p className="mt-1 text-xs text-gray-400">
-            Columns: Email, Leave Type, Start Date, End Date, Duration, Reason
+            Columns: Email, Leave Type, From, Duration (From), To, Duration (To), Leave Duration, Reason
+          </p>
+          <p className="mt-1 text-xs text-gray-400">
+            Duration values: <code>full</code> = whole day · <code>am</code> / <code>pm</code> = half day. Rows where computed total doesn&apos;t match the &quot;Leave Duration&quot; column are skipped with an error.
           </p>
         </div>
         <div className="flex items-center gap-2">
