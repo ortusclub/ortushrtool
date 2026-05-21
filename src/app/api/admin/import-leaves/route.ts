@@ -329,6 +329,15 @@ export async function POST(request: Request) {
       )
     );
 
+    // Phase 1: validation + dedup. All in-memory, no I/O. Builds a list
+    // of insert tasks for phase 2 so the slow part can run concurrently
+    // without race conditions on the dedup set.
+    type InsertTask = {
+      rowNum: number;
+      dbInserts: Record<string, unknown>[];
+    };
+    const insertTasks: InsertTask[] = [];
+
     for (const row of rows) {
       const rowNum = row.rowNum;
 
@@ -417,18 +426,29 @@ export async function POST(request: Request) {
         results.duplicates_skipped++;
         continue;
       }
-
-      // Insert all splits for this CSV row as one Postgres statement —
-      // Supabase makes this atomic, so partial failure can't leave
-      // orphan halves of a multi-row decomposition.
-      const { error } = await admin.from("leave_requests").insert(dbInserts);
-      if (error) {
-        results.errors.push(`Row ${rowNum}: insert failed — ${error.message}`);
-        results.skipped++;
-        continue;
-      }
       splitKeys.forEach((k) => seenKeys.add(k));
-      results.created += dbInserts.length;
+      insertTasks.push({ rowNum, dbInserts });
+    }
+
+    // Phase 2: run inserts concurrently in chunks. Each task is its own
+    // atomic Supabase insert call (so the per-CSV-row atomicity I want
+    // is preserved), but we fan them out so we don't pay the round-trip
+    // cost sequentially. Sized to stay well under Vercel's 60s function
+    // timeout for typical HR-scale imports (~1000 rows).
+    const CONCURRENCY = 10;
+    for (let i = 0; i < insertTasks.length; i += CONCURRENCY) {
+      const chunk = insertTasks.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        chunk.map(async ({ rowNum, dbInserts }) => {
+          const { error } = await admin.from("leave_requests").insert(dbInserts);
+          if (error) {
+            results.errors.push(`Row ${rowNum}: insert failed — ${error.message}`);
+            results.skipped++;
+          } else {
+            results.created += dbInserts.length;
+          }
+        })
+      );
     }
   } catch (err) {
     results.errors.push(`Fatal error: ${err instanceof Error ? err.message : "unknown"}`);
