@@ -82,13 +82,6 @@ type BuiltInImportSpec = {
   parse: (raw: string) => ParsedValue;
 };
 
-const ROLE_VALUES = new Set([
-  "employee",
-  "manager",
-  "hr_support",
-  "hr_admin",
-  "super_admin",
-]);
 const COUNTRY_VALUES = new Set(["PH", "XK", "IT", "AE"]);
 const COMPANY_VALUES = new Set<string>(COMPANY_OPTIONS);
 // Accept a few short aliases in CSVs so HR doesn't have to type the legal
@@ -157,6 +150,22 @@ const company = (raw: string): ParsedValue => {
   return { ok: true, value: canon };
 };
 
+/**
+ * Built-in fields the profile UI renders as auto-populated — value is set
+ * elsewhere and the field is shown read-only with the hint below. Single
+ * source of truth for: field-manager badge/hint, bulk-import picker filter,
+ * bulk-import endpoint rejection, and the apply-time defensive strip.
+ */
+export const AUTO_POPULATED_BUILT_IN_HINTS: Record<string, string> = {
+  role: "Set in User Management. Shown as a role badge on profiles.",
+  location:
+    "Derived from today's schedule (and any approved adjustment). Shown as a badge on profiles.",
+};
+
+export const AUTO_POPULATED_BUILT_IN_KEYS: ReadonlySet<string> = new Set(
+  Object.keys(AUTO_POPULATED_BUILT_IN_HINTS)
+);
+
 export const BUILT_IN_IMPORT_SPECS: Record<string, BuiltInImportSpec> = {
   preferred_name: { column: "preferred_name", parse: text },
   first_name: { column: "first_name", parse: text },
@@ -165,13 +174,11 @@ export const BUILT_IN_IMPORT_SPECS: Record<string, BuiltInImportSpec> = {
   company: { column: "company", parse: company },
   department: { column: "department", parse: text },
   job_title: { column: "job_title", parse: text },
-  location: { column: "location", parse: text },
   timezone: { column: "timezone", parse: text },
   birthday: { column: "birthday", parse: date },
   hire_date: { column: "hire_date", parse: date },
   regularization_date: { column: "regularization_date", parse: date },
   end_date: { column: "end_date", parse: date },
-  role: { column: "role", parse: enumIn(ROLE_VALUES) },
   holiday_country: { column: "holiday_country", parse: enumIn(COUNTRY_VALUES) },
   is_active: { column: "is_active", parse: boolYesNo },
   overtime_eligible: { column: "overtime_eligible", parse: boolYesNo },

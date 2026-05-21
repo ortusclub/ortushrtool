@@ -1,4 +1,5 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { AUTO_POPULATED_BUILT_IN_KEYS } from "@/lib/profile-fields";
 
 export type BulkImportPayload = {
   rows: Array<{
@@ -87,15 +88,33 @@ export async function applyBulkImport(
     let wrote = false;
 
     if (r.user_patch && Object.keys(r.user_patch).length > 0) {
-      const { error } = await admin
-        .from("users")
-        .update(r.user_patch)
-        .eq("id", r.user_id);
-      if (error) {
-        errors.push(`${r.email} (user update): ${error.message}`);
-      } else {
-        cellsWritten += Object.keys(r.user_patch).length;
-        wrote = true;
+      // Strip auto-populated fields (e.g. role, location) — they must be set
+      // via User Management / scheduling, not bulk import. Guards against
+      // stale pending_changes payloads queued before the bulk-import filter
+      // was added, and any other path (e.g. /api/users/[id]/details) that
+      // might still slip them through.
+      const safePatch: Record<string, unknown> = {};
+      const stripped: string[] = [];
+      for (const [k, v] of Object.entries(r.user_patch)) {
+        if (AUTO_POPULATED_BUILT_IN_KEYS.has(k)) stripped.push(k);
+        else safePatch[k] = v;
+      }
+      if (stripped.length > 0) {
+        console.warn(
+          `applyBulkImport: stripped auto-populated fields for ${r.email}: ${stripped.join(", ")}`
+        );
+      }
+      if (Object.keys(safePatch).length > 0) {
+        const { error } = await admin
+          .from("users")
+          .update(safePatch)
+          .eq("id", r.user_id);
+        if (error) {
+          errors.push(`${r.email} (user update): ${error.message}`);
+        } else {
+          cellsWritten += Object.keys(safePatch).length;
+          wrote = true;
+        }
       }
     }
 

@@ -13,6 +13,7 @@ import type {
   ProfileField,
   ProfileFieldSection,
 } from "@/types/database";
+import { AUTO_POPULATED_BUILT_IN_KEYS } from "@/lib/profile-fields";
 
 type Result = {
   rowsProcessed: number;
@@ -20,6 +21,7 @@ type Result = {
   cellsWritten: number;
   unknownEmails: string[];
   unknownColumns: string[];
+  autoPopulatedColumns: string[];
   errors: string[];
   pending?: boolean;
   pending_change_id?: string;
@@ -50,6 +52,7 @@ export function BulkImportForm({
   const fieldsBySection = useMemo(() => {
     const m = new Map<string, ProfileField[]>();
     for (const f of fields) {
+      if (AUTO_POPULATED_BUILT_IN_KEYS.has(f.built_in_key ?? "")) continue;
       if (!m.has(f.section_id)) m.set(f.section_id, []);
       m.get(f.section_id)!.push(f);
     }
@@ -321,6 +324,12 @@ export function BulkImportForm({
             {result.unknownColumns.length > 0 && (
               <li className="text-amber-800">
                 Unknown columns (ignored): {result.unknownColumns.join(", ")}
+              </li>
+            )}
+            {result.autoPopulatedColumns.length > 0 && (
+              <li className="text-amber-800">
+                Auto-populated columns (ignored — set in User Management or via scheduling):{" "}
+                {result.autoPopulatedColumns.join(", ")}
               </li>
             )}
             {result.errors.length > 0 && (

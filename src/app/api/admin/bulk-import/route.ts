@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasRole } from "@/lib/utils";
-import { BUILT_IN_IMPORT_SPECS } from "@/lib/profile-fields";
+import {
+  AUTO_POPULATED_BUILT_IN_KEYS,
+  BUILT_IN_IMPORT_SPECS,
+} from "@/lib/profile-fields";
 import { applyBulkImport, type BulkImportPayload } from "@/lib/pending-changes";
 
 export const maxDuration = 60;
@@ -13,6 +16,7 @@ type Result = {
   cellsWritten: number;
   unknownEmails: string[];
   unknownColumns: string[];
+  autoPopulatedColumns: string[];
   errors: string[];
   pending?: boolean;
   pending_change_id?: string;
@@ -165,6 +169,7 @@ export async function POST(request: Request) {
         >;
       }
     | { kind: "multirow"; fieldId: string; rowIndex: number; subfieldKey: string }
+    | { kind: "auto_populated" }
     | { kind: "unknown" };
   const plans: ColumnPlan[] = headers.map((h, i) => {
     if (i === emailIdx) return { kind: "unknown" };
@@ -175,6 +180,9 @@ export async function POST(request: Request) {
     if (custom) return { kind: "custom", fieldId: custom.id };
     const builtIn = builtInByLabel.get(lc);
     if (builtIn) {
+      if (AUTO_POPULATED_BUILT_IN_KEYS.has(builtIn.built_in_key)) {
+        return { kind: "auto_populated" };
+      }
       const spec = BUILT_IN_IMPORT_SPECS[builtIn.built_in_key];
       if (spec) return { kind: "builtin", column: spec.column, parse: spec.parse };
     }
@@ -183,6 +191,9 @@ export async function POST(request: Request) {
 
   const unknownColumns = headers.filter(
     (_, i) => i !== emailIdx && plans[i].kind === "unknown"
+  );
+  const autoPopulatedColumns = headers.filter(
+    (_, i) => i !== emailIdx && plans[i].kind === "auto_populated"
   );
 
   const emailsInFile = rows
@@ -203,6 +214,7 @@ export async function POST(request: Request) {
     cellsWritten: 0,
     unknownEmails: [],
     unknownColumns,
+    autoPopulatedColumns,
     errors: [],
   };
 
