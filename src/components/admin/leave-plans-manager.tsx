@@ -37,6 +37,9 @@ export function LeavePlansManager({
     Object.fromEntries(ALL_LEAVE_TYPE_KEYS.map((k) => [k, 0]))
   );
   const [editAllocations, setEditAllocations] = useState<Record<string, number>>({});
+  const [editGrantType, setEditGrantType] = useState<GrantType>("custom");
+  const [editRenewalMonth, setEditRenewalMonth] = useState(1);
+  const [editRenewalDay, setEditRenewalDay] = useState(1);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -107,11 +110,36 @@ export function LeavePlansManager({
       full[k] = current[k] ?? 0;
     }
     setEditAllocations(full);
+    setEditGrantType(plan.grant_type);
+    setEditRenewalMonth(plan.renewal_month ?? 1);
+    setEditRenewalDay(plan.renewal_day ?? 1);
   };
 
   const saveEdit = async (planId: string) => {
     setSaving(true);
     const supabase = createClient();
+
+    // Update plan-level settings (grant type + renewal date).
+    const { data: updatedPlan, error: planError } = await supabase
+      .from("leave_plans")
+      .update({
+        grant_type: editGrantType,
+        renewal_month: editRenewalMonth,
+        renewal_day: editRenewalDay,
+      })
+      .eq("id", planId)
+      .select()
+      .single();
+    if (planError) {
+      setMessage(planError.message);
+      setSaving(false);
+      return;
+    }
+    if (updatedPlan) {
+      setPlans((prev) =>
+        prev.map((p) => (p.id === planId ? (updatedPlan as LeavePlan) : p))
+      );
+    }
 
     // Delete existing allocations for this plan
     await supabase.from("leave_plan_allocations").delete().eq("plan_id", planId);
@@ -293,6 +321,15 @@ export function LeavePlansManager({
             ? editAllocations
             : getAllocationsForPlan(plan.id);
           const count = assignmentCounts[plan.id] ?? 0;
+          // When editing, all leave types need to be visible as inputs.
+          // When read-only, hide zero-day allocations to focus the eye on
+          // what the plan actually grants — list the rest in a footer.
+          const visibleAllocKeys = isEditing
+            ? ALL_LEAVE_TYPE_KEYS
+            : ALL_LEAVE_TYPE_KEYS.filter((k) => (planAllocs[k] ?? 0) > 0);
+          const hiddenAllocKeys = isEditing
+            ? []
+            : ALL_LEAVE_TYPE_KEYS.filter((k) => (planAllocs[k] ?? 0) <= 0);
 
           return (
             <div
@@ -393,40 +430,107 @@ export function LeavePlansManager({
               </div>
               {isExpanded && (
                 <div className="border-t border-gray-100 p-6">
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {ALL_LEAVE_TYPE_KEYS.map((key) => {
-                      const days = planAllocs[key] ?? 0;
-                      return (
-                        <div key={key} className="rounded-lg bg-gray-50 p-3">
-                          <p className="text-xs text-gray-500">
-                            {LEAVE_TYPES[key as keyof typeof LEAVE_TYPES].label}
+                  {isEditing && (
+                    <div className="mb-6 space-y-4 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Grant On</label>
+                        <p className="text-xs text-gray-500 mb-2">When leave credits are granted each year</p>
+                        <select
+                          value={editGrantType}
+                          onChange={(e) => setEditGrantType(e.target.value as GrantType)}
+                          className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        >
+                          <option value="custom">Custom Date</option>
+                          <option value="hire_date">Hire Date (including first year)</option>
+                          <option value="anniversary">Anniversary (1st year onwards)</option>
+                        </select>
+                        {editGrantType === "anniversary" && (
+                          <p className="mt-2 text-xs text-amber-600">
+                            Employees get 0 credits until their 1st work anniversary, then the full allocation each year after.
                           </p>
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.5"
-                              value={editAllocations[key] ?? 0}
-                              onChange={(e) =>
-                                setEditAllocations({
-                                  ...editAllocations,
-                                  [key]: parseFloat(e.target.value) || 0,
-                                })
-                              }
-                              className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                            />
-                          ) : (
-                            <p className="mt-1 text-xl font-bold text-gray-900">
-                              {days}
-                              <span className="ml-1 text-xs font-normal text-gray-400">
-                                day{days !== 1 ? "s" : ""}
-                              </span>
-                            </p>
-                          )}
+                        )}
+                        {editGrantType === "hire_date" && (
+                          <p className="mt-2 text-xs text-blue-600">
+                            Credits are prorated for new hires based on months remaining until the next cycle.
+                          </p>
+                        )}
+                      </div>
+                      {editGrantType === "custom" && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Renewal Date</label>
+                          <p className="text-xs text-gray-500 mb-2">When balances reset each year</p>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={editRenewalMonth}
+                              onChange={(e) => setEditRenewalMonth(parseInt(e.target.value))}
+                              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              {MONTHS.map((m, i) => (
+                                <option key={i} value={i + 1}>{m}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={editRenewalDay}
+                              onChange={(e) => setEditRenewalDay(parseInt(e.target.value))}
+                              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              {Array.from({ length: 31 }, (_, i) => (
+                                <option key={i} value={i + 1}>{i + 1}</option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      )}
+                    </div>
+                  )}
+                  {visibleAllocKeys.length === 0 ? (
+                    <p className="text-sm italic text-gray-400">
+                      No leave types granted yet. Click the pencil to set allocations.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                      {visibleAllocKeys.map((key) => {
+                        const days = planAllocs[key] ?? 0;
+                        return (
+                          <div key={key} className="rounded-lg bg-gray-50 p-3">
+                            <p className="text-xs text-gray-500">
+                              {LEAVE_TYPES[key as keyof typeof LEAVE_TYPES].label}
+                            </p>
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={editAllocations[key] ?? 0}
+                                onChange={(e) =>
+                                  setEditAllocations({
+                                    ...editAllocations,
+                                    [key]: parseFloat(e.target.value) || 0,
+                                  })
+                                }
+                                className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                              />
+                            ) : (
+                              <p className="mt-1 text-xl font-bold text-gray-900">
+                                {days}
+                                <span className="ml-1 text-xs font-normal text-gray-400">
+                                  day{days !== 1 ? "s" : ""}
+                                </span>
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {visibleAllocKeys.length > 0 && hiddenAllocKeys.length > 0 && (
+                    <p className="mt-3 text-xs text-gray-400">
+                      Not granted by this plan:{" "}
+                      {hiddenAllocKeys
+                        .map((k) => LEAVE_TYPES[k as keyof typeof LEAVE_TYPES].label)
+                        .join(", ")}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
