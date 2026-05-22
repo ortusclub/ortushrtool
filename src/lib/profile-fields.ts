@@ -160,6 +160,8 @@ export const AUTO_POPULATED_BUILT_IN_HINTS: Record<string, string> = {
   role: "Set in User Management. Shown as a role badge on profiles.",
   location:
     "Derived from today's schedule (and any approved adjustment). Shown as a badge on profiles.",
+  is_active:
+    "Set in User Management. Shown as an Active/Inactive status on profiles.",
 };
 
 export const AUTO_POPULATED_BUILT_IN_KEYS: ReadonlySet<string> = new Set(
@@ -180,7 +182,6 @@ export const BUILT_IN_IMPORT_SPECS: Record<string, BuiltInImportSpec> = {
   regularization_date: { column: "regularization_date", parse: date },
   end_date: { column: "end_date", parse: date },
   holiday_country: { column: "holiday_country", parse: enumIn(COUNTRY_VALUES) },
-  is_active: { column: "is_active", parse: boolYesNo },
   overtime_eligible: { column: "overtime_eligible", parse: boolYesNo },
 };
 
