@@ -10,7 +10,7 @@ type SearchParams = Promise<{
   subject?: string;
   host?: string;
   dept?: string;
-  location?: string;
+  country?: string;
   from?: string;
   to?: string;
 }>;
@@ -77,18 +77,18 @@ export default async function OneOnOnesIndexPage({
       (o) => userIndex[o.employee_id]?.department === params.dept
     );
   }
-  if (params.location) {
+  if (params.country) {
     oneOnOnes = oneOnOnes.filter(
-      (o) => userIndex[o.employee_id]?.location === params.location
+      (o) => userIndex[o.employee_id]?.holiday_country === params.country
     );
   }
 
-  // Distinct departments / locations across visible users.
+  // Distinct departments / countries (office) across visible users.
   const departments = Array.from(
     new Set(allUsers.map((u) => u.department).filter(Boolean))
   ) as string[];
-  const locations = Array.from(
-    new Set(allUsers.map((u) => u.location).filter(Boolean))
+  const countries = Array.from(
+    new Set(allUsers.map((u) => u.holiday_country).filter(Boolean))
   ) as string[];
 
   // For the filter dropdowns, only show real participants in this dataset
@@ -116,7 +116,7 @@ export default async function OneOnOnesIndexPage({
         <h1 className="text-2xl font-bold text-gray-900">1-on-1s</h1>
         <p className="text-gray-600">
           {isAdmin
-            ? "All 1-on-1s across the org. Filter by subject, host, department, location, or date — then export to CSV."
+            ? "All 1-on-1s across the org. Filter by subject, host, department, country, or date — then export to CSV."
             : "All your 1-on-1s in one place — schedule check-ins, take shared and private notes, loop in HR or peers."}
         </p>
       </div>
@@ -124,7 +124,7 @@ export default async function OneOnOnesIndexPage({
         subjects={subjects}
         hosts={hosts}
         departments={departments}
-        locations={locations}
+        countries={countries}
         isAdmin={isAdmin}
       />
       <OneOnOnesStandalone

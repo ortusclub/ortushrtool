@@ -38,7 +38,7 @@ export default async function TeamMemberLayout({
 
   const { data: user } = await supabase
     .from("users")
-    .select("id, full_name, preferred_name, first_name, last_name, email, role, job_title, department, location, avatar_url, manager_id")
+    .select("id, full_name, preferred_name, first_name, last_name, email, role, job_title, department, avatar_url, manager_id")
     .eq("id", userId)
     .single();
 

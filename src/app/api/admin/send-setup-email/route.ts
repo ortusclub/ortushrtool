@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   const { data: recipient } = await admin
     .from("users")
     .select(
-      "full_name, email, preferred_name, first_name, last_name, department, job_title, location"
+      "full_name, email, preferred_name, first_name, last_name, department, job_title"
     )
     .eq("email", email)
     .maybeSingle();

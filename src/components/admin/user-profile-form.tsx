@@ -67,7 +67,6 @@ export function UserProfileForm({
       company: form.company || null,
       department: form.department || null,
       job_title: form.job_title || null,
-      location: form.location || null,
       holiday_country: form.holiday_country,
       timezone: form.timezone || "Asia/Manila",
       desktime_employee_id: form.desktime_employee_id,
@@ -296,15 +295,6 @@ export function UserProfileForm({
               </option>
             ))}
           </select>
-        </Field>
-        <Field label="Office / City" full>
-          <input
-            type="text"
-            value={form.location ?? ""}
-            onChange={(e) => update("location", e.target.value)}
-            placeholder="e.g. Makati, Manila"
-            className={inputClass}
-          />
         </Field>
       </Section>
 

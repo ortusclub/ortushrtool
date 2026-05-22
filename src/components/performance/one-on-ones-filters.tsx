@@ -3,18 +3,19 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Download, Filter, X } from "lucide-react";
 import { FilterCombobox } from "@/components/performance/filter-combobox";
+import { HOLIDAY_COUNTRY_LABELS, type HolidayCountry } from "@/types/database";
 
 export function OneOnOnesFilters({
   subjects,
   hosts,
   departments,
-  locations,
+  countries,
   isAdmin,
 }: {
   subjects: Array<{ id: string; label: string }>;
   hosts: Array<{ id: string; label: string }>;
   departments: string[];
-  locations: string[];
+  countries: string[];
   isAdmin: boolean;
 }) {
   const router = useRouter();
@@ -30,7 +31,7 @@ export function OneOnOnesFilters({
   const clear = () => router.push("?");
 
   const hasFilters = Array.from(params.keys()).some((k) =>
-    ["subject", "host", "dept", "location", "from", "to"].includes(k)
+    ["subject", "host", "dept", "country", "from", "to"].includes(k)
   );
 
   const exportUrl = `/api/one-on-ones/export?${params.toString()}`;
@@ -59,12 +60,16 @@ export function OneOnOnesFilters({
             placeholder="Search department…"
           />
         )}
-        {locations.length > 0 && (
+        {countries.length > 0 && (
           <FilterCombobox
-            options={locations.map((l) => ({ value: l, label: l }))}
-            value={params.get("location") ?? ""}
-            onChange={(v) => update("location", v)}
-            placeholder="Search location…"
+            options={countries.map((c) => ({
+              value: c,
+              label:
+                HOLIDAY_COUNTRY_LABELS[c as HolidayCountry] ?? c,
+            }))}
+            value={params.get("country") ?? ""}
+            onChange={(v) => update("country", v)}
+            placeholder="Search country…"
           />
         )}
         <input

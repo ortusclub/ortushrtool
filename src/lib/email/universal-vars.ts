@@ -15,7 +15,6 @@ export const UNIVERSAL_VARIABLES = [
   "email",
   "department",
   "job_title",
-  "location",
   "manager_name",
   "manager_email",
   "app_url",
@@ -30,7 +29,6 @@ type SubjectUser = {
   email?: string | null;
   department?: string | null;
   job_title?: string | null;
-  location?: string | null;
 };
 
 type Manager = {
@@ -57,7 +55,6 @@ export function getUniversalVars(
     email: user?.email || "",
     department: user?.department || "",
     job_title: user?.job_title || "",
-    location: user?.location || "",
     manager_name: manager?.full_name || "",
     manager_email: manager?.email || "",
     app_url:

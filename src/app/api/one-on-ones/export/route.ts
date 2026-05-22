@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasRole, displayName } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
-import type { OneOnOne, User } from "@/types/database";
+import { HOLIDAY_COUNTRY_LABELS, type HolidayCountry, type OneOnOne, type User } from "@/types/database";
 
 function csvCell(v: unknown): string {
   if (v === null || v === undefined) return "";
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   const subject = url.searchParams.get("subject");
   const host = url.searchParams.get("host");
   const dept = url.searchParams.get("dept");
-  const location = url.searchParams.get("location");
+  const country = url.searchParams.get("country");
   const dateFrom = url.searchParams.get("from");
   const dateTo = url.searchParams.get("to");
   const includePrivate = url.searchParams.get("include_private") === "1";
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   const { data: rows } = await query;
   let oneOnOnes = (rows ?? []) as OneOnOne[];
 
-  // Department / location filter — need user records keyed by id.
+  // Department / country filter — need user records keyed by id.
   const userIds = Array.from(
     new Set(
       oneOnOnes.flatMap((o) =>
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     ? await admin
         .from("users")
         .select(
-          "id, full_name, preferred_name, first_name, last_name, email, department, location"
+          "id, full_name, preferred_name, first_name, last_name, email, department, holiday_country"
         )
         .in("id", userIds)
     : { data: [] };
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
       | "last_name"
       | "email"
       | "department"
-      | "location"
+      | "holiday_country"
     >
   >();
   for (const u of (usersData ?? []) as Pick<
@@ -89,7 +89,7 @@ export async function GET(request: Request) {
     | "last_name"
     | "email"
     | "department"
-    | "location"
+    | "holiday_country"
   >[]) {
     userById.set(u.id, u);
   }
@@ -99,9 +99,9 @@ export async function GET(request: Request) {
       (o) => userById.get(o.employee_id)?.department === dept
     );
   }
-  if (location) {
+  if (country) {
     oneOnOnes = oneOnOnes.filter(
-      (o) => userById.get(o.employee_id)?.location === location
+      (o) => userById.get(o.employee_id)?.holiday_country === country
     );
   }
 
@@ -110,7 +110,7 @@ export async function GET(request: Request) {
     "Subject (employee)",
     "Subject email",
     "Subject dept",
-    "Subject location",
+    "Subject country",
     "Host (manager of record)",
     "Other attendees",
     "Agenda",
@@ -138,7 +138,10 @@ export async function GET(request: Request) {
       subjectU ? displayName(subjectU) : "",
       subjectU?.email ?? "",
       subjectU?.department ?? "",
-      subjectU?.location ?? "",
+      subjectU?.holiday_country
+        ? HOLIDAY_COUNTRY_LABELS[subjectU.holiday_country as HolidayCountry] ??
+          subjectU.holiday_country
+        : "",
       hostU ? displayName(hostU) : "",
       others,
       o.agenda ?? "",

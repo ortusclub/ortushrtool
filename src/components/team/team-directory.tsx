@@ -436,13 +436,10 @@ function GridView({ users }: { users: TeamUser[] }) {
                     {user.job_title}
                   </p>
                 )}
-                {(user.department ||
-                  user.location ||
-                  user.holiday_country) && (
+                {(user.department || user.holiday_country) && (
                   <p className="mt-0.5 truncate text-xs text-gray-500">
                     {[
                       user.department,
-                      user.location,
                       HOLIDAY_COUNTRY_LABELS[user.holiday_country],
                     ]
                       .filter(Boolean)

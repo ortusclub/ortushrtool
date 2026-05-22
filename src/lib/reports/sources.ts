@@ -89,7 +89,7 @@ export const SOURCES: SourceDef[] = [
   {
     id: "users",
     label: "Users",
-    description: "Active employees — identity, role, dates, location.",
+    description: "Active employees — identity, role, dates, country.",
     table: "users",
     select: "*",
     orderBy: { column: "full_name", ascending: true },
@@ -103,7 +103,6 @@ export const SOURCES: SourceDef[] = [
       { id: "role", label: "Role", value: (r) => r.role ?? "" },
       { id: "department", label: "Department", value: (r) => r.department ?? "" },
       { id: "job_title", label: "Job Title", value: (r) => r.job_title ?? "" },
-      { id: "location", label: "Location", value: (r) => r.location ?? "" },
       { id: "holiday_country", label: "Country", value: (r) => r.holiday_country ?? "" },
       { id: "timezone", label: "Timezone", value: (r) => r.timezone ?? "" },
       { id: "birthday", label: "Birthday", value: (r) => r.birthday ?? "" },

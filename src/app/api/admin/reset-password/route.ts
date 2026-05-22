@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   const { data: targetUser } = await admin
     .from("users")
     .select(
-      "email, full_name, preferred_name, first_name, last_name, department, job_title, location"
+      "email, full_name, preferred_name, first_name, last_name, department, job_title"
     )
     .eq("id", userId)
     .single();

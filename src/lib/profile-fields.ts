@@ -65,8 +65,6 @@ export function builtInFieldValue(
       );
     case "timezone":
       return user.timezone;
-    case "location":
-      return user.location;
     default:
       return null;
   }
@@ -159,7 +157,7 @@ const company = (raw: string): ParsedValue => {
 export const AUTO_POPULATED_BUILT_IN_HINTS: Record<string, string> = {
   role: "Set in User Management. Shown as a role badge on profiles.",
   location:
-    "Derived from today's schedule (and any approved adjustment). Shown as a badge on profiles.",
+    "Today's working location (Office / Online / Rest) is derived from the schedule (plus any approved adjustment) and shown at the top of the profile. The legacy free-text users.location field is deprecated.",
   is_active:
     "Set in User Management. Shown as an Active/Inactive status on profiles.",
 };
