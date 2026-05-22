@@ -84,7 +84,12 @@ export async function applyBulkImport(
   let rowsUpdated = 0;
   let cellsWritten = 0;
 
-  for (const r of payload.rows) {
+  // Process one CSV row's worth of writes — user_patch + custom field
+  // upserts + multi-row inserts/updates. Stays sequential within a row
+  // so a partial in-flight row isn't half-applied; rows themselves are
+  // processed in parallel chunks below to stay under Vercel's 60s
+  // function ceiling on large imports.
+  const processRow = async (r: BulkImportPayload["rows"][number]) => {
     let wrote = false;
 
     if (r.user_patch && Object.keys(r.user_patch).length > 0) {
@@ -182,6 +187,12 @@ export async function applyBulkImport(
     }
 
     if (wrote) rowsUpdated++;
+  };
+
+  const CONCURRENCY = 10;
+  for (let i = 0; i < payload.rows.length; i += CONCURRENCY) {
+    const chunk = payload.rows.slice(i, i + CONCURRENCY);
+    await Promise.all(chunk.map(processRow));
   }
 
   return { ok: errors.length === 0, rowsUpdated, cellsWritten, errors };
