@@ -173,6 +173,11 @@ export async function POST(request: Request) {
         >;
       }
     | { kind: "multirow"; fieldId: string; subfieldKey: string }
+    // Direct Manager: CSV cell holds the manager's email, server resolves
+    // it to a user UUID after a batched lookup (parse functions in
+    // BUILT_IN_IMPORT_SPECS are pure transformations and can't hit the
+    // DB, so manager_id is handled separately).
+    | { kind: "manager_email" }
     | { kind: "auto_populated" }
     | { kind: "unknown" };
   const plans: ColumnPlan[] = headers.map((h, i) => {
@@ -186,6 +191,9 @@ export async function POST(request: Request) {
     if (builtIn) {
       if (AUTO_POPULATED_BUILT_IN_KEYS.has(builtIn.built_in_key)) {
         return { kind: "auto_populated" };
+      }
+      if (builtIn.built_in_key === "manager_id") {
+        return { kind: "manager_email" };
       }
       const spec = BUILT_IN_IMPORT_SPECS[builtIn.built_in_key];
       if (spec) return { kind: "builtin", column: spec.column, parse: spec.parse };
@@ -203,13 +211,44 @@ export async function POST(request: Request) {
   const emailsInFile = rows
     .map((r) => (r[emailIdx] ?? "").trim().toLowerCase())
     .filter(Boolean);
+  // Also gather any manager emails referenced in Direct Manager columns
+  // so we can resolve them in the same lookup.
+  const managerColIndices: number[] = [];
+  for (let i = 0; i < plans.length; i++) {
+    if (plans[i].kind === "manager_email") managerColIndices.push(i);
+  }
+  const managerEmailsReferenced = new Set<string>();
+  for (const row of rows) {
+    for (const i of managerColIndices) {
+      const e = (row[i] ?? "").trim().toLowerCase();
+      if (e) managerEmailsReferenced.add(e);
+    }
+  }
+  const allEmailsToLookup = [
+    ...new Set([...emailsInFile, ...managerEmailsReferenced]),
+  ];
   const { data: usersByEmail } = await admin
     .from("users")
-    .select("id, email")
-    .in("email", emailsInFile);
+    .select("id, email, role, is_active")
+    .in("email", allEmailsToLookup);
   const userIdByEmail = new Map<string, string>();
-  for (const u of usersByEmail ?? []) {
+  // Mirror UM's manager dropdown filter: active users with manager-like
+  // roles only. Bulk import enforces the same eligibility so a CSV can't
+  // assign a random non-manager as someone's manager.
+  const managerIdByEmail = new Map<string, string>();
+  for (const u of (usersByEmail ?? []) as {
+    id: string;
+    email: string;
+    role: string;
+    is_active: boolean;
+  }[]) {
     userIdByEmail.set(u.email.toLowerCase(), u.id);
+    if (
+      u.is_active &&
+      ["manager", "hr_admin", "super_admin"].includes(u.role)
+    ) {
+      managerIdByEmail.set(u.email.toLowerCase(), u.id);
+    }
   }
 
   // For every multi-row field touched by this import, pre-fetch the
@@ -299,6 +338,16 @@ export async function POST(request: Request) {
         }
         if (parsed.value === null) continue;
         userPatch[plan.column] = parsed.value;
+      } else if (plan.kind === "manager_email") {
+        const mgrEmail = raw.trim().toLowerCase();
+        const mgrId = managerIdByEmail.get(mgrEmail);
+        if (!mgrId) {
+          result.errors.push(
+            `${email} → ${headers[i]}: "${raw}" not found among active manager-eligible users (manager / hr_admin / super_admin)`
+          );
+          continue;
+        }
+        userPatch.manager_id = mgrId;
       }
     }
 
