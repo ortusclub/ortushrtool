@@ -135,26 +135,30 @@ export async function POST(request: Request) {
     }
   }
 
+  // New append-only template: headers for multi-row sub-fields are
+  // "{Field Label} {Sub-field Label}" (no row index). Each CSV row
+  // appends ONE new entry per multi-row field. Existing entries are
+  // never updated by bulk import — that's a UI job.
+  //
+  // TODO(later): if a sub-field is configured as a natural key (e.g.
+  // effective_date on Salary History), match existing rows by that key
+  // and update instead of appending — enabling bulk updates via the
+  // same template shape.
   const multiRowMatch: Array<
-    { fieldId: string; rowIndex: number; subfieldKey: string } | null
+    { fieldId: string; subfieldKey: string } | null
   > = headers.map(() => null);
   for (let i = 0; i < headers.length; i++) {
     if (i === emailIdx) continue;
     const h = headers[i];
     for (const mrf of multiRowFields) {
       const escaped = mrf.label.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-      const re = new RegExp(`^${escaped}\\s+(\\d+)\\s+(.+)$`, "i");
+      const re = new RegExp(`^${escaped}\\s+(.+)$`, "i");
       const m = h.match(re);
       if (!m) continue;
-      const oneBased = parseInt(m[1], 10);
-      const subLabel = m[2].trim().toLowerCase();
+      const subLabel = m[1].trim().toLowerCase();
       const sub = mrf.subfields.find((s) => s.label.toLowerCase() === subLabel);
       if (!sub) continue;
-      multiRowMatch[i] = {
-        fieldId: mrf.id,
-        rowIndex: oneBased - 1,
-        subfieldKey: sub.key,
-      };
+      multiRowMatch[i] = { fieldId: mrf.id, subfieldKey: sub.key };
       break;
     }
   }
@@ -168,7 +172,7 @@ export async function POST(request: Request) {
           typeof BUILT_IN_IMPORT_SPECS["birthday"]["parse"]
         >;
       }
-    | { kind: "multirow"; fieldId: string; rowIndex: number; subfieldKey: string }
+    | { kind: "multirow"; fieldId: string; subfieldKey: string }
     | { kind: "auto_populated" }
     | { kind: "unknown" };
   const plans: ColumnPlan[] = headers.map((h, i) => {
@@ -208,6 +212,41 @@ export async function POST(request: Request) {
     userIdByEmail.set(u.email.toLowerCase(), u.id);
   }
 
+  // For every multi-row field touched by this import, pre-fetch the
+  // current max row_index per (employee, field) so we can assign
+  // next-available indices without a query per CSV row. This keeps the
+  // import inside the function-timeout budget for ~1000-row imports.
+  const multiRowFieldIdsInCsv = new Set<string>();
+  for (const plan of plans) {
+    if (plan.kind === "multirow") multiRowFieldIdsInCsv.add(plan.fieldId);
+  }
+  const userIdsInCsv = [
+    ...new Set(
+      rows
+        .map((r) => userIdByEmail.get((r[emailIdx] ?? "").trim().toLowerCase()))
+        .filter((id): id is string => !!id)
+    ),
+  ];
+  const maxRowIndex = new Map<string, number>();
+  if (multiRowFieldIdsInCsv.size > 0 && userIdsInCsv.length > 0) {
+    const { data: existingRows } = await admin
+      .from("profile_field_value_rows")
+      .select("field_id, employee_id, row_index")
+      .in("field_id", [...multiRowFieldIdsInCsv])
+      .in("employee_id", userIdsInCsv);
+    for (const r of (existingRows ?? []) as {
+      field_id: string;
+      employee_id: string;
+      row_index: number;
+    }[]) {
+      const k = `${r.field_id}|${r.employee_id}`;
+      const existing = maxRowIndex.get(k);
+      if (existing == null || r.row_index > existing) {
+        maxRowIndex.set(k, r.row_index);
+      }
+    }
+  }
+
   const result: Result = {
     rowsProcessed: rows.length,
     rowsUpdated: 0,
@@ -233,6 +272,8 @@ export async function POST(request: Request) {
 
     const userPatch: Record<string, unknown> = {};
     const customWrites: Array<{ field_id: string; value: string }> = [];
+    // One accumulated entry per multi-row field per CSV row. Each becomes
+    // an append (new row_index) on the target employee's data.
     const multiRowAcc = new Map<string, Record<string, string>>();
 
     for (let i = 0; i < headers.length; i++) {
@@ -242,10 +283,9 @@ export async function POST(request: Request) {
       if (raw.trim().length === 0) continue;
 
       if (plan.kind === "multirow") {
-        const key = `${plan.fieldId}|${plan.rowIndex}`;
-        const existing = multiRowAcc.get(key) ?? {};
+        const existing = multiRowAcc.get(plan.fieldId) ?? {};
         existing[plan.subfieldKey] = raw.trim();
-        multiRowAcc.set(key, existing);
+        multiRowAcc.set(plan.fieldId, existing);
         continue;
       }
 
@@ -263,13 +303,11 @@ export async function POST(request: Request) {
     }
 
     const multiRowWrites: BulkImportPayload["rows"][number]["multi_row_writes"] = [];
-    for (const [key, data] of multiRowAcc) {
-      const [fieldId, rowIndexStr] = key.split("|");
-      multiRowWrites.push({
-        field_id: fieldId,
-        row_index: parseInt(rowIndexStr, 10),
-        data,
-      });
+    for (const [fieldId, data] of multiRowAcc) {
+      const k = `${fieldId}|${userId}`;
+      const next = (maxRowIndex.get(k) ?? -1) + 1;
+      maxRowIndex.set(k, next);
+      multiRowWrites.push({ field_id: fieldId, row_index: next, data });
     }
 
     if (
