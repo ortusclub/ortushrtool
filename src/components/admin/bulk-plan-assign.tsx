@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Users, Upload, Check } from "lucide-react";
+import { Users, Upload, Check, Download } from "lucide-react";
 import type { LeavePlan } from "@/types/database";
 import { displayName } from "@/lib/utils";
 
@@ -98,6 +98,20 @@ export function BulkPlanAssign({ plans, users }: Props) {
     setSelectedUsers(new Set());
     setAssigning(false);
     router.refresh();
+  };
+
+  const downloadSample = () => {
+    const samplePlans = plans.length > 0
+      ? [plans[0].name, plans[1]?.name ?? plans[0].name]
+      : ["Year 5 - Base", "Solo Parent"];
+    const csv = `email,plan\njohn@ortusclub.com,${samplePlans[0]}\njane@ortusclub.com,${samplePlans[1]}`;
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "leave-plan-assignments-sample.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -294,6 +308,14 @@ export function BulkPlanAssign({ plans, users }: Props) {
               disabled={csvUploading}
               className="text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100"
             />
+            <button
+              type="button"
+              onClick={downloadSample}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              <Download size={14} />
+              Sample
+            </button>
             {csvUploading && <span className="text-sm text-blue-600">Processing...</span>}
           </div>
 
