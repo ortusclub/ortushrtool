@@ -49,7 +49,7 @@ export default async function OneOnOnesIndexPage({
   const { data: usersData } = await admin
     .from("users")
     .select(
-      "id, full_name, preferred_name, first_name, last_name, email, department, location, is_active"
+      "id, full_name, preferred_name, first_name, last_name, email, department, holiday_country, is_active"
     )
     .eq("is_active", true)
     .order("full_name");
@@ -63,7 +63,7 @@ export default async function OneOnOnesIndexPage({
       | "last_name"
       | "email"
       | "department"
-      | "location"
+      | "holiday_country"
       | "is_active"
     >
   >;
