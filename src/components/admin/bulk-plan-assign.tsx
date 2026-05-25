@@ -101,10 +101,11 @@ export function BulkPlanAssign({ plans, users }: Props) {
   };
 
   const downloadSample = () => {
-    const samplePlans = plans.length > 0
-      ? [plans[0].name, plans[1]?.name ?? plans[0].name]
-      : ["Year 5 - Base", "Solo Parent"];
-    const csv = `email,plan\njohn@ortusclub.com,${samplePlans[0]}\njane@ortusclub.com,${samplePlans[1]}`;
+    const csv =
+      `email,plan\n` +
+      `HINT:,Plan name must match an existing plan exactly (e.g. Year 5 - Base)\n` +
+      `john@ortusclub.com,Year 5 - Base\n` +
+      `jane@ortusclub.com,Solo Parent`;
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -158,6 +159,7 @@ export function BulkPlanAssign({ plans, users }: Props) {
       const planName = cols[planIdx]?.toLowerCase();
 
       if (!email || !planName) continue;
+      if (email.startsWith("hint")) continue;
 
       const userId = userByEmail.get(email);
       const planId = planByName.get(planName);
