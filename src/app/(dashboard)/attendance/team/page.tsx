@@ -8,16 +8,15 @@ export default async function TeamAttendancePage() {
 
   const { data: rawReports } = await supabase
     .from("users")
-    .select("id, full_name, preferred_name, first_name, last_name, email, timezone, holiday_country, desktime_url, job_title, manager_id, manager:users!users_manager_id_fkey(id, full_name, preferred_name, first_name, last_name)")
+    .select("id, full_name, preferred_name, first_name, last_name, email, timezone, holiday_country, desktime_url, job_title, manager_id")
     .eq("manager_id", user.id)
     .eq("is_active", true)
     .not("desktime_employee_id", "is", null)
     .order("full_name");
 
-  const reports = (rawReports ?? []).map((u) => ({
-    ...u,
-    manager: Array.isArray(u.manager) ? (u.manager[0] ?? null) : u.manager,
-  }));
+  // All reports share this manager (the viewer); the Manager column is
+  // hidden on this view anyway, so don't bother fetching a lookup.
+  const reports = (rawReports ?? []).map((u) => ({ ...u, manager: null }));
 
   return (
     <div className="space-y-6">
