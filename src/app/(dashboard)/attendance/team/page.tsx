@@ -6,13 +6,18 @@ export default async function TeamAttendancePage() {
   const user = await requireRole("manager");
   const supabase = await createClient();
 
-  const { data: reports } = await supabase
+  const { data: rawReports } = await supabase
     .from("users")
-    .select("id, full_name, preferred_name, first_name, last_name, email, timezone, holiday_country, desktime_url")
+    .select("id, full_name, preferred_name, first_name, last_name, email, timezone, holiday_country, desktime_url, job_title, manager_id, manager:users!users_manager_id_fkey(id, full_name, preferred_name, first_name, last_name)")
     .eq("manager_id", user.id)
     .eq("is_active", true)
     .not("desktime_employee_id", "is", null)
     .order("full_name");
+
+  const reports = (rawReports ?? []).map((u) => ({
+    ...u,
+    manager: Array.isArray(u.manager) ? (u.manager[0] ?? null) : u.manager,
+  }));
 
   return (
     <div className="space-y-6">
@@ -23,7 +28,7 @@ export default async function TeamAttendancePage() {
           members)
         </p>
       </div>
-      <AllAttendanceTable users={reports ?? []} employeePicker="dropdown" />
+      <AllAttendanceTable users={reports} employeePicker="dropdown" />
     </div>
   );
 }

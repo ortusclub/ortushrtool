@@ -20,6 +20,14 @@ interface UserRow {
   timezone: string;
   holiday_country: HolidayCountry;
   desktime_url: string | null;
+  job_title: string | null;
+  manager: {
+    id: string;
+    full_name: string;
+    preferred_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+  } | null;
 }
 
 interface AttendanceLog {
@@ -691,6 +699,8 @@ export function AllAttendanceTable({
     const headers = [
       "Employee",
       "Email",
+      "Job Title",
+      ...(employeePicker !== "dropdown" ? ["Manager"] : []),
       ...(isSingleDate ? [] : ["Date"]),
       "Country",
       "Working Location",
@@ -724,7 +734,11 @@ export function AllAttendanceTable({
       const cells: (string | number)[] = [
         user.full_name || user.email.split("@")[0],
         user.email,
+        user.job_title ?? "",
       ];
+      if (employeePicker !== "dropdown") {
+        cells.push(user.manager ? displayName(user.manager) : "");
+      }
       if (!isSingleDate) cells.push(date);
       const wasInOffice = biometricPresence.has(`${user.id}|${date}`);
       const hadActivity = Boolean(log?.clock_in || log?.clock_out);
@@ -918,6 +932,10 @@ export function AllAttendanceTable({
                   <span className="align-middle">Preferred Name</span>
                   <SortButton label="Preferred Name" active={sortDir("name")} onClick={() => toggleSort("name")} />
                 </th>
+                <th className="px-4 py-3 font-medium text-gray-600">Job Title</th>
+                {employeePicker !== "dropdown" && (
+                  <th className="px-4 py-3 font-medium text-gray-600">Manager</th>
+                )}
                 <th className="px-4 py-3 font-medium text-gray-600">DeskTime URL</th>
                 {!isSingleDate && (
                   <th className="px-4 py-3 font-medium text-gray-600">
@@ -1001,6 +1019,21 @@ export function AllAttendanceTable({
                         name={user.preferred_name || user.first_name || user.full_name.split(/\s+/)[0] || user.email.split("@")[0]}
                       />
                     </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">
+                      {user.job_title || <span className="text-gray-400">-</span>}
+                    </td>
+                    {employeePicker !== "dropdown" && (
+                      <td className="px-4 py-3 text-gray-600 text-xs">
+                        {user.manager ? (
+                          <UserNameLink
+                            userId={user.manager.id}
+                            name={displayName(user.manager)}
+                          />
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       {user.desktime_url ? (
                         <a

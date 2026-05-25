@@ -9,12 +9,19 @@ export default async function AllAttendancePage() {
   await requireRole("hr_admin");
   const supabase = await createClient();
 
-  const { data: users } = await supabase
+  const { data: rawUsers } = await supabase
     .from("users")
-    .select("id, full_name, preferred_name, first_name, last_name, email, timezone, holiday_country, desktime_url")
+    .select("id, full_name, preferred_name, first_name, last_name, email, timezone, holiday_country, desktime_url, job_title, manager_id, manager:users!users_manager_id_fkey(id, full_name, preferred_name, first_name, last_name)")
     .eq("is_active", true)
     .not("desktime_employee_id", "is", null)
     .order("full_name");
+
+  // Supabase's type inference treats embedded relations as arrays even when
+  // the FK is to-one; flatten to a single manager object (or null).
+  const users = (rawUsers ?? []).map((u) => ({
+    ...u,
+    manager: Array.isArray(u.manager) ? (u.manager[0] ?? null) : u.manager,
+  }));
 
   return (
     <div className="space-y-6">
@@ -46,7 +53,7 @@ export default async function AllAttendancePage() {
         </div>
       </details>
 
-      <AllAttendanceTable users={users ?? []} />
+      <AllAttendanceTable users={users} />
     </div>
   );
 }
