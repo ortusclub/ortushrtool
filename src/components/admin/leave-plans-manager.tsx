@@ -37,6 +37,8 @@ export function LeavePlansManager({
     Object.fromEntries(ALL_LEAVE_TYPE_KEYS.map((k) => [k, 0]))
   );
   const [editAllocations, setEditAllocations] = useState<Record<string, number>>({});
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const [editGrantType, setEditGrantType] = useState<GrantType>("custom");
   const [editRenewalMonth, setEditRenewalMonth] = useState(1);
   const [editRenewalDay, setEditRenewalDay] = useState(1);
@@ -110,19 +112,29 @@ export function LeavePlansManager({
       full[k] = current[k] ?? 0;
     }
     setEditAllocations(full);
+    setEditName(plan.name);
+    setEditDescription(plan.description ?? "");
     setEditGrantType(plan.grant_type);
     setEditRenewalMonth(plan.renewal_month ?? 1);
     setEditRenewalDay(plan.renewal_day ?? 1);
   };
 
   const saveEdit = async (planId: string) => {
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      setMessage("Plan name is required");
+      return;
+    }
     setSaving(true);
+    setMessage("");
     const supabase = createClient();
 
-    // Update plan-level settings (grant type + renewal date).
+    // Update plan-level settings (name, description, grant type, renewal date).
     const { data: updatedPlan, error: planError } = await supabase
       .from("leave_plans")
       .update({
+        name: trimmedName,
+        description: editDescription.trim() || null,
         grant_type: editGrantType,
         renewal_month: editRenewalMonth,
         renewal_day: editRenewalDay,
@@ -432,6 +444,26 @@ export function LeavePlansManager({
                 <div className="border-t border-gray-100 p-6">
                   {isEditing && (
                     <div className="mb-6 space-y-4 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Plan Name</label>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Description (optional)</label>
+                          <textarea
+                            rows={2}
+                            value={editDescription}
+                            onChange={(e) => setEditDescription(e.target.value)}
+                            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Grant On</label>
                         <p className="text-xs text-gray-500 mb-2">When leave credits are granted each year</p>
