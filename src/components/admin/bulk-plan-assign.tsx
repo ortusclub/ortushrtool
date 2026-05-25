@@ -34,7 +34,9 @@ export function BulkPlanAssign({ plans, users }: Props) {
   const [message, setMessage] = useState("");
 
   // CSV state
-  const [csvMessage, setCsvMessage] = useState("");
+  const [csvSummary, setCsvSummary] = useState("");
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [csvIsError, setCsvIsError] = useState(false);
   const [csvUploading, setCsvUploading] = useState(false);
 
   const filteredUsers = useMemo(() => {
@@ -120,83 +122,57 @@ export function BulkPlanAssign({ plans, users }: Props) {
     if (!file) return;
 
     setCsvUploading(true);
-    setCsvMessage("");
+    setCsvSummary("");
+    setCsvErrors([]);
+    setCsvIsError(false);
 
-    const text = await file.text();
-    const lines = text.split("\n").map((l) => l.trim()).filter((l) => l);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
 
-    if (lines.length < 2) {
-      setCsvMessage("CSV must have a header row and at least one data row.");
+      const response = await fetch("/api/admin/import-plan-assignments", {
+        method: "POST",
+        body: formData,
+      });
+
+      const text = await response.text();
+      let data: {
+        assigned?: number;
+        skipped?: number;
+        duplicates_skipped?: number;
+        errors?: string[];
+        error?: string;
+      };
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`Server error (${response.status}): ${text.slice(0, 200)}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || "Import failed");
+      }
+
+      const assigned = data.assigned ?? 0;
+      const dup = data.duplicates_skipped ?? 0;
+      const skipped = data.skipped ?? 0;
+      const errors = data.errors ?? [];
+
+      let summary = `Assigned ${assigned} plan(s)`;
+      if (dup > 0) summary += `, ${dup} already assigned`;
+      if (skipped > 0) summary += `, ${skipped} skipped`;
+      setCsvSummary(summary + ".");
+      setCsvErrors(errors);
+      setCsvIsError(false);
+    } catch (err) {
+      setCsvSummary(`Error: ${err instanceof Error ? err.message : "Import failed"}`);
+      setCsvErrors([]);
+      setCsvIsError(true);
+    } finally {
       setCsvUploading(false);
-      return;
+      if (fileRef.current) fileRef.current.value = "";
+      router.refresh();
     }
-
-    // Parse header
-    const header = lines[0].toLowerCase().split(",").map((h) => h.trim());
-    const emailIdx = header.findIndex((h) => h === "email");
-    const planIdx = header.findIndex((h) => h === "plan" || h === "plan_name" || h === "leave_plan");
-
-    if (emailIdx === -1 || planIdx === -1) {
-      setCsvMessage("CSV must have 'email' and 'plan' (or 'plan_name') columns.");
-      setCsvUploading(false);
-      return;
-    }
-
-    // Build lookups
-    const userByEmail = new Map(users.map((u) => [u.email.toLowerCase(), u.id]));
-    const planByName = new Map(plans.map((p) => [p.name.toLowerCase(), p.id]));
-
-    const supabase = createClient();
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-
-    let assigned = 0;
-    let skipped = 0;
-    const errors: string[] = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(",").map((c) => c.trim().replace(/^["']|["']$/g, ""));
-      const email = cols[emailIdx]?.toLowerCase();
-      const planName = cols[planIdx]?.toLowerCase();
-
-      if (!email || !planName) continue;
-      if (email.startsWith("hint")) continue;
-
-      const userId = userByEmail.get(email);
-      const planId = planByName.get(planName);
-
-      if (!userId) {
-        errors.push(`Row ${i + 1}: Unknown email "${cols[emailIdx]}"`);
-        continue;
-      }
-      if (!planId) {
-        errors.push(`Row ${i + 1}: Unknown plan "${cols[planIdx]}"`);
-        continue;
-      }
-
-      const { error } = await supabase
-        .from("employee_leave_plans")
-        .insert({
-          employee_id: userId,
-          plan_id: planId,
-          assigned_by: authUser?.id ?? null,
-        });
-
-      if (error) {
-        skipped++;
-      } else {
-        assigned++;
-      }
-    }
-
-    let msg = `Assigned ${assigned} plan(s)`;
-    if (skipped > 0) msg += `, ${skipped} already assigned`;
-    if (errors.length > 0) msg += `. Errors: ${errors.slice(0, 3).join("; ")}${errors.length > 3 ? ` and ${errors.length - 3} more` : ""}`;
-    setCsvMessage(msg);
-    setCsvUploading(false);
-
-    // Reset file input
-    if (fileRef.current) fileRef.current.value = "";
-    router.refresh();
   };
 
   return (
@@ -321,9 +297,16 @@ export function BulkPlanAssign({ plans, users }: Props) {
             {csvUploading && <span className="text-sm text-blue-600">Processing...</span>}
           </div>
 
-          {csvMessage && (
-            <div className={`rounded-lg p-3 text-sm ${csvMessage.includes("Error") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
-              {csvMessage}
+          {csvSummary && (
+            <div className={`rounded-lg p-3 text-sm ${csvIsError ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+              <p>{csvSummary}</p>
+              {csvErrors.length > 0 && (
+                <div className="mt-2 space-y-1 text-red-600">
+                  {csvErrors.map((err, i) => (
+                    <p key={i}>{err}</p>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
