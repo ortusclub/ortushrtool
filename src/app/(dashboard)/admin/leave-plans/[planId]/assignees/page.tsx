@@ -42,24 +42,23 @@ export default async function PlanAssigneesPage({
     );
   }
 
-  type RawAssignment = {
-    user:
-      | Array<{
-          id: string;
-          full_name: string;
-          preferred_name: string | null;
-          first_name: string | null;
-          last_name: string | null;
-          email: string;
-          department: string | null;
-          avatar_url: string | null;
-          is_active: boolean;
-        }>
-      | null;
+  type JoinedUser = {
+    id: string;
+    full_name: string;
+    preferred_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string;
+    department: string | null;
+    avatar_url: string | null;
+    is_active: boolean;
   };
+  // Supabase has returned this embed as both a single object and as a
+  // single-element array depending on version / inference; tolerate both.
+  type RawAssignment = { user: JoinedUser | JoinedUser[] | null };
   const users = ((assignments ?? []) as unknown as RawAssignment[])
-    .map((a) => (Array.isArray(a.user) && a.user.length > 0 ? a.user[0] : null))
-    .filter((u): u is NonNullable<typeof u> => u !== null)
+    .map((a) => (Array.isArray(a.user) ? (a.user[0] ?? null) : a.user))
+    .filter((u): u is JoinedUser => u !== null)
     .sort((a, b) => displayName(a).localeCompare(displayName(b)));
 
   const active = users.filter((u) => u.is_active);
