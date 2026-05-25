@@ -80,5 +80,7 @@ export function prorateLeave(
   const months = differenceInMonths(nextRenewal, hire);
   if (months <= 0) return 0;
 
-  return Math.round(((months / 12) * annualDays) * 100) / 100;
+  // Snap to nearest half-day — the smallest leave-duration unit the system
+  // supports. Standard half-up rounding: 1.25 → 1.5, 1.24 → 1.0.
+  return Math.round(((months / 12) * annualDays) * 2) / 2;
 }
