@@ -12,16 +12,38 @@ export default function SetPasswordPage() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    // Supabase client auto-detects the recovery token from the URL hash
-    // and establishes the session. We wait for that before showing the form.
     const supabase = createClient();
+
+    const url = new URL(window.location.href);
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+
+    const urlError =
+      url.searchParams.get("error_description") ||
+      hashParams.get("error_description");
+    if (urlError) {
+      setError(decodeURIComponent(urlError.replace(/\+/g, " ")));
+      return;
+    }
+
+    const code = url.searchParams.get("code");
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
+        if (exchangeError) {
+          setError(exchangeError.message);
+          return;
+        }
+        window.history.replaceState({}, "", url.pathname);
+        setReady(true);
+      });
+      return;
+    }
+
     supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
         setReady(true);
       }
     });
 
-    // Also check if already signed in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true);
     });
@@ -73,6 +95,15 @@ export default function SetPasswordPage() {
         {success ? (
           <div className="rounded-md bg-green-50 p-4 text-sm text-green-700">
             Password set successfully! Redirecting...
+          </div>
+        ) : !ready && error ? (
+          <div className="space-y-3">
+            <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+            <p className="text-center text-sm text-gray-600">
+              Ask an administrator to send you a new password reset link.
+            </p>
           </div>
         ) : !ready ? (
           <div className="text-center text-sm text-gray-500">
