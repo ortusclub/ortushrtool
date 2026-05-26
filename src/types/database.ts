@@ -443,6 +443,19 @@ export interface CtoGrant {
   created_at: string;
 }
 
+export interface LeaveCredit {
+  id: string;
+  employee_id: string;
+  leave_type: string;
+  days: number;
+  granted_at: string;        // YYYY-MM-DD
+  expires_at: string | null; // YYYY-MM-DD or null = never expires
+  granted_by: string | null;
+  source: string;            // 'manual' for admin-issued
+  notes: string | null;
+  created_at: string;
+}
+
 export type IncidentType =
   | "harassment"
   | "safety"

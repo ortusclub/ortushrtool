@@ -38,6 +38,7 @@ export async function computeLeaveBalances(
     { data: allocations },
     { data: leaves },
     { data: ctoGrants },
+    { data: leaveCredits },
   ] = await Promise.all([
     admin
       .from("users")
@@ -57,6 +58,12 @@ export async function computeLeaveBalances(
     admin
       .from("cto_grants")
       .select("employee_id, days, granted_at"),
+    // Active manual leave credits (admin-issued, any leave type).
+    admin
+      .from("leave_credits")
+      .select("employee_id, leave_type, days, granted_at, expires_at")
+      .lte("granted_at", today)
+      .or(`expires_at.is.null,expires_at.gte.${today}`),
   ]);
 
   // All public holidays, grouped by country → set of YYYY-MM-DD covering
@@ -94,6 +101,22 @@ export async function computeLeaveBalances(
     }
   }
 
+  // Group active manual credits by (employee_id, leave_type), tracking the
+  // earliest grant so we can collapse renewalStart later.
+  const creditsByEmp = new Map<string, Map<string, { days: number; earliest: string }>>();
+  for (const c of (leaveCredits ?? []) as { employee_id: string; leave_type: string; days: number; granted_at: string }[]) {
+    const grantDate = c.granted_at.slice(0, 10);
+    if (!creditsByEmp.has(c.employee_id)) creditsByEmp.set(c.employee_id, new Map());
+    const byType = creditsByEmp.get(c.employee_id)!;
+    const existing = byType.get(c.leave_type);
+    if (existing) {
+      existing.days += Number(c.days);
+      if (grantDate < existing.earliest) existing.earliest = grantDate;
+    } else {
+      byType.set(c.leave_type, { days: Number(c.days), earliest: grantDate });
+    }
+  }
+
   const planById = new Map<string, any>(
     (plans ?? []).map((p) => [p.id, p])
   );
@@ -118,7 +141,8 @@ export async function computeLeaveBalances(
   for (const emp of employees ?? []) {
     const empPlans = planIdsByEmp.get(emp.id) ?? [];
     const earned = earnedCtoByEmp.get(emp.id);
-    if (empPlans.length === 0 && !earned) continue;
+    const empCredits = creditsByEmp.get(emp.id);
+    if (empPlans.length === 0 && !earned && !empCredits) continue;
 
     // One bucket per leave_type, aggregated across all the employee's plans
     type Bucket = {
@@ -184,6 +208,25 @@ export async function computeLeaveBalances(
           plans: new Set(["Earned CTO"]),
           renewalStart: earned.earliest,
         });
+      }
+    }
+
+    // Fold in active manual credits. Same shape as the CTO fold-in: add days
+    // to allocated and collapse renewalStart to the earliest grant.
+    if (empCredits) {
+      for (const [leaveType, c] of empCredits) {
+        const existing = buckets.get(leaveType);
+        if (existing) {
+          existing.allocated += c.days;
+          existing.plans.add("Manual credit");
+          if (c.earliest < existing.renewalStart) existing.renewalStart = c.earliest;
+        } else {
+          buckets.set(leaveType, {
+            allocated: c.days,
+            plans: new Set(["Manual credit"]),
+            renewalStart: c.earliest,
+          });
+        }
       }
     }
 

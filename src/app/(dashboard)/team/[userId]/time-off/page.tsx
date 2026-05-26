@@ -59,11 +59,12 @@ export default async function TeamMemberTimeOffTab({
 
   const today = new Date().toISOString().slice(0, 10);
 
-  // Plan assignments + plan details + allocations + leave history
+  // Plan assignments + plan details + allocations + leave history + credits
   const [
     { data: assignments },
     { data: leaves },
     { data: countryHolidays },
+    { data: leaveCredits },
   ] = await Promise.all([
     supabase
       .from("employee_leave_plans")
@@ -82,6 +83,13 @@ export default async function TeamMemberTimeOffTab({
       .from("holidays")
       .select("date, is_recurring")
       .eq("country", user.holiday_country),
+    // Active manual leave credits (admin-issued).
+    supabase
+      .from("leave_credits")
+      .select("leave_type, days, granted_at, expires_at")
+      .eq("employee_id", userId)
+      .lte("granted_at", today)
+      .or(`expires_at.is.null,expires_at.gte.${today}`),
   ]);
 
   const todayYear = parseInt(today.slice(0, 4));
@@ -173,6 +181,25 @@ export default async function TeamMemberTimeOffTab({
           renewalStart,
         });
       }
+    }
+  }
+
+  // Fold in manual leave credits. Each active credit adds to allocated for
+  // its leave_type and collapses renewalStart to the earliest grant date so
+  // used leaves on or after the grant count.
+  for (const c of leaveCredits ?? []) {
+    const grantDate = c.granted_at.slice(0, 10);
+    const existing = buckets.get(c.leave_type);
+    if (existing) {
+      existing.allocated += Number(c.days);
+      existing.plans.add("Manual credit");
+      if (grantDate < existing.renewalStart) existing.renewalStart = grantDate;
+    } else {
+      buckets.set(c.leave_type, {
+        allocated: Number(c.days),
+        plans: new Set(["Manual credit"]),
+        renewalStart: grantDate,
+      });
     }
   }
 

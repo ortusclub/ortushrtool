@@ -84,6 +84,7 @@ export default async function DashboardPage() {
     myActivatedLeaveTypes,
     myAssignedPlans,
     myCtoGrants,
+    myLeaveCredits,
   ] = await Promise.all([
     // Pending schedule adjustments — scope: admins see org-wide; managers
     // see their direct reports; employees see their own.
@@ -191,6 +192,15 @@ export default async function DashboardPage() {
       .from("cto_grants")
       .select("days, granted_at")
       .eq("employee_id", user.id),
+
+    // My manual leave credits (admin-issued, any leave type). Filtered to
+    // "active" credits — already granted and not yet expired.
+    supabase
+      .from("leave_credits")
+      .select("leave_type, days, granted_at, expires_at")
+      .eq("employee_id", user.id)
+      .lte("granted_at", today)
+      .or(`expires_at.is.null,expires_at.gte.${today}`),
   ]);
 
   // Fetch all users with date fields for upcoming events
@@ -269,7 +279,10 @@ export default async function DashboardPage() {
   const earnedCtoEarliest = (myCtoGrants.data ?? [])
     .map((g) => g.granted_at.slice(0, 10))
     .sort()[0];
-  const hasPlan = assignedPlanIds.length > 0 || earnedCtoDays > 0;
+  const hasPlan =
+    assignedPlanIds.length > 0 ||
+    earnedCtoDays > 0 ||
+    (myLeaveCredits.data?.length ?? 0) > 0;
 
   const planAllocations: Record<string, number> = {};
   // Track the renewal start date per leave type (earliest renewal across plans)
@@ -327,6 +340,21 @@ export default async function DashboardPage() {
       (!leaveTypeRenewalStart.cto || earnedCtoEarliest < leaveTypeRenewalStart.cto)
     ) {
       leaveTypeRenewalStart.cto = earnedCtoEarliest;
+    }
+  }
+
+  // Fold in manual leave credits (admin-issued, any leave type). Only active
+  // ones are returned by the query, so we can sum unconditionally. Mirrors
+  // the CTO fold-in: collapses the renewal start to the earliest grant date
+  // so used leaves on or after the grant count.
+  for (const c of myLeaveCredits.data ?? []) {
+    planAllocations[c.leave_type] = (planAllocations[c.leave_type] ?? 0) + Number(c.days);
+    const grantDate = c.granted_at.slice(0, 10);
+    if (
+      !leaveTypeRenewalStart[c.leave_type] ||
+      grantDate < leaveTypeRenewalStart[c.leave_type]
+    ) {
+      leaveTypeRenewalStart[c.leave_type] = grantDate;
     }
   }
 
