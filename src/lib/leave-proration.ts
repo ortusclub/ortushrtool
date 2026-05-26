@@ -1,4 +1,4 @@
-import { differenceInMonths, parseISO } from "date-fns";
+import { differenceInDays, differenceInMonths, parseISO } from "date-fns";
 import type { GrantType } from "@/types/database";
 
 /**
@@ -45,10 +45,14 @@ export function getRenewalStart(
 /**
  * Prorates leave entitlement for new hires.
  *
- * - "custom" / "hire_date": prorates based on completed months from hire
- *   to next renewal, if the employee started during the current cycle.
+ * - "custom" / "hire_date": prorates based on remaining days in the cycle
+ *   from hire to the next renewal, divided by the cycle length.
  * - "anniversary": returns 0 if the employee hasn't reached their 1st
  *   anniversary yet, full allocation otherwise (no proration).
+ *
+ * Day-based proration matches the granularity admins expect from other
+ * HRIS tools — a mid-month hire gets credit for the partial month they
+ * actually worked, instead of losing it to month-floor rounding.
  */
 export function prorateLeave(
   annualDays: number,
@@ -77,10 +81,11 @@ export function prorateLeave(
   const nextRenewalYear = renewalStartDate.getFullYear() + 1;
   const nextRenewal = new Date(nextRenewalYear, renewalMonth - 1, renewalDay);
 
-  const months = differenceInMonths(nextRenewal, hire);
-  if (months <= 0) return 0;
+  const cycleLength = differenceInDays(nextRenewal, renewalStartDate);
+  const daysRemaining = differenceInDays(nextRenewal, hire);
+  if (daysRemaining <= 0 || cycleLength <= 0) return 0;
 
   // Snap to nearest half-day — the smallest leave-duration unit the system
   // supports. Standard half-up rounding: 1.25 → 1.5, 1.24 → 1.0.
-  return Math.round(((months / 12) * annualDays) * 2) / 2;
+  return Math.round(((daysRemaining / cycleLength) * annualDays) * 2) / 2;
 }
