@@ -110,46 +110,64 @@ export default function LeaveRequestPage() {
       setUsedDays(used);
 
       const planIds = (assignedPlans ?? []).map((p) => p.plan_id);
-      if (planIds.length > 0) {
-        setHasPlan(true);
+      const now = new Date();
+      const today = now.toISOString().split("T")[0];
 
-        // Fetch allocations and plan renewal info together
-        const [{ data: allocs }, { data: plans }, { data: profile }] = await Promise.all([
-          supabase
-            .from("leave_plan_allocations")
-            .select("plan_id, leave_type, days_per_year")
-            .in("plan_id", planIds),
-          supabase
-            .from("leave_plans")
-            .select("id, grant_type, renewal_month, renewal_day")
-            .in("id", planIds),
-          supabase
-            .from("users")
-            .select("hire_date")
-            .eq("id", user.id)
-            .maybeSingle(),
-        ]);
+      // Fetch plan-side and credit-side allocations in parallel. Either alone
+      // is enough to give the employee a non-zero balance.
+      const [{ data: profile }, { data: activeCredits }, planSide] = await Promise.all([
+        supabase
+          .from("users")
+          .select("hire_date")
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("leave_credits")
+          .select("leave_type, days, granted_at, expires_at")
+          .eq("employee_id", user.id)
+          .lte("granted_at", today)
+          .or(`expires_at.is.null,expires_at.gte.${today}`),
+        planIds.length > 0
+          ? Promise.all([
+              supabase
+                .from("leave_plan_allocations")
+                .select("plan_id, leave_type, days_per_year")
+                .in("plan_id", planIds),
+              supabase
+                .from("leave_plans")
+                .select("id, grant_type, renewal_month, renewal_day")
+                .in("id", planIds),
+            ])
+          : Promise.resolve([{ data: [] }, { data: [] }] as const),
+      ]);
 
-        const hireDate = profile?.hire_date ?? null;
-        const now = new Date();
-        const today = now.toISOString().split("T")[0];
+      const hireDate = profile?.hire_date ?? null;
+      const allocMap: Record<string, number> = {};
 
-        const allocMap: Record<string, number> = {};
-        for (const a of allocs ?? []) {
-          const plan = (plans ?? []).find((p) => p.id === a.plan_id);
-          const grantType = (plan?.grant_type ?? "custom") as GrantType;
-          const { renewalStart, month, day } = getRenewalStart(
-            grantType,
-            plan?.renewal_month ?? 1,
-            plan?.renewal_day ?? 1,
-            hireDate,
-            today
-          );
-          const prorated = prorateLeave(a.days_per_year, hireDate, renewalStart, month, day, grantType);
-          allocMap[a.leave_type] = (allocMap[a.leave_type] ?? 0) + prorated;
-        }
-        setPlanAllocations(allocMap);
+      const [{ data: allocs }, { data: plans }] = planSide as [{ data: Array<{ plan_id: string; leave_type: string; days_per_year: number }> }, { data: Array<{ id: string; grant_type: GrantType; renewal_month: number; renewal_day: number }> }];
+      for (const a of allocs ?? []) {
+        const plan = (plans ?? []).find((p) => p.id === a.plan_id);
+        const grantType = (plan?.grant_type ?? "custom") as GrantType;
+        const { renewalStart, month, day } = getRenewalStart(
+          grantType,
+          plan?.renewal_month ?? 1,
+          plan?.renewal_day ?? 1,
+          hireDate,
+          today
+        );
+        const prorated = prorateLeave(a.days_per_year, hireDate, renewalStart, month, day, grantType);
+        allocMap[a.leave_type] = (allocMap[a.leave_type] ?? 0) + prorated;
       }
+
+      // Fold in active manual leave credits — admin-issued bonus allocation.
+      for (const c of activeCredits ?? []) {
+        allocMap[c.leave_type] = (allocMap[c.leave_type] ?? 0) + Number(c.days);
+      }
+
+      const hasAnyBalance =
+        planIds.length > 0 || (activeCredits?.length ?? 0) > 0;
+      if (hasAnyBalance) setHasPlan(true);
+      setPlanAllocations(allocMap);
 
       setLoadingTypes(false);
     }
