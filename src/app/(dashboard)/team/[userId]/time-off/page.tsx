@@ -185,20 +185,19 @@ export default async function TeamMemberTimeOffTab({
   }
 
   // Fold in manual leave credits. Each active credit adds to allocated for
-  // its leave_type and collapses renewalStart to the earliest grant date so
-  // used leaves on or after the grant count.
+  // its leave_type. Cycle scoping (renewalStart) stays with the plan; if a
+  // leave_type has no plan, we fall back to today's start-of-year so the
+  // credit covers leaves taken this calendar year.
   for (const c of leaveCredits ?? []) {
-    const grantDate = c.granted_at.slice(0, 10);
     const existing = buckets.get(c.leave_type);
     if (existing) {
       existing.allocated += Number(c.days);
       existing.plans.add("Manual credit");
-      if (grantDate < existing.renewalStart) existing.renewalStart = grantDate;
     } else {
       buckets.set(c.leave_type, {
         allocated: Number(c.days),
         plans: new Set(["Manual credit"]),
-        renewalStart: grantDate,
+        renewalStart: `${todayYear}-01-01`,
       });
     }
   }

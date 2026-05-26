@@ -344,18 +344,15 @@ export default async function DashboardPage() {
   }
 
   // Fold in manual leave credits (admin-issued, any leave type). Only active
-  // ones are returned by the query, so we can sum unconditionally. Mirrors
-  // the CTO fold-in: collapses the renewal start to the earliest grant date
-  // so used leaves on or after the grant count.
+  // credits are returned by the query, so we can sum unconditionally.
+  //
+  // Unlike CTO grants, we do NOT touch leaveTypeRenewalStart here — a credit
+  // is just an additive bonus to the active allocated pool, while cycle
+  // scoping stays with the plan (or yearStart default). This prevents an
+  // unexpiring credit from yanking next year's renewalStart back into the
+  // prior cycle and re-counting old leaves.
   for (const c of myLeaveCredits.data ?? []) {
     planAllocations[c.leave_type] = (planAllocations[c.leave_type] ?? 0) + Number(c.days);
-    const grantDate = c.granted_at.slice(0, 10);
-    if (
-      !leaveTypeRenewalStart[c.leave_type] ||
-      grantDate < leaveTypeRenewalStart[c.leave_type]
-    ) {
-      leaveTypeRenewalStart[c.leave_type] = grantDate;
-    }
   }
 
   // Count used days per type, respecting per-type renewal dates. Public

@@ -211,20 +211,21 @@ export async function computeLeaveBalances(
       }
     }
 
-    // Fold in active manual credits. Same shape as the CTO fold-in: add days
-    // to allocated and collapse renewalStart to the earliest grant.
+    // Fold in active manual credits. Unlike CTO, we don't pull renewalStart
+    // back — credits just add to allocated, and cycle scoping stays with the
+    // plan (or yearStart default for credit-only leave types).
     if (empCredits) {
+      const yearStart = `${today.slice(0, 4)}-01-01`;
       for (const [leaveType, c] of empCredits) {
         const existing = buckets.get(leaveType);
         if (existing) {
           existing.allocated += c.days;
           existing.plans.add("Manual credit");
-          if (c.earliest < existing.renewalStart) existing.renewalStart = c.earliest;
         } else {
           buckets.set(leaveType, {
             allocated: c.days,
             plans: new Set(["Manual credit"]),
-            renewalStart: c.earliest,
+            renewalStart: yearStart,
           });
         }
       }
