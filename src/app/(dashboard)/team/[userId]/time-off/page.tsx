@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { hasRole } from "@/lib/utils";
 import { LEAVE_TYPE_LABELS, UNIVERSAL_LEAVE_TYPES } from "@/lib/constants";
 import { getRenewalStart, prorateLeave } from "@/lib/leave-proration";
+import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
 import type { GrantType, LeaveRequest } from "@/types/database";
 import { format, parseISO } from "date-fns";
 import { Palmtree, Plane, CalendarDays } from "lucide-react";
@@ -33,18 +34,6 @@ type LeaveLite = Pick<
   } | null;
 };
 
-function countWeekdays(start: string, end: string): number {
-  let count = 0;
-  const s = new Date(start + "T00:00:00");
-  const e = new Date(end + "T00:00:00");
-  const cur = new Date(s);
-  while (cur <= e) {
-    const dow = cur.getDay();
-    if (dow >= 1 && dow <= 5) count++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return count;
-}
 
 export default async function TeamMemberTimeOffTab({
   params,
@@ -59,7 +48,7 @@ export default async function TeamMemberTimeOffTab({
 
   const { data: user } = await supabase
     .from("users")
-    .select("id, full_name, email, hire_date, manager_id")
+    .select("id, full_name, email, hire_date, manager_id, holiday_country")
     .eq("id", userId)
     .single();
   if (!user) return null;
@@ -74,6 +63,7 @@ export default async function TeamMemberTimeOffTab({
   const [
     { data: assignments },
     { data: leaves },
+    { data: countryHolidays },
   ] = await Promise.all([
     supabase
       .from("employee_leave_plans")
@@ -86,7 +76,20 @@ export default async function TeamMemberTimeOffTab({
       )
       .eq("employee_id", userId)
       .order("start_date", { ascending: true }),
+    // Holidays in the employee's country — used to exclude public holidays
+    // from the "used" leave day count.
+    supabase
+      .from("holidays")
+      .select("date, is_recurring")
+      .eq("country", user.holiday_country),
   ]);
+
+  const todayYear = parseInt(today.slice(0, 4));
+  const holidaySet = buildHolidaySet(
+    countryHolidays ?? [],
+    `${todayYear - 2}-01-01`,
+    `${todayYear + 1}-12-31`
+  );
 
   type PlanRow = {
     plan_id: string;
@@ -185,7 +188,7 @@ export default async function TeamMemberTimeOffTab({
         (sum, l) =>
           l.leave_duration === "half_day"
             ? sum + 0.5
-            : sum + countWeekdays(l.start_date, l.end_date),
+            : sum + countLeaveDays(l.start_date, l.end_date, holidaySet),
         0
       );
     return {
@@ -326,7 +329,7 @@ export default async function TeamMemberTimeOffTab({
           ) : (
             <div className="divide-y divide-gray-100">
               {upcoming.map((l) => (
-                <LeaveRow key={l.id} leave={l} />
+                <LeaveRow key={l.id} leave={l} holidaySet={holidaySet} />
               ))}
             </div>
           )}
@@ -341,7 +344,7 @@ export default async function TeamMemberTimeOffTab({
           </h2>
           <div className="divide-y divide-gray-100">
             {past.map((l) => (
-              <LeaveRow key={l.id} leave={l} />
+              <LeaveRow key={l.id} leave={l} holidaySet={holidaySet} />
             ))}
           </div>
         </div>
@@ -350,11 +353,11 @@ export default async function TeamMemberTimeOffTab({
   );
 }
 
-function LeaveRow({ leave }: { leave: LeaveLite }) {
+function LeaveRow({ leave, holidaySet }: { leave: LeaveLite; holidaySet: Set<string> }) {
   const days =
     leave.leave_duration === "half_day"
       ? "0.5"
-      : countWeekdays(leave.start_date, leave.end_date).toString();
+      : countLeaveDays(leave.start_date, leave.end_date, holidaySet).toString();
   const statusStyles: Record<string, string> = {
     approved: "bg-emerald-100 text-emerald-800",
     pending: "bg-amber-100 text-amber-800",

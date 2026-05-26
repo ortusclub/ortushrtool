@@ -7,6 +7,7 @@ import Link from "next/link";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { LEAVE_TYPES, UNIVERSAL_LEAVE_TYPES } from "@/lib/constants";
 import { prorateLeave, getRenewalStart } from "@/lib/leave-proration";
+import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
 import type { GrantType } from "@/types/database";
 
 interface BalanceWarning {
@@ -28,6 +29,7 @@ export default function LeaveRequestPage() {
 
   const [planAllocations, setPlanAllocations] = useState<Record<string, number>>({});
   const [usedDays, setUsedDays] = useState<Record<string, number>>({});
+  const [holidaySet, setHolidaySet] = useState<Set<string>>(new Set());
 
   const [form, setForm] = useState({
     leave_type: "",
@@ -42,26 +44,11 @@ export default function LeaveRequestPage() {
 
   const isHalfDay = form.leave_duration === "half_day";
 
-  function countWeekdays(start: string, end: string): number {
-    if (!start || !end || end < start) return 0;
-    let count = 0;
-    const [sy, sm, sd] = start.split("-").map(Number);
-    const [ey, em, ed] = end.split("-").map(Number);
-    const current = new Date(sy, sm - 1, sd);
-    const endDate = new Date(ey, em - 1, ed);
-    while (current <= endDate) {
-      const dow = current.getDay();
-      if (dow >= 1 && dow <= 5) count++;
-      current.setDate(current.getDate() + 1);
-    }
-    return count;
-  }
-
   function getRequestDays(): number {
     if (!form.start_date) return 0;
     if (isHalfDay) return 0.5;
     if (!form.end_date) return 0;
-    return countWeekdays(form.start_date, form.end_date);
+    return countLeaveDays(form.start_date, form.end_date, holidaySet);
   }
 
   useEffect(() => {
@@ -70,7 +57,7 @@ export default function LeaveRequestPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [{ data: activated }, { data: assignedPlans }, { data: leavesThisYear }] = await Promise.all([
+      const [{ data: activated }, { data: assignedPlans }, { data: leavesThisYear }, { data: me }] = await Promise.all([
         supabase
           .from("employee_leave_types")
           .select("leave_type")
@@ -85,7 +72,28 @@ export default function LeaveRequestPage() {
           .eq("employee_id", user.id)
           .eq("status", "approved")
           .gte("start_date", `${new Date().getFullYear() - 1}-01-01`),
+        supabase
+          .from("users")
+          .select("holiday_country")
+          .eq("id", user.id)
+          .single(),
       ]);
+
+      // Holidays in the viewer's country — used to exclude public holidays
+      // from the "used" day count and the "request days" preview.
+      const { data: holRows } = me?.holiday_country
+        ? await supabase
+            .from("holidays")
+            .select("date, is_recurring")
+            .eq("country", me.holiday_country)
+        : { data: [] };
+      const currentYear = new Date().getFullYear();
+      const localHolidays = buildHolidaySet(
+        holRows ?? [],
+        `${currentYear - 1}-01-01`,
+        `${currentYear + 1}-12-31`
+      );
+      setHolidaySet(localHolidays);
 
       const activatedTypes = (activated ?? []).map((a) => a.leave_type);
       const available = [...UNIVERSAL_LEAVE_TYPES, ...activatedTypes];
@@ -94,7 +102,9 @@ export default function LeaveRequestPage() {
 
       const used: Record<string, number> = {};
       for (const l of leavesThisYear ?? []) {
-        const days = l.leave_duration === "half_day" ? 0.5 : countWeekdays(l.start_date, l.end_date);
+        const days = l.leave_duration === "half_day"
+          ? 0.5
+          : countLeaveDays(l.start_date, l.end_date, localHolidays);
         used[l.leave_type] = (used[l.leave_type] ?? 0) + days;
       }
       setUsedDays(used);

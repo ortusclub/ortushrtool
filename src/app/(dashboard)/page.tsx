@@ -22,6 +22,7 @@ import type { KudosWithUsers } from "@/types/database";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { LEAVE_TYPE_LABELS, UNIVERSAL_LEAVE_TYPES, LEAVE_TYPES } from "@/lib/constants";
 import { prorateLeave, getRenewalStart } from "@/lib/leave-proration";
+import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
 import type { GrantType } from "@/types/database";
 
 export default async function DashboardPage() {
@@ -79,6 +80,7 @@ export default async function DashboardPage() {
     myPendingLeaves,
     whosOutThisWeek,
     upcomingHolidays,
+    myCountryHolidays,
     myActivatedLeaveTypes,
     myAssignedPlans,
     myCtoGrants,
@@ -163,6 +165,14 @@ export default async function DashboardPage() {
     supabase
       .from("holidays")
       .select("name, date, country, is_recurring"),
+
+    // Holidays in the viewer's country — used to subtract holiday weekdays
+    // from "used" leave counts (a public holiday inside an approved range
+    // shouldn't be charged as leave).
+    supabase
+      .from("holidays")
+      .select("date, is_recurring")
+      .eq("country", user.holiday_country),
 
     // My activated special leave types
     supabase
@@ -320,13 +330,23 @@ export default async function DashboardPage() {
     }
   }
 
-  // Count used days per type, respecting per-type renewal dates
-  const leaveUsed: Record<string, number> = {};
+  // Count used days per type, respecting per-type renewal dates. Public
+  // holidays in the viewer's country are not charged as leave even when
+  // they fall inside an approved range.
+  const earliestRenewal = Object.values(leaveTypeRenewalStart).sort()[0] ?? yearStart;
+  const holidaySet = buildHolidaySet(
+    myCountryHolidays.data ?? [],
+    earliestRenewal,
+    `${now.getFullYear() + 1}-12-31`
+  );
 
+  const leaveUsed: Record<string, number> = {};
   for (const l of myLeavesThisYear.data ?? []) {
     const renewalStart = leaveTypeRenewalStart[l.leave_type] ?? yearStart;
     if (l.start_date >= renewalStart) {
-      const days = l.leave_duration === "half_day" ? 0.5 : countWeekdays(l.start_date, l.end_date);
+      const days = l.leave_duration === "half_day"
+        ? 0.5
+        : countLeaveDays(l.start_date, l.end_date, holidaySet);
       leaveUsed[l.leave_type] = (leaveUsed[l.leave_type] ?? 0) + days;
     }
   }

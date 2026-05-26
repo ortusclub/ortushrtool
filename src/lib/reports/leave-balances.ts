@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getRenewalStart, prorateLeave } from "@/lib/leave-proration";
+import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
 import type { GrantType } from "@/types/database";
 
@@ -18,19 +19,6 @@ export type LeaveBalanceRow = {
   renewal_start: string;
   plan_name: string;
 };
-
-function countWeekdays(start: string, end: string): number {
-  let count = 0;
-  const s = new Date(start + "T00:00:00");
-  const e = new Date(end + "T00:00:00");
-  const cur = new Date(s);
-  while (cur <= e) {
-    const dow = cur.getDay();
-    if (dow >= 1 && dow <= 5) count++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return count;
-}
 
 /**
  * Computes current-cycle leave balances for every active employee × every
@@ -53,7 +41,7 @@ export async function computeLeaveBalances(
   ] = await Promise.all([
     admin
       .from("users")
-      .select("id, full_name, email, department, hire_date")
+      .select("id, full_name, email, department, hire_date, holiday_country")
       .eq("is_active", true),
     admin.from("employee_leave_plans").select("employee_id, plan_id"),
     admin
@@ -70,6 +58,25 @@ export async function computeLeaveBalances(
       .from("cto_grants")
       .select("employee_id, days, granted_at"),
   ]);
+
+  // All public holidays, grouped by country → set of YYYY-MM-DD covering
+  // the years relevant to leave balances. Used to subtract holiday weekdays
+  // from each employee's "used" count.
+  const todayYear = parseInt(today.slice(0, 4));
+  const holidayRangeFrom = `${todayYear - 2}-01-01`;
+  const holidayRangeTo = `${todayYear + 1}-12-31`;
+  const { data: allHolidays } = await admin
+    .from("holidays")
+    .select("country, date, is_recurring");
+  const holidayByCountry = new Map<string, Set<string>>();
+  const holidaysByCountryRaw = new Map<string, { date: string; is_recurring: boolean | null }[]>();
+  for (const h of allHolidays ?? []) {
+    if (!holidaysByCountryRaw.has(h.country)) holidaysByCountryRaw.set(h.country, []);
+    holidaysByCountryRaw.get(h.country)!.push({ date: h.date, is_recurring: h.is_recurring });
+  }
+  for (const [country, rows] of holidaysByCountryRaw) {
+    holidayByCountry.set(country, buildHolidaySet(rows, holidayRangeFrom, holidayRangeTo));
+  }
 
   // Sum earned CTO per employee and remember the earliest grant date.
   const earnedCtoByEmp = new Map<string, { days: number; earliest: string }>();
@@ -181,6 +188,7 @@ export async function computeLeaveBalances(
     }
 
     const empLeaves = leavesByEmp.get(emp.id) ?? [];
+    const empHolidays = holidayByCountry.get(emp.holiday_country) ?? new Set<string>();
 
     for (const [leaveType, bucket] of buckets) {
       const used = empLeaves
@@ -190,7 +198,7 @@ export async function computeLeaveBalances(
         )
         .reduce((sum, l) => {
           if (l.leave_duration === "half_day") return sum + 0.5;
-          return sum + countWeekdays(l.start_date, l.end_date);
+          return sum + countLeaveDays(l.start_date, l.end_date, empHolidays);
         }, 0);
 
       const allocated = Math.round(bucket.allocated * 100) / 100;
