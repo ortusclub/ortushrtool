@@ -25,6 +25,26 @@ export default function SetPasswordPage() {
       return;
     }
 
+    // Hash-fragment recovery flow — admin-generated links via Supabase's
+    // verify endpoint redirect back with the tokens in the URL hash. PKCE
+    // browser clients don't auto-detect these, so we set the session manually.
+    const access_token = hashParams.get("access_token");
+    const refresh_token = hashParams.get("refresh_token");
+    if (access_token && refresh_token) {
+      supabase.auth
+        .setSession({ access_token, refresh_token })
+        .then(({ error: setErr }) => {
+          if (setErr) {
+            setError(setErr.message);
+            return;
+          }
+          window.history.replaceState({}, "", url.pathname);
+          setReady(true);
+        });
+      return;
+    }
+
+    // PKCE recovery flow: ?code=...
     const code = url.searchParams.get("code");
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
