@@ -22,9 +22,6 @@ function LoginForm() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          hd: "ortusclub.com",
-        },
       },
     });
   };
@@ -177,7 +174,7 @@ function LoginForm() {
           Sign in with Google
         </button>
         <p className="text-center text-xs text-gray-400">
-          Google sign-in for @ortusclub.com accounts
+          Use Google sign-in if your account email matches your Google account
         </p>
       </div>
     </div>

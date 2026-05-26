@@ -39,7 +39,7 @@ export const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateDefault[] = [
       `<p>Hi {{employee_name}},</p>`,
       `<p>Your account has been created. Please click the button below to set your password and get started:</p>`,
       button("Set Up Your Password", "{{reset_link}}"),
-      `<p class="muted">If you have an @ortusclub.com email, you can also sign in directly with Google.</p>`,
+      `<p class="muted">You can also sign in with Google using the same email address.</p>`,
     ].join("\n"),
     variables: "employee_name, reset_link",
   },
