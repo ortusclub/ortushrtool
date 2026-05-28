@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/birthday-anniversary-emails",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/grant-birthday-credits",
+      "schedule": "30 1 * * *"
     }
   ]
 }
