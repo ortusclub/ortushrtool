@@ -11,6 +11,7 @@ export default async function AdjustmentsPage() {
   const user = await getCurrentUser();
   const supabase = await createClient();
   const isReviewer = hasRole(user.role, "manager");
+  const isAdmin = hasRole(user.role, "hr_admin");
 
   let query = supabase
     .from("schedule_adjustments")
@@ -109,7 +110,7 @@ export default async function AdjustmentsPage() {
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     {isReviewer && <AdjustmentActions adjustmentId={adj.id} />}
-                    {!isReviewer && (
+                    {(!isReviewer || isAdmin) && (
                       <CancelRequest requestId={adj.id} table="schedule_adjustments" />
                     )}
                   </div>
@@ -164,6 +165,9 @@ export default async function AdjustmentsPage() {
                 <div className="flex items-center gap-3">
                   {isReviewer && (
                     <AdjustmentActions adjustmentId={adj.id} currentStatus={adj.status as "approved" | "rejected"} />
+                  )}
+                  {isAdmin && (
+                    <CancelRequest requestId={adj.id} table="schedule_adjustments" />
                   )}
                   <StatusBadge status={adj.status} />
                 </div>
