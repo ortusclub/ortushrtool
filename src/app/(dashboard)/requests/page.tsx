@@ -349,6 +349,9 @@ export default async function RequestsPage() {
                         <CancelRequest requestId={leave.id} table="leave_requests" />
                       </>
                     )}
+                    {isAdmin && (
+                      <CancelRequest requestId={leave.id} table="leave_requests" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -422,6 +425,9 @@ export default async function RequestsPage() {
                         <CancelRequest requestId={hw.id} table="holiday_work_requests" />
                       </>
                     )}
+                    {isAdmin && (
+                      <CancelRequest requestId={hw.id} table="holiday_work_requests" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -468,6 +474,9 @@ export default async function RequestsPage() {
                         <BuzzManager requestId={ot.id} requestType="overtime" />
                         <CancelRequest requestId={ot.id} table="overtime_requests" />
                       </>
+                    )}
+                    {isAdmin && (
+                      <CancelRequest requestId={ot.id} table="overtime_requests" />
                     )}
                   </div>
                 </div>
@@ -565,6 +574,9 @@ export default async function RequestsPage() {
                     startDate={leave.start_date}
                     currentStatus={leave.status}
                   />
+                  {isAdmin && (
+                    <CancelRequest requestId={leave.id} table="leave_requests" />
+                  )}
                   <StatusBadge status={leave.status} />
                 </div>
               </div>
@@ -615,6 +627,9 @@ export default async function RequestsPage() {
                   {isReviewer && (
                     <HolidayWorkActions requestId={hw.id} currentStatus={hw.status} />
                   )}
+                  {isAdmin && (
+                    <CancelRequest requestId={hw.id} table="holiday_work_requests" />
+                  )}
                   <StatusBadge status={hw.status} />
                 </div>
               </div>
@@ -648,6 +663,9 @@ export default async function RequestsPage() {
                 <div className="flex items-center gap-3">
                   {isReviewer && (
                     <OvertimeActions overtimeId={ot.id} currentStatus={ot.status} />
+                  )}
+                  {isAdmin && (
+                    <CancelRequest requestId={ot.id} table="overtime_requests" />
                   )}
                   <StatusBadge status={ot.status} />
                 </div>
