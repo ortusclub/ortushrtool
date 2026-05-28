@@ -26,6 +26,7 @@ export default async function RequestsPage() {
   const user = await getCurrentUser();
   const supabase = await createClient();
   const isReviewer = hasRole(user.role, "manager");
+  const isAdmin = hasRole(user.role, "hr_admin");
 
   // Build the 4 list queries and run them in parallel.
   let adjQuery = supabase
@@ -278,6 +279,9 @@ export default async function RequestsPage() {
                           <CancelRequest requestId={adj.id} table="schedule_adjustments" />
                         </>
                       )}
+                      {isAdmin && (
+                        <CancelRequest requestId={adj.id} table="schedule_adjustments" />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -512,6 +516,9 @@ export default async function RequestsPage() {
                 <div className="flex items-center gap-3">
                   {isReviewer && (
                     <AdjustmentActions adjustmentId={adj.id} currentStatus={adj.status} />
+                  )}
+                  {isAdmin && (
+                    <CancelRequest requestId={adj.id} table="schedule_adjustments" />
                   )}
                   <StatusBadge status={adj.status} />
                 </div>
