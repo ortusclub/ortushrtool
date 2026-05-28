@@ -37,7 +37,6 @@ export async function computeLeaveBalances(
     { data: plans },
     { data: allocations },
     { data: leaves },
-    { data: ctoGrants },
     { data: leaveCredits },
   ] = await Promise.all([
     admin
@@ -55,10 +54,8 @@ export async function computeLeaveBalances(
       .from("leave_requests")
       .select("employee_id, leave_type, start_date, end_date, leave_duration")
       .eq("status", "approved"),
-    admin
-      .from("cto_grants")
-      .select("employee_id, days, granted_at"),
-    // Active manual leave credits (admin-issued, any leave type).
+    // Active leave credits — covers both admin-issued and auto-granted
+    // earned CTO from approved holiday work.
     admin
       .from("leave_credits")
       .select("employee_id, leave_type, days, granted_at, expires_at")
@@ -85,23 +82,7 @@ export async function computeLeaveBalances(
     holidayByCountry.set(country, buildHolidaySet(rows, holidayRangeFrom, holidayRangeTo));
   }
 
-  // Sum earned CTO per employee and remember the earliest grant date.
-  const earnedCtoByEmp = new Map<string, { days: number; earliest: string }>();
-  for (const g of (ctoGrants ?? []) as { employee_id: string; days: number; granted_at: string }[]) {
-    const grantDate = g.granted_at.slice(0, 10);
-    const existing = earnedCtoByEmp.get(g.employee_id);
-    if (existing) {
-      existing.days += Number(g.days);
-      if (grantDate < existing.earliest) existing.earliest = grantDate;
-    } else {
-      earnedCtoByEmp.set(g.employee_id, {
-        days: Number(g.days),
-        earliest: grantDate,
-      });
-    }
-  }
-
-  // Group active manual credits by (employee_id, leave_type), tracking the
+  // Group active leave credits by (employee_id, leave_type), tracking the
   // earliest grant so we can collapse renewalStart later.
   const creditsByEmp = new Map<string, Map<string, { days: number; earliest: string }>>();
   for (const c of (leaveCredits ?? []) as { employee_id: string; leave_type: string; days: number; granted_at: string }[]) {
@@ -140,9 +121,8 @@ export async function computeLeaveBalances(
 
   for (const emp of employees ?? []) {
     const empPlans = planIdsByEmp.get(emp.id) ?? [];
-    const earned = earnedCtoByEmp.get(emp.id);
     const empCredits = creditsByEmp.get(emp.id);
-    if (empPlans.length === 0 && !earned && !empCredits) continue;
+    if (empPlans.length === 0 && !empCredits) continue;
 
     // One bucket per leave_type, aggregated across all the employee's plans
     type Bucket = {
@@ -190,28 +170,8 @@ export async function computeLeaveBalances(
       }
     }
 
-    // Fold in earned CTO (auto-grants from approved holiday-work). Earned
-    // credits don't expire, so they collapse the bucket's renewalStart to the
-    // earliest grant date — every approved CTO leave since then counts as
-    // used.
-    if (earned && earned.days > 0) {
-      const existing = buckets.get("cto");
-      if (existing) {
-        existing.allocated += earned.days;
-        existing.plans.add("Earned CTO");
-        if (earned.earliest < existing.renewalStart) {
-          existing.renewalStart = earned.earliest;
-        }
-      } else {
-        buckets.set("cto", {
-          allocated: earned.days,
-          plans: new Set(["Earned CTO"]),
-          renewalStart: earned.earliest,
-        });
-      }
-    }
-
-    // Fold in active manual credits. Unlike CTO, we don't pull renewalStart
+    // Fold in active leave credits (admin-issued + auto-granted earned CTO
+    // from approved holiday-work). We don't pull renewalStart
     // back — credits just add to allocated, and cycle scoping stays with the
     // plan (or yearStart default for credit-only leave types).
     if (empCredits) {

@@ -83,7 +83,6 @@ export default async function DashboardPage() {
     myCountryHolidays,
     myActivatedLeaveTypes,
     myAssignedPlans,
-    myCtoGrants,
     myLeaveCredits,
   ] = await Promise.all([
     // Pending schedule adjustments — scope: admins see org-wide; managers
@@ -187,14 +186,10 @@ export default async function DashboardPage() {
       .select("plan_id")
       .eq("employee_id", user.id),
 
-    // My earned CTO grants (from approved holiday-work with compensation=cto)
-    supabase
-      .from("cto_grants")
-      .select("days, granted_at")
-      .eq("employee_id", user.id),
-
-    // My manual leave credits (admin-issued, any leave type). Filtered to
-    // "active" credits — already granted and not yet expired.
+    // My leave credits (admin-issued plus auto-granted from approved
+    // holiday-work via the trg_grant_cto_credit_on_holiday_work_approval
+    // trigger). Filtered to active credits — already granted and not yet
+    // expired.
     supabase
       .from("leave_credits")
       .select("leave_type, days, granted_at, expires_at")
@@ -272,17 +267,8 @@ export default async function DashboardPage() {
   const assignedPlanIds = (myAssignedPlans.data ?? []).map((p) => p.plan_id);
   // Earned CTO (auto-granted from approved holiday-work) is a balance even
   // when the user has no leave plan.
-  const earnedCtoDays = (myCtoGrants.data ?? []).reduce(
-    (sum, g) => sum + Number(g.days),
-    0
-  );
-  const earnedCtoEarliest = (myCtoGrants.data ?? [])
-    .map((g) => g.granted_at.slice(0, 10))
-    .sort()[0];
   const hasPlan =
-    assignedPlanIds.length > 0 ||
-    earnedCtoDays > 0 ||
-    (myLeaveCredits.data?.length ?? 0) > 0;
+    assignedPlanIds.length > 0 || (myLeaveCredits.data?.length ?? 0) > 0;
 
   const planAllocations: Record<string, number> = {};
   // Track the renewal start date per leave type (earliest renewal across plans)
@@ -330,20 +316,8 @@ export default async function DashboardPage() {
     }
   }
 
-  // Add earned CTO into the allocated bucket. Earned credits don't expire, so
-  // collapse the CTO renewal_start to the earliest grant date — every approved
-  // CTO leave since then counts toward "used".
-  if (earnedCtoDays > 0) {
-    planAllocations.cto = (planAllocations.cto ?? 0) + earnedCtoDays;
-    if (
-      earnedCtoEarliest &&
-      (!leaveTypeRenewalStart.cto || earnedCtoEarliest < leaveTypeRenewalStart.cto)
-    ) {
-      leaveTypeRenewalStart.cto = earnedCtoEarliest;
-    }
-  }
-
-  // Fold in manual leave credits (admin-issued, any leave type). Only active
+  // Fold in leave credits (admin-issued plus auto-granted earned CTO from
+  // approved holiday-work). Only active
   // credits are returned by the query, so we can sum unconditionally.
   //
   // Unlike CTO grants, we do NOT touch leaveTypeRenewalStart here — a credit
