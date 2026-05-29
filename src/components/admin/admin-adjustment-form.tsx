@@ -42,7 +42,7 @@ export function AdminAdjustmentForm({ userId }: { userId: string }) {
     setMessage("");
     const supabase = createClient();
 
-    let errors = 0;
+    const errorMessages: string[] = [];
 
     for (const date of validDates) {
       const dateObj = new Date(date);
@@ -79,11 +79,13 @@ export function AdminAdjustmentForm({ userId }: { userId: string }) {
           reviewed_at: new Date().toISOString(),
         });
 
-      if (error) errors++;
+      if (error) errorMessages.push(`${date}: ${error.message}`);
     }
 
-    if (errors > 0) {
-      setMessage(`Created with ${errors} error(s).`);
+    if (errorMessages.length > 0) {
+      setMessage(
+        `Created with ${errorMessages.length} error(s) — ${errorMessages.join("; ")}`
+      );
     } else {
       setMessage(
         `Adjustment added for ${validDates.length} date(s) — auto-approved.`
