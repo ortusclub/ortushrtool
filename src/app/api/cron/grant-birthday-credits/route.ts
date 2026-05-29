@@ -30,7 +30,14 @@ export async function GET(request: Request) {
   const now = new Date();
   const todayManila = formatInTimeZone(now, MANILA_TZ, "yyyy-MM-dd");
   const todayMonth = parseInt(formatInTimeZone(now, MANILA_TZ, "MM"), 10);
+  const todayDay = parseInt(formatInTimeZone(now, MANILA_TZ, "dd"), 10);
   const todayYear = parseInt(formatInTimeZone(now, MANILA_TZ, "yyyy"), 10);
+
+  // Strict day-1 grant: only fire on the first day of any birth month. If
+  // the cron misses day 1 (deploy gap, downtime), no retroactive grant.
+  if (todayDay !== 1) {
+    return NextResponse.json({ granted: 0, message: "not the first of any month" });
+  }
 
   const { data: users, error: usersErr } = await supabase
     .from("users")
@@ -53,7 +60,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ granted: 0, skipped: 0, message: "no birthdays this month" });
   }
 
-  // Find which ones already have a birthday credit for this calendar year.
+  // Skip anyone who already has ANY active birthday credit for this calendar
+  // year — admin-issued, backfilled, or a previous auto-grant. Prevents
+  // double-granting on top of a manual credit.
   const candidateIds = candidates.map((u) => u.id);
   const yearStart = `${todayYear}-01-01`;
   const yearEnd = `${todayYear}-12-31`;
@@ -61,7 +70,6 @@ export async function GET(request: Request) {
     .from("leave_credits")
     .select("employee_id")
     .eq("leave_type", "birthday")
-    .eq("source", "auto_birthday")
     .gte("granted_at", yearStart)
     .lte("granted_at", yearEnd)
     .in("employee_id", candidateIds);
