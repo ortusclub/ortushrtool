@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     requested_end_time,
     requested_work_location,
     reason,
+    queue,
   } = body;
 
   if (!employee_id || !requested_date || !adjustment_type) {
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
     requested_work_location: showLoc ? requested_work_location : null,
     reason: reason ?? "",
   };
-  const row = isAdmin
+  const row = isAdmin && !queue
     ? {
         ...baseRow,
         status: "approved",

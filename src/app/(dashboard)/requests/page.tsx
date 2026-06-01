@@ -15,6 +15,7 @@ import { EditAdjustmentForm } from "@/components/admin/edit-adjustment-form";
 import { EditLeaveForm } from "@/components/admin/edit-leave-form";
 import { EditHolidayWorkForm } from "@/components/admin/edit-holiday-work-form";
 import { EditOvertimeForm } from "@/components/admin/edit-overtime-form";
+import { FileAdjustmentOnBehalf } from "@/components/admin/file-adjustment-on-behalf";
 import Link from "next/link";
 import {
   ArrowRightLeft,
@@ -64,6 +65,10 @@ export default async function RequestsPage({
     otQuery = otQuery.eq("employee_id", user.id);
   }
 
+  const allUsersPromise = isAdmin
+    ? supabase.from("users").select("id, full_name, preferred_name, first_name, last_name, email").eq("is_active", true).order("full_name")
+    : null;
+
   // Apply date filters
   if (filterFrom) {
     adjQuery = adjQuery.gte("requested_date", filterFrom);
@@ -83,7 +88,10 @@ export default async function RequestsPage({
     { data: leaveRequests },
     { data: holidayWorkRequests },
     { data: overtimeRequests },
-  ] = await Promise.all([adjQuery, leaveQuery, hwQuery, otQuery]);
+    allUsersResult,
+  ] = await Promise.all([adjQuery, leaveQuery, hwQuery, otQuery, allUsersPromise ?? Promise.resolve(null)]);
+
+  const allUsers = (allUsersResult as { data: { id: string; full_name: string | null; preferred_name: string | null; first_name: string | null; last_name: string | null; email: string }[] } | null)?.data ?? [];
 
   const pendingOT = (overtimeRequests ?? []).filter((o) => o.status === "pending");
   const pastOT = (overtimeRequests ?? []).filter((o) => o.status !== "pending");
@@ -233,6 +241,10 @@ export default async function RequestsPage({
       </div>
 
       <RequestsDateFilter from={filterFrom ?? ""} to={filterTo ?? ""} />
+
+      {isAdmin && (
+        <FileAdjustmentOnBehalf employees={allUsers} />
+      )}
 
       {hasRole(user.role, "hr_admin") && (
         <>
