@@ -465,7 +465,6 @@ export default function ScheduleAdjustmentPage() {
                       required
                       value={date}
                       onChange={(e) => updateDate(idx, e.target.value)}
-                      min={new Date().toISOString().split("T")[0]}
                       className="flex-1 rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     {dates.length > 1 && (
@@ -498,7 +497,6 @@ export default function ScheduleAdjustmentPage() {
                       required
                       value={rangeStart}
                       onChange={(e) => setRangeStart(e.target.value)}
-                      min={new Date().toISOString().split("T")[0]}
                       className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
@@ -509,7 +507,7 @@ export default function ScheduleAdjustmentPage() {
                       required
                       value={rangeEnd}
                       onChange={(e) => setRangeEnd(e.target.value)}
-                      min={rangeStart || new Date().toISOString().split("T")[0]}
+                      min={rangeStart}
                       className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>

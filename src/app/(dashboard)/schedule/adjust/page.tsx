@@ -107,7 +107,7 @@ export default function ScheduleAdjustPage() {
             onChange={(e) =>
               setForm({ ...form, requested_date: e.target.value })
             }
-            min={new Date().toISOString().split("T")[0]}
+
             className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>

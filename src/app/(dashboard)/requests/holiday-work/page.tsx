@@ -66,12 +66,12 @@ export default function HolidayWorkRequestPage() {
         })
       );
 
-      const today = new Date().toISOString().split("T")[0];
+      const yearStart = `${new Date().getFullYear()}-01-01`;
       const { data } = await supabase
         .from("holidays")
         .select("*")
         .eq("country", userData.holiday_country)
-        .gte("date", today)
+        .gte("date", yearStart)
         .order("date");
 
       setHolidays(data ?? []);
@@ -171,7 +171,7 @@ export default function HolidayWorkRequestPage() {
         </Link>
         <h1 className="text-2xl font-bold text-gray-900">Work on Holiday</h1>
         <p className="text-gray-600">
-          Request to work on an upcoming holiday. Your manager will review the request.
+          Request to work on a holiday. Your manager will review the request.
         </p>
       </div>
 
@@ -190,7 +190,7 @@ export default function HolidayWorkRequestPage() {
           {loadingHolidays ? (
             <p className="mt-1 text-sm text-gray-500">Loading holidays...</p>
           ) : holidays.length === 0 ? (
-            <p className="mt-1 text-sm text-gray-500">No upcoming holidays found for your country.</p>
+            <p className="mt-1 text-sm text-gray-500">No holidays found for your country this year.</p>
           ) : (
             <select
               required
