@@ -20,6 +20,7 @@ import { BulkAdjustmentsSection } from "@/components/requests/bulk-adjustments-s
 import { BulkLeaveSection } from "@/components/requests/bulk-leave-section";
 import { BulkHolidayWorkSection } from "@/components/requests/bulk-holiday-work-section";
 import { BulkOvertimeSection } from "@/components/requests/bulk-overtime-section";
+import { CollapsibleSection } from "@/components/requests/collapsible-section";
 import Link from "next/link";
 import {
   ArrowRightLeft,
@@ -36,76 +37,81 @@ import { UserNameLink } from "@/components/shared/user-name-link";
 export default async function RequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; myfrom?: string; myto?: string }>;
 }) {
-  const { from: filterFrom, to: filterTo } = await searchParams;
+  const { from: teamFrom, to: teamTo, myfrom: myFrom, myto: myTo } = await searchParams;
   const user = await getCurrentUser();
   const supabase = await createClient();
   const isReviewer = hasRole(user.role, "manager");
   const isAdmin = hasRole(user.role, "hr_admin");
 
-  // Build the 4 list queries and run them in parallel.
-  let adjQuery = supabase
-    .from("schedule_adjustments")
-    .select("*, employee:users!schedule_adjustments_employee_id_fkey(full_name, preferred_name, first_name, last_name, email, role)")
-    .order("created_at", { ascending: false });
-  let leaveQuery = supabase
-    .from("leave_requests")
-    .select("*, employee:users!leave_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email)")
-    .order("created_at", { ascending: false });
-  let hwQuery = supabase
-    .from("holiday_work_requests")
-    .select("*, employee:users!holiday_work_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email), holiday:holidays!holiday_work_requests_holiday_id_fkey(name)")
-    .order("created_at", { ascending: false });
-  let otQuery = supabase
-    .from("overtime_requests")
-    .select("*, employee:users!overtime_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email)")
-    .order("created_at", { ascending: false });
+  const adjSel = "*, employee:users!schedule_adjustments_employee_id_fkey(full_name, preferred_name, first_name, last_name, email, role)";
+  const leaveSel = "*, employee:users!leave_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email)";
+  const hwSel = "*, employee:users!holiday_work_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email), holiday:holidays!holiday_work_requests_holiday_id_fkey(name)";
+  const otSel = "*, employee:users!overtime_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email)";
 
-  if (!isReviewer) {
-    adjQuery = adjQuery.eq("employee_id", user.id);
-    leaveQuery = leaveQuery.eq("employee_id", user.id);
-    hwQuery = hwQuery.eq("employee_id", user.id);
-    otQuery = otQuery.eq("employee_id", user.id);
-  }
+  // My requests — always filtered to current user
+  let myAdjQ = supabase.from("schedule_adjustments").select(adjSel).eq("employee_id", user.id).order("created_at", { ascending: false });
+  let myLeaveQ = supabase.from("leave_requests").select(leaveSel).eq("employee_id", user.id).order("created_at", { ascending: false });
+  let myHwQ = supabase.from("holiday_work_requests").select(hwSel).eq("employee_id", user.id).order("created_at", { ascending: false });
+  let myOtQ = supabase.from("overtime_requests").select(otSel).eq("employee_id", user.id).order("created_at", { ascending: false });
+
+  if (myFrom) { myAdjQ = myAdjQ.gte("requested_date", myFrom); myLeaveQ = myLeaveQ.gte("start_date", myFrom); myHwQ = myHwQ.gte("holiday_date", myFrom); myOtQ = myOtQ.gte("requested_date", myFrom); }
+  if (myTo)   { myAdjQ = myAdjQ.lte("requested_date", myTo);   myLeaveQ = myLeaveQ.lte("start_date", myTo);   myHwQ = myHwQ.lte("holiday_date", myTo);   myOtQ = myOtQ.lte("requested_date", myTo); }
+
+  // Team requests — only for reviewers, excludes current user
+  let teamAdjQ = isReviewer ? supabase.from("schedule_adjustments").select(adjSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
+  let teamLeaveQ = isReviewer ? supabase.from("leave_requests").select(leaveSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
+  let teamHwQ = isReviewer ? supabase.from("holiday_work_requests").select(hwSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
+  let teamOtQ = isReviewer ? supabase.from("overtime_requests").select(otSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
+
+  if (teamFrom) { teamAdjQ = teamAdjQ?.gte("requested_date", teamFrom) ?? null; teamLeaveQ = teamLeaveQ?.gte("start_date", teamFrom) ?? null; teamHwQ = teamHwQ?.gte("holiday_date", teamFrom) ?? null; teamOtQ = teamOtQ?.gte("requested_date", teamFrom) ?? null; }
+  if (teamTo)   { teamAdjQ = teamAdjQ?.lte("requested_date", teamTo) ?? null;   teamLeaveQ = teamLeaveQ?.lte("start_date", teamTo) ?? null;   teamHwQ = teamHwQ?.lte("holiday_date", teamTo) ?? null;   teamOtQ = teamOtQ?.lte("requested_date", teamTo) ?? null; }
 
   const allUsersPromise = isAdmin
     ? supabase.from("users").select("id, full_name, preferred_name, first_name, last_name, email").eq("is_active", true).order("full_name")
     : null;
 
-  // Apply date filters
-  if (filterFrom) {
-    adjQuery = adjQuery.gte("requested_date", filterFrom);
-    leaveQuery = leaveQuery.gte("start_date", filterFrom);
-    hwQuery = hwQuery.gte("holiday_date", filterFrom);
-    otQuery = otQuery.gte("requested_date", filterFrom);
-  }
-  if (filterTo) {
-    adjQuery = adjQuery.lte("requested_date", filterTo);
-    leaveQuery = leaveQuery.lte("start_date", filterTo);
-    hwQuery = hwQuery.lte("holiday_date", filterTo);
-    otQuery = otQuery.lte("requested_date", filterTo);
-  }
-
+  const none = Promise.resolve({ data: [] });
   const [
-    { data: adjustments },
-    { data: leaveRequests },
-    { data: holidayWorkRequests },
-    { data: overtimeRequests },
+    { data: myAdj },
+    { data: myLeave },
+    { data: myHw },
+    { data: myOt },
+    { data: teamAdj },
+    { data: teamLeave },
+    { data: teamHw },
+    { data: teamOt },
     allUsersResult,
-  ] = await Promise.all([adjQuery, leaveQuery, hwQuery, otQuery, allUsersPromise ?? Promise.resolve(null)]);
+  ] = await Promise.all([
+    myAdjQ, myLeaveQ, myHwQ, myOtQ,
+    teamAdjQ ?? none, teamLeaveQ ?? none, teamHwQ ?? none, teamOtQ ?? none,
+    allUsersPromise ?? Promise.resolve(null),
+  ]);
 
   const allUsers = (allUsersResult as { data: { id: string; full_name: string | null; preferred_name: string | null; first_name: string | null; last_name: string | null; email: string }[] } | null)?.data ?? [];
 
-  const pendingOT = (overtimeRequests ?? []).filter((o) => o.status === "pending");
-  const pastOT = (overtimeRequests ?? []).filter((o) => o.status !== "pending");
+  // Split by pending/past
+  const myPendingAdj   = (myAdj   ?? []).filter(a => a.status === "pending");
+  const myPastAdj      = (myAdj   ?? []).filter(a => a.status !== "pending");
+  const myPendingLeave = (myLeave ?? []).filter(l => l.status === "pending");
+  const myPastLeave    = (myLeave ?? []).filter(l => l.status !== "pending");
+  const myPendingHw    = (myHw    ?? []).filter(h => h.status === "pending");
+  const myPastHw       = (myHw    ?? []).filter(h => h.status !== "pending");
+  const myPendingOt    = (myOt    ?? []).filter(o => o.status === "pending");
+  const myPastOt       = (myOt    ?? []).filter(o => o.status !== "pending");
 
-  const pendingAdj = (adjustments ?? []).filter((a) => a.status === "pending");
-  const pastAdj = (adjustments ?? []).filter((a) => a.status !== "pending");
-  const pendingLeave = (leaveRequests ?? []).filter((l) => l.status === "pending");
-  const pastLeave = (leaveRequests ?? []).filter((l) => l.status !== "pending");
-  const pendingHW = (holidayWorkRequests ?? []).filter((h) => h.status === "pending");
-  const pastHW = (holidayWorkRequests ?? []).filter((h) => h.status !== "pending");
+  const teamPendingAdj   = (teamAdj   ?? []).filter(a => a.status === "pending");
+  const teamPastAdj      = (teamAdj   ?? []).filter(a => a.status !== "pending");
+  const teamPendingLeave = (teamLeave ?? []).filter(l => l.status === "pending");
+  const teamPastLeave    = (teamLeave ?? []).filter(l => l.status !== "pending");
+  const teamPendingHw    = (teamHw    ?? []).filter(h => h.status === "pending");
+  const teamPastHw       = (teamHw    ?? []).filter(h => h.status !== "pending");
+  const teamPendingOt    = (teamOt    ?? []).filter(o => o.status === "pending");
+  const teamPastOt       = (teamOt    ?? []).filter(o => o.status !== "pending");
+
+  // For backwards compat with office-warnings logic
+  const pendingAdj = [...myPendingAdj, ...teamPendingAdj];
 
   // --- Compute office day warnings for pending adjustments ---
   const officeWarnings = new Map<string, { officeDays: number; threshold: number }>();
@@ -193,335 +199,112 @@ export default async function RequestsPage({
 
   const officeWarningsObj = Object.fromEntries(officeWarnings);
 
-  const leaveTypeLabels = LEAVE_TYPE_LABELS;
-
   const actionButtons = (
-    <div className="flex flex-wrap gap-3">
-      <Link
-        href="/requests/schedule-adjustment"
-        className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-      >
-        <ArrowRightLeft size={16} />
-        Schedule Adjustment
+    <div className="flex flex-wrap gap-2">
+      <Link href="/requests/schedule-adjustment" className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+        <ArrowRightLeft size={15} /> Schedule Adjustment
       </Link>
-      <Link
-        href="/requests/leave"
-        className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
-      >
-        <CalendarOff size={16} />
-        Request Leave
+      <Link href="/requests/leave" className="flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700">
+        <CalendarOff size={15} /> Request Leave
       </Link>
-      <Link
-        href="/requests/holiday-work"
-        className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
-      >
-        <CalendarCheck size={16} />
-        Work on Holiday
+      <Link href="/requests/holiday-work" className="flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700">
+        <CalendarCheck size={15} /> Work on Holiday
       </Link>
       {user.overtime_eligible && (
-        <Link
-          href="/requests/overtime"
-          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
-        >
-          <Clock4 size={16} />
-          Request Overtime
+        <Link href="/requests/overtime" className="flex items-center gap-2 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700">
+          <Clock4 size={15} /> Request Overtime
         </Link>
       )}
     </div>
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isReviewer ? "Team Requests" : "My Requests"}
-          </h1>
-          <p className="text-gray-600">
-            {isReviewer
-              ? "Review schedule adjustment, leave, and holiday work requests"
-              : "Track your schedule, leave, and holiday work requests"}
-          </p>
-        </div>
-        {!isReviewer && actionButtons}
-      </div>
+    <div className="space-y-8">
+      <h1 className="text-2xl font-bold text-gray-900">Requests</h1>
 
-      <RequestsDateFilter from={filterFrom ?? ""} to={filterTo ?? ""} />
-
+      {/* ── ADMIN CONSOLE ── */}
       {isAdmin && (
-        <FileAdjustmentOnBehalf employees={allUsers} />
-      )}
-
-      {hasRole(user.role, "hr_admin") && (
-        <>
+        <CollapsibleSection title="Admin Console" defaultOpen={false}>
+          <FileAdjustmentOnBehalf employees={allUsers} />
           <LeaveCsvImport />
           <AdjustmentCsvImport />
-        </>
+        </CollapsibleSection>
       )}
 
-      {isReviewer && actionButtons}
+      {/* ── MY REQUESTS ── */}
+      <CollapsibleSection title="My Requests" actions={actionButtons}>
+        <RequestsDateFilter from={myFrom ?? ""} to={myTo ?? ""} paramFrom="myfrom" paramTo="myto" />
 
-      {/* Pending Schedule Adjustments */}
-      {pendingAdj.length > 0 && (
-        <BulkAdjustmentsSection
-          adjustments={pendingAdj}
-          officeWarnings={officeWarningsObj}
-          currentUserId={user.id}
-          isReviewer={isReviewer}
-          isAdmin={isAdmin}
-        />
-      )}
+        {myPendingAdj.length > 0 && (
+          <BulkAdjustmentsSection adjustments={myPendingAdj} officeWarnings={officeWarningsObj} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
+        )}
+        {myPendingLeave.length > 0 && (
+          <BulkLeaveSection leaves={myPendingLeave} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
+        )}
+        {myPendingHw.length > 0 && (
+          <BulkHolidayWorkSection requests={myPendingHw} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
+        )}
+        {myPendingOt.length > 0 && (
+          <BulkOvertimeSection requests={myPendingOt} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
+        )}
+        {myPendingAdj.length === 0 && myPendingLeave.length === 0 && myPendingHw.length === 0 && myPendingOt.length === 0 && (
+          <p className="text-sm text-gray-500">No pending requests.</p>
+        )}
 
-      {/* Pending Leave Requests */}
-      {pendingLeave.length > 0 && (
-        <BulkLeaveSection
-          leaves={pendingLeave}
-          currentUserId={user.id}
-          isReviewer={isReviewer}
-          isAdmin={isAdmin}
-        />
-      )}
-
-      {/* Pending Holiday Work Requests */}
-      {pendingHW.length > 0 && (
-        <BulkHolidayWorkSection
-          requests={pendingHW}
-          currentUserId={user.id}
-          isReviewer={isReviewer}
-          isAdmin={isAdmin}
-        />
-      )}
-
-      {/* Pending Overtime Requests */}
-      {pendingOT.length > 0 && (
-        <BulkOvertimeSection
-          requests={pendingOT}
-          currentUserId={user.id}
-          isReviewer={isReviewer}
-          isAdmin={isAdmin}
-        />
-      )}
-
-      {/* History */}
-      <CollapsibleHistory count={pastAdj.length + pastLeave.length + pastHW.length + pastOT.length}>
-        {pastAdj.length === 0 && pastLeave.length === 0 && pastHW.length === 0 && pastOT.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">No past requests.</div>
+        <CollapsibleHistory count={myPastAdj.length + myPastLeave.length + myPastHw.length + myPastOt.length}>
+      {myPastAdj.length === 0 && myPastLeave.length === 0 && myPastHw.length === 0 && myPastOt.length === 0 ? (
+          <div className="p-6 text-center text-gray-500">No history yet.</div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {pastAdj.map((adj) => (
+            {myPastAdj.map((adj) => (
               <div key={adj.id} className="flex items-center justify-between p-6">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                      Schedule Adjustment
-                    </span>
-                    {isReviewer && adj.employee && (
-                      <span className="text-sm font-medium text-gray-900">
-                        <UserNameLink
-                          userId={adj.employee_id}
-                          name={displayName(adj.employee)}
-                        />
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    {formatDate(adj.requested_date)} &mdash;{" "}
-                    {formatTime(adj.requested_start_time)} -{" "}
-                    {formatTime(adj.requested_end_time)}
-                  </p>
-                  {adj.reviewer_notes && (
-                    <p className="text-sm text-gray-500 italic">
-                      Note: {adj.reviewer_notes}
-                    </p>
-                  )}
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Schedule Adjustment</span>
+                  <p className="text-sm text-gray-700">{formatDate(adj.requested_date)} &mdash; {formatTime(adj.requested_start_time)} – {formatTime(adj.requested_end_time)}</p>
+                  {adj.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {adj.reviewer_notes}</p>}
                 </div>
                 <div className="flex items-center gap-3">
-                  {isReviewer && adj.employee_id !== user.id && (
-                    <AdjustmentActions adjustmentId={adj.id} currentStatus={adj.status} />
-                  )}
-                  {isAdmin && adj.employee_id !== user.id && (
-                    <CancelRequest requestId={adj.id} table="schedule_adjustments" />
-                  )}
-                  {isAdmin && (
-                    <EditAdjustmentForm
-                      id={adj.id}
-                      requestedDate={adj.requested_date}
-                      adjustmentType={adj.adjustment_type}
-                      requestedStartTime={adj.requested_start_time}
-                      requestedEndTime={adj.requested_end_time}
-                      requestedWorkLocation={adj.requested_work_location}
-                      reason={adj.reason}
-                    />
-                  )}
+                  <EditAdjustmentForm id={adj.id} requestedDate={adj.requested_date} adjustmentType={adj.adjustment_type} requestedStartTime={adj.requested_start_time} requestedEndTime={adj.requested_end_time} requestedWorkLocation={adj.requested_work_location} reason={adj.reason} />
                   <StatusBadge status={adj.status} />
                 </div>
               </div>
             ))}
-            {pastLeave.map((leave) => (
+            {myPastLeave.map((leave) => (
               <div key={leave.id} className="flex items-center justify-between p-6">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
-                      {leaveTypeLabels[leave.leave_type] ?? leave.leave_type}
-                    </span>
-                    {isReviewer && leave.employee && (
-                      <span className="text-sm font-medium text-gray-900">
-                        <UserNameLink
-                          userId={leave.employee_id}
-                          name={displayName(leave.employee)}
-                        />
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    {formatDate(leave.start_date)}
-                    {leave.leave_duration === "half_day" ? (
-                      <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">
-                        Half day ({leave.half_day_period === "am" ? "AM" : "PM"})
-                      </span>
-                    ) : (
-                      <> &mdash; {formatDate(leave.end_date)}</>
-                    )}
-                  </p>
-                  {leave.reviewer_notes && (
-                    <p className="text-sm text-gray-500 italic">
-                      Note: {leave.reviewer_notes}
-                    </p>
-                  )}
+                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">{LEAVE_TYPE_LABELS[leave.leave_type] ?? leave.leave_type}</span>
+                  <p className="text-sm text-gray-700">{formatDate(leave.start_date)}{leave.leave_duration === "half_day" ? <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">Half day ({leave.half_day_period === "am" ? "AM" : "PM"})</span> : <> &mdash; {formatDate(leave.end_date)}</>}</p>
+                  {leave.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {leave.reviewer_notes}</p>}
                 </div>
                 <div className="flex items-center gap-3">
-                  {isReviewer && leave.employee_id !== user.id && (
-                    <LeaveActions leaveId={leave.id} currentStatus={leave.status} />
-                  )}
-                  <CancelApprovedLeave
-                    leaveId={leave.id}
-                    startDate={leave.start_date}
-                    currentStatus={leave.status}
-                  />
-                  {isAdmin && leave.employee_id !== user.id && (
-                    <CancelRequest requestId={leave.id} table="leave_requests" />
-                  )}
-                  {isAdmin && (
-                    <EditLeaveForm
-                      id={leave.id}
-                      leaveType={leave.leave_type}
-                      leaveDuration={leave.leave_duration}
-                      halfDayPeriod={leave.half_day_period}
-                      startDate={leave.start_date}
-                      endDate={leave.end_date}
-                      reason={leave.reason}
-                    />
-                  )}
+                  <CancelApprovedLeave leaveId={leave.id} startDate={leave.start_date} currentStatus={leave.status} />
+                  <EditLeaveForm id={leave.id} leaveType={leave.leave_type} leaveDuration={leave.leave_duration} halfDayPeriod={leave.half_day_period} startDate={leave.start_date} endDate={leave.end_date} reason={leave.reason} />
                   <StatusBadge status={leave.status} />
                 </div>
               </div>
             ))}
-            {pastHW.map((hw) => (
+            {myPastHw.map((hw) => (
               <div key={hw.id} className="flex items-center justify-between p-6">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">
-                      Holiday Work
-                    </span>
-                    <span className="text-xs text-gray-500">{hw.holiday?.name}</span>
-                    {isReviewer && hw.employee && (
-                      <span className="text-sm font-medium text-gray-900">
-                        <UserNameLink
-                          userId={hw.employee_id}
-                          name={displayName(hw.employee)}
-                        />
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    {formatDate(hw.holiday_date)} &mdash;{" "}
-                    {formatTime(hw.start_time)} - {formatTime(hw.end_time)}{" "}
-                    <span className="ml-1 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
-                      {hw.duration === "half_day" ? "Half Day" : "Full Day"}
-                    </span>
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Compensation:{" "}
-                    <span
-                      className={
-                        hw.compensation === "cto"
-                          ? "font-medium text-teal-700"
-                          : "font-medium text-amber-700"
-                      }
-                    >
-                      {hw.compensation === "cto" ? "CTO Leave" : "Holiday Pay"}
-                    </span>
-                  </p>
-                  {hw.reviewer_notes && (
-                    <p className="text-sm text-gray-500 italic">
-                      Note: {hw.reviewer_notes}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-2"><span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">Holiday Work</span><span className="text-xs text-gray-500">{hw.holiday?.name}</span></div>
+                  <p className="text-sm text-gray-700">{formatDate(hw.holiday_date)} &mdash; {formatTime(hw.start_time)} – {formatTime(hw.end_time)}</p>
+                  {hw.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {hw.reviewer_notes}</p>}
                 </div>
                 <div className="flex items-center gap-3">
-                  {isReviewer && hw.employee_id !== user.id && (
-                    <HolidayWorkActions requestId={hw.id} currentStatus={hw.status} />
-                  )}
-                  {isAdmin && hw.employee_id !== user.id && (
-                    <CancelRequest requestId={hw.id} table="holiday_work_requests" />
-                  )}
-                  {isAdmin && (
-                    <EditHolidayWorkForm
-                      id={hw.id}
-                      duration={hw.duration}
-                      startTime={hw.start_time}
-                      endTime={hw.end_time}
-                      workLocation={hw.work_location}
-                      compensation={hw.compensation}
-                      reason={hw.reason}
-                    />
-                  )}
+                  <EditHolidayWorkForm id={hw.id} duration={hw.duration} startTime={hw.start_time} endTime={hw.end_time} workLocation={hw.work_location} compensation={hw.compensation} reason={hw.reason} />
                   <StatusBadge status={hw.status} />
                 </div>
               </div>
             ))}
-            {pastOT.map((ot) => (
+            {myPastOt.map((ot) => (
               <div key={ot.id} className="flex items-center justify-between p-6">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
-                      Overtime
-                    </span>
-                    {isReviewer && ot.employee && (
-                      <span className="text-sm font-medium text-gray-900">
-                        <UserNameLink
-                          userId={ot.employee_id}
-                          name={displayName(ot.employee)}
-                        />
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    {formatDate(ot.requested_date)} &mdash;{" "}
-                    {formatTime(ot.start_time)} - {formatTime(ot.end_time)}
-                  </p>
-                  {ot.reviewer_notes && (
-                    <p className="text-sm text-gray-500 italic">
-                      Note: {ot.reviewer_notes}
-                    </p>
-                  )}
+                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">Overtime</span>
+                  <p className="text-sm text-gray-700">{formatDate(ot.requested_date)} &mdash; {formatTime(ot.start_time)} – {formatTime(ot.end_time)}</p>
+                  {ot.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {ot.reviewer_notes}</p>}
                 </div>
                 <div className="flex items-center gap-3">
-                  {isReviewer && ot.employee_id !== user.id && (
-                    <OvertimeActions overtimeId={ot.id} currentStatus={ot.status} />
-                  )}
-                  {isAdmin && ot.employee_id !== user.id && (
-                    <CancelRequest requestId={ot.id} table="overtime_requests" />
-                  )}
-                  {isAdmin && (
-                    <EditOvertimeForm
-                      id={ot.id}
-                      requestedDate={ot.requested_date}
-                      startTime={ot.start_time}
-                      endTime={ot.end_time}
-                      reason={ot.reason}
-                    />
-                  )}
+                  <EditOvertimeForm id={ot.id} requestedDate={ot.requested_date} startTime={ot.start_time} endTime={ot.end_time} reason={ot.reason} />
                   <StatusBadge status={ot.status} />
                 </div>
               </div>
@@ -529,6 +312,113 @@ export default async function RequestsPage({
           </div>
         )}
       </CollapsibleHistory>
+      </CollapsibleSection>
+
+      {/* ── TEAM REQUESTS ── */}
+      {isReviewer && (
+        <CollapsibleSection title="Team Requests">
+          <RequestsDateFilter from={teamFrom ?? ""} to={teamTo ?? ""} />
+
+          {teamPendingAdj.length > 0 && (
+            <BulkAdjustmentsSection adjustments={teamPendingAdj} officeWarnings={officeWarningsObj} currentUserId={user.id} isReviewer={isReviewer} isAdmin={isAdmin} />
+          )}
+          {teamPendingLeave.length > 0 && (
+            <BulkLeaveSection leaves={teamPendingLeave} currentUserId={user.id} isReviewer={isReviewer} isAdmin={isAdmin} />
+          )}
+          {teamPendingHw.length > 0 && (
+            <BulkHolidayWorkSection requests={teamPendingHw} currentUserId={user.id} isReviewer={isReviewer} isAdmin={isAdmin} />
+          )}
+          {teamPendingOt.length > 0 && (
+            <BulkOvertimeSection requests={teamPendingOt} currentUserId={user.id} isReviewer={isReviewer} isAdmin={isAdmin} />
+          )}
+          {teamPendingAdj.length === 0 && teamPendingLeave.length === 0 && teamPendingHw.length === 0 && teamPendingOt.length === 0 && (
+            <p className="text-sm text-gray-500">No pending team requests.</p>
+          )}
+
+          <CollapsibleHistory count={teamPastAdj.length + teamPastLeave.length + teamPastHw.length + teamPastOt.length}>
+            {teamPastAdj.length === 0 && teamPastLeave.length === 0 && teamPastHw.length === 0 && teamPastOt.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">No history yet.</div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {teamPastAdj.map((adj) => (
+                  <div key={adj.id} className="flex items-center justify-between p-6">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Schedule Adjustment</span>
+                        {adj.employee && <span className="text-sm font-medium text-gray-900"><UserNameLink userId={adj.employee_id} name={displayName(adj.employee)} /></span>}
+                      </div>
+                      <p className="text-sm text-gray-700">{formatDate(adj.requested_date)} &mdash; {formatTime(adj.requested_start_time)} – {formatTime(adj.requested_end_time)}</p>
+                      {adj.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {adj.reviewer_notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <AdjustmentActions adjustmentId={adj.id} currentStatus={adj.status} />
+                      {isAdmin && <CancelRequest requestId={adj.id} table="schedule_adjustments" />}
+                      {isAdmin && <EditAdjustmentForm id={adj.id} requestedDate={adj.requested_date} adjustmentType={adj.adjustment_type} requestedStartTime={adj.requested_start_time} requestedEndTime={adj.requested_end_time} requestedWorkLocation={adj.requested_work_location} reason={adj.reason} />}
+                      <StatusBadge status={adj.status} />
+                    </div>
+                  </div>
+                ))}
+                {teamPastLeave.map((leave) => (
+                  <div key={leave.id} className="flex items-center justify-between p-6">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">{LEAVE_TYPE_LABELS[leave.leave_type] ?? leave.leave_type}</span>
+                        {leave.employee && <span className="text-sm font-medium text-gray-900"><UserNameLink userId={leave.employee_id} name={displayName(leave.employee)} /></span>}
+                      </div>
+                      <p className="text-sm text-gray-700">{formatDate(leave.start_date)}{leave.leave_duration === "half_day" ? <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">Half day ({leave.half_day_period === "am" ? "AM" : "PM"})</span> : <> &mdash; {formatDate(leave.end_date)}</>}</p>
+                      {leave.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {leave.reviewer_notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <LeaveActions leaveId={leave.id} currentStatus={leave.status} />
+                      <CancelApprovedLeave leaveId={leave.id} startDate={leave.start_date} currentStatus={leave.status} />
+                      {isAdmin && <CancelRequest requestId={leave.id} table="leave_requests" />}
+                      {isAdmin && <EditLeaveForm id={leave.id} leaveType={leave.leave_type} leaveDuration={leave.leave_duration} halfDayPeriod={leave.half_day_period} startDate={leave.start_date} endDate={leave.end_date} reason={leave.reason} />}
+                      <StatusBadge status={leave.status} />
+                    </div>
+                  </div>
+                ))}
+                {teamPastHw.map((hw) => (
+                  <div key={hw.id} className="flex items-center justify-between p-6">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">Holiday Work</span>
+                        <span className="text-xs text-gray-500">{hw.holiday?.name}</span>
+                        {hw.employee && <span className="text-sm font-medium text-gray-900"><UserNameLink userId={hw.employee_id} name={displayName(hw.employee)} /></span>}
+                      </div>
+                      <p className="text-sm text-gray-700">{formatDate(hw.holiday_date)} &mdash; {formatTime(hw.start_time)} – {formatTime(hw.end_time)}</p>
+                      {hw.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {hw.reviewer_notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <HolidayWorkActions requestId={hw.id} currentStatus={hw.status} />
+                      {isAdmin && <CancelRequest requestId={hw.id} table="holiday_work_requests" />}
+                      {isAdmin && <EditHolidayWorkForm id={hw.id} duration={hw.duration} startTime={hw.start_time} endTime={hw.end_time} workLocation={hw.work_location} compensation={hw.compensation} reason={hw.reason} />}
+                      <StatusBadge status={hw.status} />
+                    </div>
+                  </div>
+                ))}
+                {teamPastOt.map((ot) => (
+                  <div key={ot.id} className="flex items-center justify-between p-6">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">Overtime</span>
+                        {ot.employee && <span className="text-sm font-medium text-gray-900"><UserNameLink userId={ot.employee_id} name={displayName(ot.employee)} /></span>}
+                      </div>
+                      <p className="text-sm text-gray-700">{formatDate(ot.requested_date)} &mdash; {formatTime(ot.start_time)} – {formatTime(ot.end_time)}</p>
+                      {ot.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {ot.reviewer_notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <OvertimeActions overtimeId={ot.id} currentStatus={ot.status} />
+                      {isAdmin && <CancelRequest requestId={ot.id} table="overtime_requests" />}
+                      {isAdmin && <EditOvertimeForm id={ot.id} requestedDate={ot.requested_date} startTime={ot.start_time} endTime={ot.end_time} reason={ot.reason} />}
+                      <StatusBadge status={ot.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CollapsibleHistory>
+        </CollapsibleSection>
+      )}
     </div>
   );
 }

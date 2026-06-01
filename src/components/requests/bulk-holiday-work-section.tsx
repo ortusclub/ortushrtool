@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CheckSquare, Square, Check } from "lucide-react";
+import { CheckSquare, Square, Check, ChevronDown, ChevronRight, Flag } from "lucide-react";
 import { formatDate, formatTime, displayName } from "@/lib/utils";
 import { HolidayWorkActions } from "@/components/holiday-work/holiday-work-actions";
 import { BuzzManager } from "@/components/shared/buzz-manager";
@@ -40,6 +40,7 @@ export function BulkHolidayWorkSection({
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const approvableIds = requests.filter(h => h.employee_id !== currentUserId).map(h => h.id);
   const allSelected = approvableIds.length > 0 && approvableIds.every(id => selected.has(id));
@@ -75,7 +76,15 @@ export function BulkHolidayWorkSection({
               {allSelected ? <CheckSquare size={18} className="text-teal-600" /> : <Square size={18} />}
             </button>
           )}
-          <h2 className="text-lg font-semibold text-gray-900">Pending Holiday Work Requests ({requests.length})</h2>
+          <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2">
+            {open ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}
+            <h2 className="text-lg font-semibold text-gray-900">Pending Holiday Work Requests ({requests.length})</h2>
+            {approvableIds.length > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                <Flag size={11} /> {approvableIds.length} need action
+              </span>
+            )}
+          </button>
         </div>
         {selected.size > 0 && (
           <button onClick={bulkApprove} disabled={busy} className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
@@ -84,7 +93,7 @@ export function BulkHolidayWorkSection({
           </button>
         )}
       </div>
-      <div className="divide-y divide-gray-100">
+      {open && <div className="divide-y divide-gray-100">
         {requests.map((hw) => {
           const isOwn = hw.employee_id === currentUserId;
           return (
@@ -154,7 +163,7 @@ export function BulkHolidayWorkSection({
             </div>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CheckSquare, Square, Check } from "lucide-react";
+import { CheckSquare, Square, Check, ChevronDown, ChevronRight, Flag } from "lucide-react";
 import { formatDate, formatTime, displayName } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 import { AdjustmentActions } from "@/components/adjustments/adjustment-actions";
@@ -45,6 +45,7 @@ export function BulkAdjustmentsSection({
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const approvableIds = adjustments
     .filter(a => a.employee_id !== currentUserId)
@@ -88,9 +89,17 @@ export function BulkAdjustmentsSection({
               {allSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
             </button>
           )}
-          <h2 className="text-lg font-semibold text-gray-900">
-            Pending Schedule Adjustments ({adjustments.length})
-          </h2>
+          <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2">
+            {open ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}
+            <h2 className="text-lg font-semibold text-gray-900">
+              Pending Schedule Adjustments ({adjustments.length})
+            </h2>
+            {approvableIds.length > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                <Flag size={11} /> {approvableIds.length} need action
+              </span>
+            )}
+          </button>
         </div>
         {selected.size > 0 && (
           <button
@@ -103,7 +112,7 @@ export function BulkAdjustmentsSection({
           </button>
         )}
       </div>
-      <div className="divide-y divide-gray-100">
+      {open && <div className="divide-y divide-gray-100">
         {adjustments.map((adj) => {
           const warning = officeWarnings[adj.id];
           const isOwn = adj.employee_id === currentUserId;
@@ -182,7 +191,7 @@ export function BulkAdjustmentsSection({
             </div>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }

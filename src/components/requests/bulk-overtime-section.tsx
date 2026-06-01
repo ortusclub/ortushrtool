@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CheckSquare, Square, Check } from "lucide-react";
+import { CheckSquare, Square, Check, ChevronDown, ChevronRight, Flag } from "lucide-react";
 import { formatDate, formatTime, displayName } from "@/lib/utils";
 import { OvertimeActions } from "@/components/overtime/overtime-actions";
 import { BuzzManager } from "@/components/shared/buzz-manager";
@@ -35,6 +35,7 @@ export function BulkOvertimeSection({
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const approvableIds = requests.filter(o => o.employee_id !== currentUserId).map(o => o.id);
   const allSelected = approvableIds.length > 0 && approvableIds.every(id => selected.has(id));
@@ -70,7 +71,15 @@ export function BulkOvertimeSection({
               {allSelected ? <CheckSquare size={18} className="text-orange-600" /> : <Square size={18} />}
             </button>
           )}
-          <h2 className="text-lg font-semibold text-gray-900">Pending Overtime Requests ({requests.length})</h2>
+          <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2">
+            {open ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}
+            <h2 className="text-lg font-semibold text-gray-900">Pending Overtime Requests ({requests.length})</h2>
+            {approvableIds.length > 0 && (
+              <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                <Flag size={11} /> {approvableIds.length} need action
+              </span>
+            )}
+          </button>
         </div>
         {selected.size > 0 && (
           <button onClick={bulkApprove} disabled={busy} className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
@@ -79,7 +88,7 @@ export function BulkOvertimeSection({
           </button>
         )}
       </div>
-      <div className="divide-y divide-gray-100">
+      {open && <div className="divide-y divide-gray-100">
         {requests.map((ot) => {
           const isOwn = ot.employee_id === currentUserId;
           return (
@@ -125,7 +134,7 @@ export function BulkOvertimeSection({
             </div>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }
