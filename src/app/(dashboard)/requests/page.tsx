@@ -9,6 +9,7 @@ import { HolidayWorkActions } from "@/components/holiday-work/holiday-work-actio
 import { OvertimeActions } from "@/components/overtime/overtime-actions";
 import { CancelRequest } from "@/components/shared/cancel-request";
 import { BuzzManager } from "@/components/shared/buzz-manager";
+import { RequestsDateFilter } from "@/components/requests/requests-date-filter";
 import Link from "next/link";
 import {
   ArrowRightLeft,
@@ -22,7 +23,12 @@ import { LeaveCsvImport } from "@/components/admin/leave-csv-import";
 import { AdjustmentCsvImport } from "@/components/admin/adjustment-csv-import";
 import { UserNameLink } from "@/components/shared/user-name-link";
 
-export default async function RequestsPage() {
+export default async function RequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
+  const { from: filterFrom, to: filterTo } = await searchParams;
   const user = await getCurrentUser();
   const supabase = await createClient();
   const isReviewer = hasRole(user.role, "manager");
@@ -51,6 +57,20 @@ export default async function RequestsPage() {
     leaveQuery = leaveQuery.eq("employee_id", user.id);
     hwQuery = hwQuery.eq("employee_id", user.id);
     otQuery = otQuery.eq("employee_id", user.id);
+  }
+
+  // Apply date filters
+  if (filterFrom) {
+    adjQuery = adjQuery.gte("requested_date", filterFrom);
+    leaveQuery = leaveQuery.gte("start_date", filterFrom);
+    hwQuery = hwQuery.gte("holiday_date", filterFrom);
+    otQuery = otQuery.gte("requested_date", filterFrom);
+  }
+  if (filterTo) {
+    adjQuery = adjQuery.lte("requested_date", filterTo);
+    leaveQuery = leaveQuery.lte("start_date", filterTo);
+    hwQuery = hwQuery.lte("holiday_date", filterTo);
+    otQuery = otQuery.lte("requested_date", filterTo);
   }
 
   const [
@@ -206,6 +226,8 @@ export default async function RequestsPage() {
         </div>
         {!isReviewer && actionButtons}
       </div>
+
+      <RequestsDateFilter />
 
       {hasRole(user.role, "hr_admin") && (
         <>
