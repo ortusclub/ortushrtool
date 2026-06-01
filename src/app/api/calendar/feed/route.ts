@@ -337,12 +337,18 @@ export async function GET(request: Request) {
   for (const o of overtimeRes.data ?? []) {
     const name = nameOf(o.employee_id);
     if (!o.requested_date || !o.start_time || !o.end_time) continue;
+    const isOvernight = o.end_time < o.start_time;
+    const endDate = isOvernight
+      ? new Date(new Date(o.requested_date + "T00:00:00").getTime() + 86400000)
+          .toISOString()
+          .slice(0, 10)
+      : o.requested_date;
     events.push({
       uid: `overtime-${o.id}@ortushrtool`,
       summary: `${name} — Overtime`,
       description: o.reason ?? undefined,
       start: `${o.requested_date}T${o.start_time.slice(0, 8)}+08:00`,
-      end: `${o.requested_date}T${o.end_time.slice(0, 8)}+08:00`,
+      end: `${endDate}T${o.end_time.slice(0, 8)}+08:00`,
     });
   }
 

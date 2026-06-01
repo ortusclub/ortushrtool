@@ -48,8 +48,8 @@ export default function OvertimeRequestPage() {
       setLoading(false);
       return;
     }
-    if (endTime <= startTime) {
-      setError("End time must be after start time.");
+    if (startTime && endTime && startTime === endTime) {
+      setError("Start time and end time cannot be the same.");
       setLoading(false);
       return;
     }
@@ -170,10 +170,14 @@ export default function OvertimeRequestPage() {
           />
         </div>
 
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          Enter only your <span className="font-semibold">OT hours</span> — do not include your regular shift. For overnight OT, the end time may be earlier than the start time (e.g. 23:00 – 02:00).
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Start time
+              OT start time
             </label>
             <input
               type="time"
@@ -185,7 +189,9 @@ export default function OvertimeRequestPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              End time
+              OT end time{startTime && endTime && endTime < startTime && (
+                <span className="ml-2 text-xs font-normal text-amber-600">(next day)</span>
+              )}
             </label>
             <input
               type="time"
