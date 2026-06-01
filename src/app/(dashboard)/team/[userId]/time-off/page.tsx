@@ -222,7 +222,7 @@ export default async function TeamMemberTimeOffTab({
       label: LEAVE_TYPE_LABELS[leaveType] ?? leaveType,
       allocated: Math.round(b.allocated * 100) / 100,
       used,
-      remaining: Math.max(0, Math.round((b.allocated - used) * 100) / 100),
+      remaining: Math.round((b.allocated - used) * 100) / 100,
       renewalStart: b.renewalStart,
       plans: Array.from(b.plans),
     };
@@ -283,22 +283,22 @@ export default async function TeamMemberTimeOffTab({
               {balances.map((b) => (
                 <div
                   key={b.leaveType}
-                  className="rounded-lg border border-gray-200 p-3"
+                  className={`rounded-lg border p-3 ${b.remaining < 0 ? "border-red-200 bg-red-50/40" : "border-gray-200"}`}
                 >
                   <p className="text-sm font-medium text-gray-900">{b.label}</p>
                   <div className="mt-2 flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-gray-900">
-                      {b.remaining}
+                    <span className={`text-2xl font-bold ${b.remaining < 0 ? "text-red-600" : "text-gray-900"}`}>
+                      {b.remaining < 0 ? Math.abs(b.remaining) : b.remaining}
                     </span>
-                    <span className="text-xs text-gray-500">
-                      of {b.allocated} day{b.allocated === 1 ? "" : "s"} left
+                    <span className={`text-xs ${b.remaining < 0 ? "font-medium text-red-500" : "text-gray-500"}`}>
+                      {b.remaining < 0 ? "day unpaid" : `of ${b.allocated} day${b.allocated === 1 ? "" : "s"} left`}
                     </span>
                   </div>
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-100">
                     <div
-                      className="h-full bg-emerald-500"
+                      className={`h-full ${b.remaining < 0 ? "bg-red-400" : "bg-emerald-500"}`}
                       style={{
-                        width: `${b.allocated > 0 ? (b.remaining / b.allocated) * 100 : 0}%`,
+                        width: b.remaining < 0 ? "100%" : `${b.allocated > 0 ? (b.remaining / b.allocated) * 100 : 0}%`,
                       }}
                     />
                   </div>
