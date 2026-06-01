@@ -10,6 +10,8 @@ import { OvertimeActions } from "@/components/overtime/overtime-actions";
 import { CancelRequest } from "@/components/shared/cancel-request";
 import { BuzzManager } from "@/components/shared/buzz-manager";
 import { RequestsDateFilter } from "@/components/requests/requests-date-filter";
+import { CollapsibleHistory } from "@/components/requests/collapsible-history";
+import { Suspense } from "react";
 import Link from "next/link";
 import {
   ArrowRightLeft,
@@ -227,7 +229,9 @@ export default async function RequestsPage({
         {!isReviewer && actionButtons}
       </div>
 
-      <RequestsDateFilter />
+      <Suspense fallback={null}>
+        <RequestsDateFilter />
+      </Suspense>
 
       {hasRole(user.role, "hr_admin") && (
         <>
@@ -509,10 +513,7 @@ export default async function RequestsPage({
       )}
 
       {/* History */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">History</h2>
-        </div>
+      <CollapsibleHistory count={pastAdj.length + pastLeave.length + pastHW.length + pastOT.length}>
         {pastAdj.length === 0 && pastLeave.length === 0 && pastHW.length === 0 && pastOT.length === 0 ? (
           <div className="p-6 text-center text-gray-500">No past requests.</div>
         ) : (
@@ -695,7 +696,7 @@ export default async function RequestsPage({
             ))}
           </div>
         )}
-      </div>
+      </CollapsibleHistory>
     </div>
   );
 }
