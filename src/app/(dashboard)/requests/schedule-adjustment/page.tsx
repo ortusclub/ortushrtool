@@ -143,7 +143,7 @@ export default function ScheduleAdjustmentPage() {
 
   // Check office days whenever dates or location selection changes
   const checkOfficeDays = useCallback(async () => {
-    if (isPermanent || validDates.length === 0) {
+    if (isPermanent || filteredDates.length === 0) {
       setOfficeWarnings([]);
       return;
     }
@@ -184,7 +184,7 @@ export default function ScheduleAdjustmentPage() {
 
     // Group dates by week (Monday key) to handle multiple dates in the same week
     const datesByWeek = new Map<string, string[]>();
-    for (const date of validDates) {
+    for (const date of filteredDates) {
       const weekKey = getMondayOf(date);
       if (!datesByWeek.has(weekKey)) datesByWeek.set(weekKey, []);
       datesByWeek.get(weekKey)!.push(date);
@@ -243,7 +243,7 @@ export default function ScheduleAdjustmentPage() {
     }
 
     setOfficeWarnings(warnings);
-  }, [validDates.join(","), adjustmentType, requestedLocation, isPermanent, showLocationField]);
+  }, [filteredDates.join(","), adjustmentType, requestedLocation, isPermanent, showLocationField]);
 
   useEffect(() => {
     const timer = setTimeout(checkOfficeDays, 300);
