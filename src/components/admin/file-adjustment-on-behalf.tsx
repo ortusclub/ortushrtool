@@ -222,20 +222,22 @@ export function FileAdjustmentOnBehalf({ employees }: { employees: Employee[] })
       </div>
 
       {/* Location filter */}
-      <div>
-        <label className="mb-2 block text-xs font-medium text-gray-600">Apply to which days?</label>
-        <div className="flex flex-wrap gap-4">
-          {(["all", "online", "office"] as const).map(opt => (
-            <label key={opt} className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-              <input type="radio" checked={locationFilter === opt} onChange={() => setLocationFilter(opt)} className="h-4 w-4 text-blue-600" />
-              {opt === "all" ? "All days" : opt === "online" ? "Online days only" : "Office days only"}
-            </label>
-          ))}
+      {employeeSchedule.length > 0 && validDates.length > 0 && (
+        <div>
+          <label className="mb-2 block text-xs font-medium text-gray-600">Apply to which days?</label>
+          <div className="flex flex-wrap gap-4">
+            {(["all", "online", "office"] as const).map(opt => (
+              <label key={opt} className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                <input type="radio" checked={locationFilter === opt} onChange={() => setLocationFilter(opt)} className="h-4 w-4 text-blue-600" />
+                {opt === "all" ? "All days" : opt === "online" ? "Online days only" : "Office days only"}
+              </label>
+            ))}
+          </div>
+          {locationFilter !== "all" && filteredDates.length === 0 && (
+            <p className="mt-1 text-xs text-amber-600">No {locationFilter} days found in the selected dates.</p>
+          )}
         </div>
-        {locationFilter !== "all" && validDates.length > 0 && filteredDates.length === 0 && (
-          <p className="mt-1 text-xs text-amber-600">No {locationFilter} days found in the selected dates.</p>
-        )}
-      </div>
+      )}
 
       {/* Type + times + location */}
       <div className="grid gap-3 sm:grid-cols-2">

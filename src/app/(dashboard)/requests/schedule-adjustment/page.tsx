@@ -536,28 +536,30 @@ export default function ScheduleAdjustmentPage() {
               </div>
             )}
           {/* Location filter */}
-          <div className="rounded-lg border border-gray-200 p-4">
-            <p className="mb-3 text-sm font-medium text-gray-700">Apply adjustment to which days?</p>
-            <div className="flex flex-wrap gap-4">
-              {(["all", "online", "office"] as const).map((opt) => (
-                <label key={opt} className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="radio"
-                    name="location_filter"
-                    checked={locationFilter === opt}
-                    onChange={() => setLocationFilter(opt)}
-                    className="h-4 w-4 text-blue-600"
-                  />
-                  <span className="text-sm text-gray-700">
-                    {opt === "all" ? "All days" : opt === "online" ? "Online days only" : "Office days only"}
-                  </span>
-                </label>
-              ))}
+          {schedulesLoaded && currentSchedules.length > 0 && validDates.length > 0 && (
+            <div className="rounded-lg border border-gray-200 p-4">
+              <p className="mb-3 text-sm font-medium text-gray-700">Apply adjustment to which days?</p>
+              <div className="flex flex-wrap gap-4">
+                {(["all", "online", "office"] as const).map((opt) => (
+                  <label key={opt} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="radio"
+                      name="location_filter"
+                      checked={locationFilter === opt}
+                      onChange={() => setLocationFilter(opt)}
+                      className="h-4 w-4 text-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {opt === "all" ? "All days" : opt === "online" ? "Online days only" : "Office days only"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {locationFilter !== "all" && filteredDates.length === 0 && (
+                <p className="mt-2 text-xs text-amber-600">No {locationFilter} days found in your selection.</p>
+              )}
             </div>
-            {locationFilter !== "all" && validDates.length > 0 && filteredDates.length === 0 && (
-              <p className="mt-2 text-xs text-amber-600">No {locationFilter} days found in your selection.</p>
-            )}
-          </div>
+          )}
           </div>
         )}
 
