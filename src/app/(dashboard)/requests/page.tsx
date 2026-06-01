@@ -224,7 +224,7 @@ export default async function RequestsPage({
 
       {/* ── ADMIN CONSOLE ── */}
       {isAdmin && (
-        <CollapsibleSection title="Admin Console" defaultOpen={false}>
+        <CollapsibleSection title="Admin Console" defaultOpen={false} accent="amber">
           <FileAdjustmentOnBehalf employees={allUsers} />
           <LeaveCsvImport />
           <AdjustmentCsvImport />
@@ -232,7 +232,7 @@ export default async function RequestsPage({
       )}
 
       {/* ── MY REQUESTS ── */}
-      <CollapsibleSection title="My Requests" actions={actionButtons}>
+      <CollapsibleSection title="My Requests" accent="indigo" actions={actionButtons}>
         <RequestsDateFilter from={myFrom ?? ""} to={myTo ?? ""} paramFrom="myfrom" paramTo="myto" />
 
         {myPendingAdj.length > 0 && (
@@ -316,7 +316,7 @@ export default async function RequestsPage({
 
       {/* ── TEAM REQUESTS ── */}
       {isReviewer && (
-        <CollapsibleSection title="Team Requests">
+        <CollapsibleSection title="Team Requests" accent="emerald">
           <RequestsDateFilter from={teamFrom ?? ""} to={teamTo ?? ""} />
 
           {teamPendingAdj.length > 0 && (
