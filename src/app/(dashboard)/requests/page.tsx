@@ -15,7 +15,6 @@ import { EditAdjustmentForm } from "@/components/admin/edit-adjustment-form";
 import { EditLeaveForm } from "@/components/admin/edit-leave-form";
 import { EditHolidayWorkForm } from "@/components/admin/edit-holiday-work-form";
 import { EditOvertimeForm } from "@/components/admin/edit-overtime-form";
-import { Suspense } from "react";
 import Link from "next/link";
 import {
   ArrowRightLeft,
@@ -233,9 +232,7 @@ export default async function RequestsPage({
         {!isReviewer && actionButtons}
       </div>
 
-      <Suspense fallback={null}>
-        <RequestsDateFilter />
-      </Suspense>
+      <RequestsDateFilter from={filterFrom ?? ""} to={filterTo ?? ""} />
 
       {hasRole(user.role, "hr_admin") && (
         <>
