@@ -35,6 +35,7 @@ export default function ScheduleAdjustmentPage() {
   const [dates, setDates] = useState<string[]>([""]);
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
+  const [locationFilter, setLocationFilter] = useState<"all" | "online" | "office">("all");
   const [adjustmentType, setAdjustmentType] = useState<ScheduleAdjustmentType>("time");
   const [requestedStart, setRequestedStart] = useState("");
   const [requestedEnd, setRequestedEnd] = useState("");
@@ -101,6 +102,18 @@ export default function ScheduleAdjustmentPage() {
   const validDates = dateMode === "range"
     ? getWeekdaysInRange(rangeStart, rangeEnd)
     : dates.filter((d) => d);
+
+  // Filter dates by the employee's scheduled work location for that day-of-week
+  function getScheduledLocation(dateStr: string): string | null {
+    const jsDay = new Date(dateStr + "T00:00:00").getDay();
+    const dow = (jsDay + 6) % 7; // Mon=0
+    const s = currentSchedules.find((r) => r.day_of_week === dow);
+    if (!s || s.is_rest_day) return null;
+    return s.work_location;
+  }
+  const filteredDates = locationFilter === "all"
+    ? validDates
+    : validDates.filter((d) => getScheduledLocation(d) === locationFilter);
 
   // Helper: format Date to YYYY-MM-DD in local time (avoids UTC shift)
   function toLocalDateStr(d: Date): string {
@@ -243,8 +256,10 @@ export default function ScheduleAdjustmentPage() {
     setLoading(true);
     setError("");
 
-    if (validDates.length === 0) {
-      setError(dateMode === "range" ? "Please select a valid date range." : "Please select at least one date.");
+    if (filteredDates.length === 0) {
+      setError(locationFilter !== "all"
+        ? `No ${locationFilter} days found in your selected dates.`
+        : dateMode === "range" ? "Please select a valid date range." : "Please select at least one date.");
       setLoading(false);
       return;
     }
@@ -266,7 +281,7 @@ export default function ScheduleAdjustmentPage() {
       return;
     }
 
-    for (const date of validDates) {
+    for (const date of filteredDates) {
       const dateObj = new Date(date);
       const dayOfWeek = (dateObj.getDay() + 6) % 7;
 
@@ -309,7 +324,7 @@ export default function ScheduleAdjustmentPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          requested_date: validDates.join(", "),
+          requested_date: filteredDates.join(", "),
           original_time: "Current schedule",
           requested_time: showTimeFields
             ? `${requestedStart} - ${requestedEnd}`
@@ -514,11 +529,37 @@ export default function ScheduleAdjustmentPage() {
                 </div>
                 {validDates.length > 0 && (
                   <p className="text-xs text-gray-500">
-                    This will apply to {validDates.length} weekday{validDates.length !== 1 ? "s" : ""} (weekends excluded)
+                    {filteredDates.length} of {validDates.length} weekday{validDates.length !== 1 ? "s" : ""} selected
+                    {locationFilter !== "all" ? ` (${locationFilter} days only)` : ""}
                   </p>
                 )}
               </div>
             )}
+          {/* Location filter */}
+          {schedulesLoaded && currentSchedules.length > 0 && validDates.length > 0 && (
+            <div className="rounded-lg border border-gray-200 p-4">
+              <p className="mb-3 text-sm font-medium text-gray-700">Apply adjustment to which days?</p>
+              <div className="flex flex-wrap gap-4">
+                {(["all", "online", "office"] as const).map((opt) => (
+                  <label key={opt} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="radio"
+                      name="location_filter"
+                      checked={locationFilter === opt}
+                      onChange={() => setLocationFilter(opt)}
+                      className="h-4 w-4 text-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {opt === "all" ? "All days" : opt === "online" ? "Online days only" : "Office days only"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {locationFilter !== "all" && filteredDates.length === 0 && (
+                <p className="mt-2 text-xs text-amber-600">No {locationFilter} days found in your selection.</p>
+              )}
+            </div>
+          )}
           </div>
         )}
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { Plus, Save, X } from "lucide-react";
 import type { ScheduleAdjustmentType, WorkLocation } from "@/types/database";
 
@@ -30,6 +31,8 @@ export function FileAdjustmentOnBehalf({ employees }: { employees: Employee[] })
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [employeeId, setEmployeeId] = useState("");
+  const [employeeSchedule, setEmployeeSchedule] = useState<{ day_of_week: number; work_location: string; is_rest_day: boolean }[]>([]);
+  const [locationFilter, setLocationFilter] = useState<"all" | "online" | "office">("all");
   const [dateMode, setDateMode] = useState<"individual" | "range">("individual");
   const [dates, setDates] = useState<string[]>([""]);
   const [rangeStart, setRangeStart] = useState("");
@@ -65,16 +68,46 @@ export function FileAdjustmentOnBehalf({ employees }: { employees: Employee[] })
       ? getWeekdaysInRange(rangeStart, rangeEnd)
       : dates.filter(Boolean);
 
+  async function fetchEmployeeSchedule(id: string) {
+    if (!id) { setEmployeeSchedule([]); return; }
+    const supabase = createClient();
+    const today = new Date().toISOString().split("T")[0];
+    const { data } = await supabase
+      .from("schedules")
+      .select("day_of_week, work_location, is_rest_day")
+      .eq("employee_id", id)
+      .lte("effective_from", today)
+      .or(`effective_until.is.null,effective_until.gte.${today}`);
+    setEmployeeSchedule(data ?? []);
+  }
+
+  function getScheduledLocation(dateStr: string): string | null {
+    const jsDay = new Date(dateStr + "T00:00:00").getDay();
+    const dow = (jsDay + 6) % 7; // Mon=0
+    const s = employeeSchedule.find((r) => r.day_of_week === dow);
+    if (!s || s.is_rest_day) return null;
+    return s.work_location;
+  }
+
+  const filteredDates = locationFilter === "all"
+    ? validDates
+    : validDates.filter((d) => getScheduledLocation(d) === locationFilter);
+
   const submit = async () => {
     if (!employeeId) { setError("Select an employee."); return; }
-    if (validDates.length === 0) { setError("Pick at least one date."); return; }
+    if (filteredDates.length === 0) {
+      setError(locationFilter !== "all"
+        ? `No ${locationFilter} days found in the selected dates.`
+        : "Pick at least one date.");
+      return;
+    }
     if (showTime && (!startTime || !endTime)) { setError("Set start and end times."); return; }
     if (!reason.trim()) { setError("Reason is required."); return; }
 
     setBusy(true);
     setError(null);
     let errors = 0;
-    for (const date of validDates) {
+    for (const date of filteredDates) {
       const res = await fetch("/api/schedule-adjustments/for-employee", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -127,7 +160,14 @@ export function FileAdjustmentOnBehalf({ employees }: { employees: Employee[] })
       {/* Employee picker */}
       <div>
         <label className="mb-1 block text-xs font-medium text-gray-600">Employee</label>
-        <select value={employeeId} onChange={e => setEmployeeId(e.target.value)} className={inputClass}>
+        <select
+          value={employeeId}
+          onChange={e => {
+            setEmployeeId(e.target.value);
+            fetchEmployeeSchedule(e.target.value);
+          }}
+          className={inputClass}
+        >
           <option value="">Select employee…</option>
           {employees.map(e => (
             <option key={e.id} value={e.id}>{displayName(e)}</option>
@@ -172,11 +212,32 @@ export function FileAdjustmentOnBehalf({ employees }: { employees: Employee[] })
               <input type="date" value={rangeEnd} min={rangeStart} onChange={e => setRangeEnd(e.target.value)} className={inputClass} />
             </div>
             {validDates.length > 0 && (
-              <p className="col-span-2 text-xs text-gray-500">{validDates.length} weekday{validDates.length !== 1 ? "s" : ""}</p>
+              <p className="col-span-2 text-xs text-gray-500">
+                {filteredDates.length} of {validDates.length} weekday{validDates.length !== 1 ? "s" : ""}
+                {locationFilter !== "all" ? ` (${locationFilter} days only)` : ""}
+              </p>
             )}
           </div>
         )}
       </div>
+
+      {/* Location filter */}
+      {employeeSchedule.length > 0 && validDates.length > 0 && (
+        <div>
+          <label className="mb-2 block text-xs font-medium text-gray-600">Apply to which days?</label>
+          <div className="flex flex-wrap gap-4">
+            {(["all", "online", "office"] as const).map(opt => (
+              <label key={opt} className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                <input type="radio" checked={locationFilter === opt} onChange={() => setLocationFilter(opt)} className="h-4 w-4 text-blue-600" />
+                {opt === "all" ? "All days" : opt === "online" ? "Online days only" : "Office days only"}
+              </label>
+            ))}
+          </div>
+          {locationFilter !== "all" && filteredDates.length === 0 && (
+            <p className="mt-1 text-xs text-amber-600">No {locationFilter} days found in the selected dates.</p>
+          )}
+        </div>
+      )}
 
       {/* Type + times + location */}
       <div className="grid gap-3 sm:grid-cols-2">
