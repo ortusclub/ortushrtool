@@ -11,6 +11,10 @@ import { CancelRequest } from "@/components/shared/cancel-request";
 import { BuzzManager } from "@/components/shared/buzz-manager";
 import { RequestsDateFilter } from "@/components/requests/requests-date-filter";
 import { CollapsibleHistory } from "@/components/requests/collapsible-history";
+import { EditAdjustmentForm } from "@/components/admin/edit-adjustment-form";
+import { EditLeaveForm } from "@/components/admin/edit-leave-form";
+import { EditHolidayWorkForm } from "@/components/admin/edit-holiday-work-form";
+import { EditOvertimeForm } from "@/components/admin/edit-overtime-form";
 import { Suspense } from "react";
 import Link from "next/link";
 import {
@@ -308,6 +312,17 @@ export default async function RequestsPage({
                       {isAdmin && adj.employee_id !== user.id && (
                         <CancelRequest requestId={adj.id} table="schedule_adjustments" />
                       )}
+                      {isAdmin && (
+                        <EditAdjustmentForm
+                          id={adj.id}
+                          requestedDate={adj.requested_date}
+                          adjustmentType={adj.adjustment_type}
+                          requestedStartTime={adj.requested_start_time}
+                          requestedEndTime={adj.requested_end_time}
+                          requestedWorkLocation={adj.requested_work_location}
+                          reason={adj.reason}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -377,6 +392,17 @@ export default async function RequestsPage({
                     )}
                     {isAdmin && leave.employee_id !== user.id && (
                       <CancelRequest requestId={leave.id} table="leave_requests" />
+                    )}
+                    {isAdmin && (
+                      <EditLeaveForm
+                        id={leave.id}
+                        leaveType={leave.leave_type}
+                        leaveDuration={leave.leave_duration}
+                        halfDayPeriod={leave.half_day_period}
+                        startDate={leave.start_date}
+                        endDate={leave.end_date}
+                        reason={leave.reason}
+                      />
                     )}
                   </div>
                 </div>
@@ -454,6 +480,17 @@ export default async function RequestsPage({
                     {isAdmin && hw.employee_id !== user.id && (
                       <CancelRequest requestId={hw.id} table="holiday_work_requests" />
                     )}
+                    {isAdmin && (
+                      <EditHolidayWorkForm
+                        id={hw.id}
+                        duration={hw.duration}
+                        startTime={hw.start_time}
+                        endTime={hw.end_time}
+                        workLocation={hw.work_location}
+                        compensation={hw.compensation}
+                        reason={hw.reason}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -504,6 +541,15 @@ export default async function RequestsPage({
                     {isAdmin && ot.employee_id !== user.id && (
                       <CancelRequest requestId={ot.id} table="overtime_requests" />
                     )}
+                    {isAdmin && (
+                      <EditOvertimeForm
+                        id={ot.id}
+                        requestedDate={ot.requested_date}
+                        startTime={ot.start_time}
+                        endTime={ot.end_time}
+                        reason={ot.reason}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -552,6 +598,17 @@ export default async function RequestsPage({
                   {isAdmin && adj.employee_id !== user.id && (
                     <CancelRequest requestId={adj.id} table="schedule_adjustments" />
                   )}
+                  {isAdmin && (
+                    <EditAdjustmentForm
+                      id={adj.id}
+                      requestedDate={adj.requested_date}
+                      adjustmentType={adj.adjustment_type}
+                      requestedStartTime={adj.requested_start_time}
+                      requestedEndTime={adj.requested_end_time}
+                      requestedWorkLocation={adj.requested_work_location}
+                      reason={adj.reason}
+                    />
+                  )}
                   <StatusBadge status={adj.status} />
                 </div>
               </div>
@@ -599,6 +656,17 @@ export default async function RequestsPage({
                   />
                   {isAdmin && leave.employee_id !== user.id && (
                     <CancelRequest requestId={leave.id} table="leave_requests" />
+                  )}
+                  {isAdmin && (
+                    <EditLeaveForm
+                      id={leave.id}
+                      leaveType={leave.leave_type}
+                      leaveDuration={leave.leave_duration}
+                      halfDayPeriod={leave.half_day_period}
+                      startDate={leave.start_date}
+                      endDate={leave.end_date}
+                      reason={leave.reason}
+                    />
                   )}
                   <StatusBadge status={leave.status} />
                 </div>
@@ -653,6 +721,17 @@ export default async function RequestsPage({
                   {isAdmin && hw.employee_id !== user.id && (
                     <CancelRequest requestId={hw.id} table="holiday_work_requests" />
                   )}
+                  {isAdmin && (
+                    <EditHolidayWorkForm
+                      id={hw.id}
+                      duration={hw.duration}
+                      startTime={hw.start_time}
+                      endTime={hw.end_time}
+                      workLocation={hw.work_location}
+                      compensation={hw.compensation}
+                      reason={hw.reason}
+                    />
+                  )}
                   <StatusBadge status={hw.status} />
                 </div>
               </div>
@@ -689,6 +768,15 @@ export default async function RequestsPage({
                   )}
                   {isAdmin && ot.employee_id !== user.id && (
                     <CancelRequest requestId={ot.id} table="overtime_requests" />
+                  )}
+                  {isAdmin && (
+                    <EditOvertimeForm
+                      id={ot.id}
+                      requestedDate={ot.requested_date}
+                      startTime={ot.start_time}
+                      endTime={ot.end_time}
+                      reason={ot.reason}
+                    />
                   )}
                   <StatusBadge status={ot.status} />
                 </div>
