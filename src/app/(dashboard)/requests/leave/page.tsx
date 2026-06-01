@@ -196,7 +196,7 @@ export default function LeaveRequestPage() {
     } else {
       setBalanceWarning(null);
     }
-  }, [form.leave_type, form.start_date, form.end_date, form.leave_duration, hasPlan, planAllocations, usedDays]);
+  }, [form.leave_type, form.start_date, form.end_date, form.leave_duration, hasPlan, planAllocations, usedDays, holidaySet]);
 
   useEffect(() => {
     checkBalance();
