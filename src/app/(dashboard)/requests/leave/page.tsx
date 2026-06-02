@@ -107,7 +107,7 @@ export default function LeaveRequestPage() {
           : countLeaveDays(l.start_date, l.end_date, localHolidays);
         used[l.leave_type] = (used[l.leave_type] ?? 0) + days;
       }
-      setUsedDays(used);
+      // (setUsedDays is called below, after folding in any negative credits.)
 
       const planIds = (assignedPlans ?? []).map((p) => p.plan_id);
       const now = new Date();
@@ -159,10 +159,18 @@ export default function LeaveRequestPage() {
         allocMap[a.leave_type] = (allocMap[a.leave_type] ?? 0) + prorated;
       }
 
-      // Fold in active manual leave credits — admin-issued bonus allocation.
+      // Fold in active manual leave credits. Positive credits raise the max
+      // (allocation); negative credits are deductions that reduce remaining
+      // without lowering the max, so they're charged against "used".
       for (const c of activeCredits ?? []) {
-        allocMap[c.leave_type] = (allocMap[c.leave_type] ?? 0) + Number(c.days);
+        const days = Number(c.days);
+        if (days >= 0) {
+          allocMap[c.leave_type] = (allocMap[c.leave_type] ?? 0) + days;
+        } else {
+          used[c.leave_type] = (used[c.leave_type] ?? 0) + -days;
+        }
       }
+      setUsedDays(used);
 
       const hasAnyBalance =
         planIds.length > 0 || (activeCredits?.length ?? 0) > 0;

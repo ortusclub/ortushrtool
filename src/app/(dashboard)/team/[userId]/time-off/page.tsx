@@ -143,6 +143,7 @@ export default async function TeamMemberTimeOffTab({
   // ─── Balances per leave_type ───
   type Bucket = {
     allocated: number;
+    deductions: number;
     plans: Set<string>;
     renewalStart: string;
   };
@@ -177,6 +178,7 @@ export default async function TeamMemberTimeOffTab({
       } else {
         buckets.set(a.leave_type, {
           allocated: prorated,
+          deductions: 0,
           plans: new Set([plan.name]),
           renewalStart,
         });
@@ -184,18 +186,21 @@ export default async function TeamMemberTimeOffTab({
     }
   }
 
-  // Fold in manual leave credits. Each active credit adds to allocated for
-  // its leave_type. Cycle scoping (renewalStart) stays with the plan; if a
-  // leave_type has no plan, we fall back to today's start-of-year so the
-  // credit covers leaves taken this calendar year.
+  // Fold in manual leave credits. A positive credit is bonus allocation
+  // (raises the max). A negative credit is a deduction (e.g. resignation
+  // payout, debit) — it lowers the remaining balance but must NOT lower the
+  // max entitlement, so it's tracked separately and charged against "used".
   for (const c of leaveCredits ?? []) {
+    const days = Number(c.days);
     const existing = buckets.get(c.leave_type);
     if (existing) {
-      existing.allocated += Number(c.days);
+      if (days >= 0) existing.allocated += days;
+      else existing.deductions += -days;
       existing.plans.add("Manual credit");
     } else {
       buckets.set(c.leave_type, {
-        allocated: Number(c.days),
+        allocated: days >= 0 ? days : 0,
+        deductions: days < 0 ? -days : 0,
         plans: new Set(["Manual credit"]),
         renewalStart: `${todayYear}-01-01`,
       });
@@ -203,7 +208,7 @@ export default async function TeamMemberTimeOffTab({
   }
 
   const balances = Array.from(buckets.entries()).map(([leaveType, b]) => {
-    const used = allLeaves
+    const usedLeaves = allLeaves
       .filter(
         (l) =>
           l.leave_type === leaveType &&
@@ -217,11 +222,12 @@ export default async function TeamMemberTimeOffTab({
             : sum + countLeaveDays(l.start_date, l.end_date, holidaySet),
         0
       );
+    const used = usedLeaves + b.deductions;
     return {
       leaveType,
       label: LEAVE_TYPE_LABELS[leaveType] ?? leaveType,
       allocated: Math.round(b.allocated * 100) / 100,
-      used,
+      used: Math.round(used * 100) / 100,
       remaining: Math.round((b.allocated - used) * 100) / 100,
       renewalStart: b.renewalStart,
       plans: Array.from(b.plans),

@@ -317,16 +317,26 @@ export default async function DashboardPage() {
   }
 
   // Fold in leave credits (admin-issued plus auto-granted earned CTO from
-  // approved holiday-work). Only active
-  // credits are returned by the query, so we can sum unconditionally.
+  // approved holiday-work). Only active credits are returned by the query.
+  //
+  // A positive credit is bonus allocation (raises the max). A negative credit
+  // is a deduction (resignation payout, debit) — it must lower remaining but
+  // NOT the max, so it's charged against "used" below, not subtracted from
+  // the allocated pool.
   //
   // Unlike CTO grants, we do NOT touch leaveTypeRenewalStart here — a credit
   // is just an additive bonus to the active allocated pool, while cycle
   // scoping stays with the plan (or yearStart default). This prevents an
   // unexpiring credit from yanking next year's renewalStart back into the
   // prior cycle and re-counting old leaves.
+  const creditDeductions: Record<string, number> = {};
   for (const c of myLeaveCredits.data ?? []) {
-    planAllocations[c.leave_type] = (planAllocations[c.leave_type] ?? 0) + Number(c.days);
+    const days = Number(c.days);
+    if (days >= 0) {
+      planAllocations[c.leave_type] = (planAllocations[c.leave_type] ?? 0) + days;
+    } else {
+      creditDeductions[c.leave_type] = (creditDeductions[c.leave_type] ?? 0) + -days;
+    }
   }
 
   // Count used days per type, respecting per-type renewal dates. Public
@@ -348,6 +358,10 @@ export default async function DashboardPage() {
         : countLeaveDays(l.start_date, l.end_date, holidaySet);
       leaveUsed[l.leave_type] = (leaveUsed[l.leave_type] ?? 0) + days;
     }
+  }
+  // Fold negative credits into used so they reduce remaining, not the max.
+  for (const [type, amt] of Object.entries(creditDeductions)) {
+    leaveUsed[type] = (leaveUsed[type] ?? 0) + amt;
   }
 
   // --- Who's Out ---

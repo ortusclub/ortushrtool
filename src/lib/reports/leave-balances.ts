@@ -83,18 +83,23 @@ export async function computeLeaveBalances(
   }
 
   // Group active leave credits by (employee_id, leave_type), tracking the
-  // earliest grant so we can collapse renewalStart later.
-  const creditsByEmp = new Map<string, Map<string, { days: number; earliest: string }>>();
+  // earliest grant so we can collapse renewalStart later. Positive and
+  // negative credits are kept apart: positives raise the max (allocation),
+  // negatives are deductions charged against "used" so they reduce remaining
+  // without lowering the max.
+  const creditsByEmp = new Map<string, Map<string, { pos: number; neg: number; earliest: string }>>();
   for (const c of (leaveCredits ?? []) as { employee_id: string; leave_type: string; days: number; granted_at: string }[]) {
     const grantDate = c.granted_at.slice(0, 10);
+    const days = Number(c.days);
     if (!creditsByEmp.has(c.employee_id)) creditsByEmp.set(c.employee_id, new Map());
     const byType = creditsByEmp.get(c.employee_id)!;
     const existing = byType.get(c.leave_type);
     if (existing) {
-      existing.days += Number(c.days);
+      if (days >= 0) existing.pos += days;
+      else existing.neg += -days;
       if (grantDate < existing.earliest) existing.earliest = grantDate;
     } else {
-      byType.set(c.leave_type, { days: Number(c.days), earliest: grantDate });
+      byType.set(c.leave_type, { pos: days >= 0 ? days : 0, neg: days < 0 ? -days : 0, earliest: grantDate });
     }
   }
 
@@ -127,6 +132,7 @@ export async function computeLeaveBalances(
     // One bucket per leave_type, aggregated across all the employee's plans
     type Bucket = {
       allocated: number;
+      deductions: number;
       plans: Set<string>;
       renewalStart: string;
     };
@@ -163,6 +169,7 @@ export async function computeLeaveBalances(
         } else {
           buckets.set(a.leave_type, {
             allocated: prorated,
+            deductions: 0,
             plans: new Set([plan.name]),
             renewalStart,
           });
@@ -171,19 +178,22 @@ export async function computeLeaveBalances(
     }
 
     // Fold in active leave credits (admin-issued + auto-granted earned CTO
-    // from approved holiday-work). We don't pull renewalStart
-    // back — credits just add to allocated, and cycle scoping stays with the
-    // plan (or yearStart default for credit-only leave types).
+    // from approved holiday-work). Positive credits add to allocated; negative
+    // credits are deductions charged against "used" so they lower remaining
+    // but not the max. We don't pull renewalStart back — cycle scoping stays
+    // with the plan (or yearStart default for credit-only leave types).
     if (empCredits) {
       const yearStart = `${today.slice(0, 4)}-01-01`;
       for (const [leaveType, c] of empCredits) {
         const existing = buckets.get(leaveType);
         if (existing) {
-          existing.allocated += c.days;
+          existing.allocated += c.pos;
+          existing.deductions += c.neg;
           existing.plans.add("Manual credit");
         } else {
           buckets.set(leaveType, {
-            allocated: c.days,
+            allocated: c.pos,
+            deductions: c.neg,
             plans: new Set(["Manual credit"]),
             renewalStart: yearStart,
           });
@@ -195,7 +205,7 @@ export async function computeLeaveBalances(
     const empHolidays = holidayByCountry.get(emp.holiday_country) ?? new Set<string>();
 
     for (const [leaveType, bucket] of buckets) {
-      const used = empLeaves
+      const usedLeaves = empLeaves
         .filter(
           (l) =>
             l.leave_type === leaveType && l.start_date >= bucket.renewalStart
@@ -205,6 +215,7 @@ export async function computeLeaveBalances(
           return sum + countLeaveDays(l.start_date, l.end_date, empHolidays);
         }, 0);
 
+      const used = Math.round((usedLeaves + bucket.deductions) * 100) / 100;
       const allocated = Math.round(bucket.allocated * 100) / 100;
       // CTO can go negative when an earned grant is revoked after the credit
       // has already been used. Other leave types stay clamped at zero — they
