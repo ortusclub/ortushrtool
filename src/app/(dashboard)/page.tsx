@@ -316,27 +316,16 @@ export default async function DashboardPage() {
     }
   }
 
-  // Fold in leave credits (admin-issued plus auto-granted earned CTO from
-  // approved holiday-work). Only active credits are returned by the query.
-  //
-  // A positive credit is bonus allocation (raises the max). A negative credit
-  // is a deduction (resignation payout, debit) — it must lower remaining but
-  // NOT the max, so it's charged against "used" below, not subtracted from
-  // the allocated pool.
-  //
-  // Unlike CTO grants, we do NOT touch leaveTypeRenewalStart here — a credit
-  // is just an additive bonus to the active allocated pool, while cycle
-  // scoping stays with the plan (or yearStart default). This prevents an
-  // unexpiring credit from yanking next year's renewalStart back into the
-  // prior cycle and re-counting old leaves.
-  const creditDeductions: Record<string, number> = {};
+  // Net leave credits into a separate pool, scoped to the current cycle. A
+  // credit only counts in the cycle it was granted (granted_at >= cycle start),
+  // so it refreshes with the allocation — CTO and any other credit are
+  // use-it-or-lose-it within the cycle. Positive and negative both just net
+  // into the available number; the plan allocation is never touched.
+  const creditPool: Record<string, number> = {};
   for (const c of myLeaveCredits.data ?? []) {
-    const days = Number(c.days);
-    if (days >= 0) {
-      planAllocations[c.leave_type] = (planAllocations[c.leave_type] ?? 0) + days;
-    } else {
-      creditDeductions[c.leave_type] = (creditDeductions[c.leave_type] ?? 0) + -days;
-    }
+    const cycleStart = leaveTypeRenewalStart[c.leave_type] ?? yearStart;
+    if (c.granted_at.slice(0, 10) < cycleStart) continue;
+    creditPool[c.leave_type] = (creditPool[c.leave_type] ?? 0) + Number(c.days);
   }
 
   // Count used days per type, respecting per-type renewal dates. Public
@@ -359,9 +348,14 @@ export default async function DashboardPage() {
       leaveUsed[l.leave_type] = (leaveUsed[l.leave_type] ?? 0) + days;
     }
   }
-  // Fold negative credits into used so they reduce remaining, not the max.
-  for (const [type, amt] of Object.entries(creditDeductions)) {
-    leaveUsed[type] = (leaveUsed[type] ?? 0) + amt;
+
+  // Available per type = plan base − used + net cycle credits.
+  const leaveAvailable: Record<string, number> = {};
+  for (const key of myLeaveTypes) {
+    const base = planAllocations[key] ?? 0;
+    const used = leaveUsed[key] ?? 0;
+    const credits = creditPool[key] ?? 0;
+    leaveAvailable[key] = Math.round((base - used + credits) * 100) / 100;
   }
 
   // --- Who's Out ---
@@ -734,25 +728,22 @@ export default async function DashboardPage() {
               {myLeaveTypes.map((key) => {
                 const label = leaveTypeLabels[key] ?? key;
                 const used = leaveUsed[key] ?? 0;
-                const allocated = planAllocations[key] ?? 0;
-                const remaining = allocated - used;
+                const available = leaveAvailable[key] ?? 0;
 
                 return (
                   <div key={key} className="rounded-lg bg-gray-50 p-3">
                     <p className="text-xs text-gray-500">{label}</p>
                     {hasPlan ? (
                       <>
-                        <p className={`mt-1 text-xl font-bold ${remaining <= 0 && allocated > 0 ? "text-red-600" : "text-gray-900"}`}>
-                          {remaining}
-                          <span className="ml-1 text-xs font-normal text-gray-400">
-                            / {allocated}
-                          </span>
+                        <p className={`mt-1 text-xl font-bold ${available < 0 ? "text-red-600" : "text-gray-900"}`}>
+                          {available}
+                          <span className="ml-1 text-xs font-normal text-gray-400">available</span>
                         </p>
                         {used > 0 && (
-                          <p className="text-[10px] text-gray-400">{used} used</p>
+                          <p className="text-[10px] text-gray-400">{used} used this cycle</p>
                         )}
-                        {remaining < 0 && (
-                          <p className="text-[10px] font-medium text-red-500">{Math.abs(remaining)} unpaid</p>
+                        {available < 0 && (
+                          <p className="text-[10px] font-medium text-red-500">{Math.abs(available)} unpaid</p>
                         )}
                       </>
                     ) : (

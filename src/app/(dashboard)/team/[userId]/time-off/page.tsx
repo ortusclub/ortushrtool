@@ -4,12 +4,14 @@ import { hasRole } from "@/lib/utils";
 import { LEAVE_TYPE_LABELS, UNIVERSAL_LEAVE_TYPES } from "@/lib/constants";
 import { getRenewalStart, prorateLeave } from "@/lib/leave-proration";
 import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
+import { buildLeaveLedger } from "@/lib/leave-ledger";
 import type { GrantType, LeaveRequest } from "@/types/database";
 import { format, parseISO } from "date-fns";
 import { Palmtree, Plane, CalendarDays } from "lucide-react";
 import { TimeOffCalendar } from "./calendar";
 import { LeaveRequestForm } from "@/components/profile/leave-request-form";
 import { LeavePlansEditor } from "@/components/profile/leave-plans-editor";
+import { LeaveBalanceCard } from "@/components/profile/leave-balance-card";
 
 type LeaveLite = Pick<
   LeaveRequest,
@@ -83,10 +85,10 @@ export default async function TeamMemberTimeOffTab({
       .from("holidays")
       .select("date, is_recurring")
       .eq("country", user.holiday_country),
-    // Active manual leave credits (admin-issued).
+    // Active manual leave credits (admin-issued + earned CTO).
     supabase
       .from("leave_credits")
-      .select("leave_type, days, granted_at, expires_at")
+      .select("leave_type, days, granted_at, expires_at, notes, source")
       .eq("employee_id", userId)
       .lte("granted_at", today)
       .or(`expires_at.is.null,expires_at.gte.${today}`),
@@ -140,14 +142,11 @@ export default async function TeamMemberTimeOffTab({
     })
   );
 
-  // ─── Balances per leave_type ───
-  type Bucket = {
-    allocated: number;
-    deductions: number;
-    plans: Set<string>;
-    renewalStart: string;
-  };
-  const buckets = new Map<string, Bucket>();
+  // ─── Balances per leave_type (fluid; no fixed max) ───
+  // Each leave_type opens with its (prorated) plan allocation for the current
+  // cycle, then credits and leaves net against it. Both credits and leaves are
+  // scoped to the cycle start, so a refresh resets everything automatically.
+  const planBuckets = new Map<string, { planBase: number; renewalStart: string }>();
 
   for (const pa of planAssignments) {
     const plan = pa.plan!;
@@ -168,69 +167,42 @@ export default async function TeamMemberTimeOffTab({
         day,
         plan.grant_type
       );
-      const existing = buckets.get(a.leave_type);
+      const existing = planBuckets.get(a.leave_type);
       if (existing) {
-        existing.allocated += prorated;
-        existing.plans.add(plan.name);
-        if (renewalStart > existing.renewalStart) {
-          existing.renewalStart = renewalStart;
-        }
+        existing.planBase += prorated;
+        if (renewalStart > existing.renewalStart) existing.renewalStart = renewalStart;
       } else {
-        buckets.set(a.leave_type, {
-          allocated: prorated,
-          deductions: 0,
-          plans: new Set([plan.name]),
-          renewalStart,
-        });
+        planBuckets.set(a.leave_type, { planBase: prorated, renewalStart });
       }
     }
   }
 
-  // Fold in manual leave credits. A positive credit is bonus allocation
-  // (raises the max). A negative credit is a deduction (e.g. resignation
-  // payout, debit) — it lowers the remaining balance but must NOT lower the
-  // max entitlement, so it's tracked separately and charged against "used".
-  for (const c of leaveCredits ?? []) {
-    const days = Number(c.days);
-    const existing = buckets.get(c.leave_type);
-    if (existing) {
-      if (days >= 0) existing.allocated += days;
-      else existing.deductions += -days;
-      existing.plans.add("Manual credit");
-    } else {
-      buckets.set(c.leave_type, {
-        allocated: days >= 0 ? days : 0,
-        deductions: days < 0 ? -days : 0,
-        plans: new Set(["Manual credit"]),
-        renewalStart: `${todayYear}-01-01`,
-      });
-    }
-  }
+  // Every leave_type that has a plan OR any credit gets a balance row.
+  const allTypes = new Set<string>([
+    ...planBuckets.keys(),
+    ...(leaveCredits ?? []).map((c) => c.leave_type),
+  ]);
 
-  const balances = Array.from(buckets.entries()).map(([leaveType, b]) => {
-    const usedLeaves = allLeaves
-      .filter(
-        (l) =>
-          l.leave_type === leaveType &&
-          l.status === "approved" &&
-          l.start_date >= b.renewalStart
-      )
-      .reduce(
-        (sum, l) =>
-          l.leave_duration === "half_day"
-            ? sum + 0.5
-            : sum + countLeaveDays(l.start_date, l.end_date, holidaySet),
-        0
-      );
-    const used = usedLeaves + b.deductions;
+  const balances = Array.from(allTypes).map((leaveType) => {
+    const pb = planBuckets.get(leaveType);
+    const cycleStart = pb?.renewalStart ?? `${todayYear}-01-01`;
+    const ledger = buildLeaveLedger({
+      leaveType,
+      planBase: pb?.planBase ?? 0,
+      cycleStart,
+      credits: (leaveCredits ?? []).filter((c) => c.leave_type === leaveType),
+      leaves: allLeaves,
+      holidays: holidaySet,
+      today,
+    });
     return {
       leaveType,
       label: LEAVE_TYPE_LABELS[leaveType] ?? leaveType,
-      allocated: Math.round(b.allocated * 100) / 100,
-      used: Math.round(used * 100) / 100,
-      remaining: Math.round((b.allocated - used) * 100) / 100,
-      renewalStart: b.renewalStart,
-      plans: Array.from(b.plans),
+      available: ledger.available,
+      usedDays: ledger.usedDays,
+      usedCount: ledger.usedCount,
+      entries: ledger.entries,
+      renewalStart: cycleStart,
     };
   });
   balances.sort((a, b) => a.label.localeCompare(b.label));
@@ -287,32 +259,14 @@ export default async function TeamMemberTimeOffTab({
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {balances.map((b) => (
-                <div
+                <LeaveBalanceCard
                   key={b.leaveType}
-                  className={`rounded-lg border p-3 ${b.remaining < 0 ? "border-red-200 bg-red-50/40" : "border-gray-200"}`}
-                >
-                  <p className="text-sm font-medium text-gray-900">{b.label}</p>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    <span className={`text-2xl font-bold ${b.remaining < 0 ? "text-red-600" : "text-gray-900"}`}>
-                      {b.remaining < 0 ? Math.abs(b.remaining) : b.remaining}
-                    </span>
-                    <span className={`text-xs ${b.remaining < 0 ? "font-medium text-red-500" : "text-gray-500"}`}>
-                      {b.remaining < 0 ? "day unpaid" : `of ${b.allocated} day${b.allocated === 1 ? "" : "s"} left`}
-                    </span>
-                  </div>
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                    <div
-                      className={`h-full ${b.remaining < 0 ? "bg-red-400" : "bg-emerald-500"}`}
-                      style={{
-                        width: b.remaining < 0 ? "100%" : `${b.allocated > 0 ? (b.remaining / b.allocated) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="mt-2 text-[11px] text-gray-400">
-                    Used {b.used} · cycle starts{" "}
-                    {format(parseISO(b.renewalStart), "MMM d, yyyy")}
-                  </p>
-                </div>
+                  label={b.label}
+                  available={b.available}
+                  usedDays={b.usedDays}
+                  usedCount={b.usedCount}
+                  entries={b.entries}
+                />
               ))}
             </div>
           )}

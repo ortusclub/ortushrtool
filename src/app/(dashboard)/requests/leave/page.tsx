@@ -143,6 +143,7 @@ export default function LeaveRequestPage() {
 
       const hireDate = profile?.hire_date ?? null;
       const allocMap: Record<string, number> = {};
+      const cycleStartByType: Record<string, string> = {};
 
       const [{ data: allocs }, { data: plans }] = planSide as [{ data: Array<{ plan_id: string; leave_type: string; days_per_year: number }> }, { data: Array<{ id: string; grant_type: GrantType; renewal_month: number; renewal_day: number }> }];
       for (const a of allocs ?? []) {
@@ -157,18 +158,20 @@ export default function LeaveRequestPage() {
         );
         const prorated = prorateLeave(a.days_per_year, hireDate, renewalStart, month, day, grantType);
         allocMap[a.leave_type] = (allocMap[a.leave_type] ?? 0) + prorated;
+        if (!cycleStartByType[a.leave_type] || renewalStart > cycleStartByType[a.leave_type]) {
+          cycleStartByType[a.leave_type] = renewalStart;
+        }
       }
 
-      // Fold in active manual leave credits. Positive credits raise the max
-      // (allocation); negative credits are deductions that reduce remaining
-      // without lowering the max, so they're charged against "used".
+      // Net active manual leave credits into the allocation pool, scoped to the
+      // current cycle (granted_at >= cycle start) so they reset on refresh. Both
+      // signs just net in; there's no separate max to protect, so the balance
+      // shown is simply "available" = plan base − used + net cycle credits.
+      const yearStartStr = `${currentYear}-01-01`;
       for (const c of activeCredits ?? []) {
-        const days = Number(c.days);
-        if (days >= 0) {
-          allocMap[c.leave_type] = (allocMap[c.leave_type] ?? 0) + days;
-        } else {
-          used[c.leave_type] = (used[c.leave_type] ?? 0) + -days;
-        }
+        const cycleStart = cycleStartByType[c.leave_type] ?? yearStartStr;
+        if (c.granted_at.slice(0, 10) < cycleStart) continue;
+        allocMap[c.leave_type] = (allocMap[c.leave_type] ?? 0) + Number(c.days);
       }
       setUsedDays(used);
 
@@ -339,7 +342,7 @@ export default function LeaveRequestPage() {
           )}
           {hasPlan && form.leave_type && !loadingTypes && (
             <p className="mt-1 text-xs text-gray-500">
-              Balance: {(planAllocations[form.leave_type] ?? 0) - (usedDays[form.leave_type] ?? 0)} of {planAllocations[form.leave_type] ?? 0} day(s) remaining
+              {Math.round(((planAllocations[form.leave_type] ?? 0) - (usedDays[form.leave_type] ?? 0)) * 100) / 100} day(s) available
             </p>
           )}
         </div>

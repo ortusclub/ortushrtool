@@ -82,25 +82,16 @@ export async function computeLeaveBalances(
     holidayByCountry.set(country, buildHolidaySet(rows, holidayRangeFrom, holidayRangeTo));
   }
 
-  // Group active leave credits by (employee_id, leave_type), tracking the
-  // earliest grant so we can collapse renewalStart later. Positive and
-  // negative credits are kept apart: positives raise the max (allocation),
-  // negatives are deductions charged against "used" so they reduce remaining
-  // without lowering the max.
-  const creditsByEmp = new Map<string, Map<string, { pos: number; neg: number; earliest: string }>>();
+  // Keep raw active credits per (employee_id, leave_type) with grant dates, so
+  // they can be scoped to each leave_type's cycle below (a credit only counts
+  // in the cycle it was granted, so it resets on refresh — use-it-or-lose-it).
+  const creditsByEmp = new Map<string, Map<string, { days: number; granted: string }[]>>();
   for (const c of (leaveCredits ?? []) as { employee_id: string; leave_type: string; days: number; granted_at: string }[]) {
     const grantDate = c.granted_at.slice(0, 10);
-    const days = Number(c.days);
     if (!creditsByEmp.has(c.employee_id)) creditsByEmp.set(c.employee_id, new Map());
     const byType = creditsByEmp.get(c.employee_id)!;
-    const existing = byType.get(c.leave_type);
-    if (existing) {
-      if (days >= 0) existing.pos += days;
-      else existing.neg += -days;
-      if (grantDate < existing.earliest) existing.earliest = grantDate;
-    } else {
-      byType.set(c.leave_type, { pos: days >= 0 ? days : 0, neg: days < 0 ? -days : 0, earliest: grantDate });
-    }
+    if (!byType.has(c.leave_type)) byType.set(c.leave_type, []);
+    byType.get(c.leave_type)!.push({ days: Number(c.days), granted: grantDate });
   }
 
   const planById = new Map<string, any>(
@@ -132,7 +123,6 @@ export async function computeLeaveBalances(
     // One bucket per leave_type, aggregated across all the employee's plans
     type Bucket = {
       allocated: number;
-      deductions: number;
       plans: Set<string>;
       renewalStart: string;
     };
@@ -169,7 +159,6 @@ export async function computeLeaveBalances(
         } else {
           buckets.set(a.leave_type, {
             allocated: prorated,
-            deductions: 0,
             plans: new Set([plan.name]),
             renewalStart,
           });
@@ -177,23 +166,23 @@ export async function computeLeaveBalances(
       }
     }
 
-    // Fold in active leave credits (admin-issued + auto-granted earned CTO
-    // from approved holiday-work). Positive credits add to allocated; negative
-    // credits are deductions charged against "used" so they lower remaining
-    // but not the max. We don't pull renewalStart back — cycle scoping stays
-    // with the plan (or yearStart default for credit-only leave types).
+    // Net active leave credits into the allocation pool, scoped to each type's
+    // cycle (granted on/after the cycle start) so they reset on refresh. Both
+    // signs net in; there's no separate max, so remaining = available.
     if (empCredits) {
       const yearStart = `${today.slice(0, 4)}-01-01`;
-      for (const [leaveType, c] of empCredits) {
+      for (const [leaveType, list] of empCredits) {
         const existing = buckets.get(leaveType);
+        const cycleStart = existing?.renewalStart ?? yearStart;
+        const net = list
+          .filter((c) => c.granted >= cycleStart)
+          .reduce((s, c) => s + c.days, 0);
         if (existing) {
-          existing.allocated += c.pos;
-          existing.deductions += c.neg;
+          existing.allocated += net;
           existing.plans.add("Manual credit");
         } else {
           buckets.set(leaveType, {
-            allocated: c.pos,
-            deductions: c.neg,
+            allocated: net,
             plans: new Set(["Manual credit"]),
             renewalStart: yearStart,
           });
@@ -215,7 +204,7 @@ export async function computeLeaveBalances(
           return sum + countLeaveDays(l.start_date, l.end_date, empHolidays);
         }, 0);
 
-      const used = Math.round((usedLeaves + bucket.deductions) * 100) / 100;
+      const used = Math.round(usedLeaves * 100) / 100;
       const allocated = Math.round(bucket.allocated * 100) / 100;
       // CTO can go negative when an earned grant is revoked after the credit
       // has already been used. Other leave types stay clamped at zero — they
