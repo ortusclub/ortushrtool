@@ -13,7 +13,7 @@ interface Props {
   entries: LedgerEntry[];
 }
 
-export function LeaveBalanceCard({ label, available, usedDays, usedCount, entries }: Props) {
+export function LeaveBalanceCard({ label, available, usedDays, entries }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -31,7 +31,7 @@ export function LeaveBalanceCard({ label, available, usedDays, usedCount, entrie
           <span className="text-xs text-gray-500">available</span>
         </div>
         <p className="mt-2 text-[11px] text-gray-400">
-          {usedCount} leave{usedCount === 1 ? "" : "s"} · {usedDays} day{usedDays === 1 ? "" : "s"} used · tap for history
+          {usedDays} day{usedDays === 1 ? "" : "s"} used · tap for history
         </p>
       </button>
 
@@ -86,7 +86,7 @@ export function LeaveBalanceCard({ label, available, usedDays, usedCount, entrie
 
             <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-5 py-3">
               <span className="text-xs text-gray-500">
-                {usedCount} leave{usedCount === 1 ? "" : "s"} · {usedDays} day{usedDays === 1 ? "" : "s"} used
+                {usedDays} day{usedDays === 1 ? "" : "s"} used
               </span>
               <span className="text-sm font-semibold text-gray-900">
                 Available: {available}
