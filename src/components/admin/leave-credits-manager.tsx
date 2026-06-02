@@ -133,7 +133,12 @@ export function LeaveCreditsManager({ initialCredits, users }: Props) {
   };
 
   const revoke = async (id: string) => {
-    if (!confirm("Revoke this credit? The employee's allocated balance will drop by the credit amount.")) return;
+    const credit = credits.find((c) => c.id === id);
+    const isDeduction = credit ? Number(credit.days) < 0 : false;
+    const message = isDeduction
+      ? "Remove this deduction? The employee's remaining balance will go back up by the deducted amount."
+      : "Revoke this credit? The employee's allocated balance will drop by the credit amount.";
+    if (!confirm(message)) return;
     const supabase = createClient();
     const { error: delErr } = await supabase.from("leave_credits").delete().eq("id", id);
     if (delErr) {
