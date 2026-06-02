@@ -20,10 +20,10 @@ export default async function ConcernsLandingPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Report a Concern</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Workplace Concerns</h1>
         <p className="text-gray-600">
-          A safe place to raise issues — formally as an incident report, or
-          anonymously as feedback.
+          A safe place to raise workplace issues — formally as an incident
+          report, or anonymously as feedback.
         </p>
       </div>
 

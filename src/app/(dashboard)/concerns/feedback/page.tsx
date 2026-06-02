@@ -11,7 +11,7 @@ export default function FeedbackPage() {
           className="mb-4 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
         >
           <ArrowLeft size={16} />
-          Back to Report a Concern
+          Back to Workplace Concerns
         </Link>
         <h1 className="text-2xl font-bold text-gray-900">Anonymous Feedback</h1>
         <p className="text-gray-600">

@@ -27,7 +27,7 @@ const FEATURES: ReadonlyArray<{
   { route: "/performance/kpis", label: "↳ KPIs (Performance view)", group: "My Workspace" },
   { route: "/performance/kudos", label: "↳ Kudos", group: "My Workspace" },
   { route: "/performance/one-on-ones", label: "↳ 1-on-1s (Performance view)", group: "My Workspace" },
-  { route: "/concerns", label: "Report a Concern", group: "My Workspace" },
+  { route: "/concerns", label: "Workplace Concerns", group: "My Workspace" },
   { route: "/help", label: "Help & Guide", group: "My Workspace" },
   { route: "/attendance/team", label: "Team Attendance", group: "Team" },
   { route: "/one-on-ones", label: "1-on-1s", group: "Team" },

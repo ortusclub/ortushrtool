@@ -74,7 +74,7 @@ const navSections: NavSection[] = [
       { label: "Team Directory", href: "/team", icon: <UsersRound size={20} />, minRole: "employee" },
       { label: "KPIs", href: "/kpis", icon: <Target size={20} />, minRole: "employee" },
       { label: "Performance", href: "/performance", icon: <Trophy size={20} />, minRole: "employee" },
-      { label: "Report a Concern", href: "/concerns", icon: <ShieldAlert size={20} />, minRole: "employee" },
+      { label: "Workplace Concerns", href: "/concerns", icon: <ShieldAlert size={20} />, minRole: "employee" },
       { label: "Help & Guide", href: "/help", icon: <HelpCircle size={20} />, minRole: "employee" },
     ],
   },
