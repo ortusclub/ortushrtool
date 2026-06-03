@@ -16,6 +16,8 @@ export function AdjustmentActions({ adjustmentId, currentStatus }: Props) {
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState("");
   const [action, setAction] = useState<"approved" | "rejected" | null>(null);
+  const [done, setDone] = useState<"approved" | "rejected" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleAction = async (status: "approved" | "rejected") => {
     if (status === "rejected" && !showNotes) {
@@ -25,12 +27,13 @@ export function AdjustmentActions({ adjustmentId, currentStatus }: Props) {
     }
 
     setLoading(true);
+    setError(null);
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    await supabase
+    const { error: updErr } = await supabase
       .from("schedule_adjustments")
       .update({
         status,
@@ -40,22 +43,36 @@ export function AdjustmentActions({ adjustmentId, currentStatus }: Props) {
       })
       .eq("id", adjustmentId);
 
-    try {
-      await fetch("/api/notifications/adjustment-decision", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          adjustment_id: adjustmentId,
-          status,
-          notes: notes || null,
-        }),
-      });
-    } catch {
-      // Non-blocking
+    if (updErr) {
+      setError(updErr.message);
+      setLoading(false);
+      return;
     }
 
+    // Send the decision email in the background — don't make the UI wait on it.
+    fetch("/api/notifications/adjustment-decision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        adjustment_id: adjustmentId,
+        status,
+        notes: notes || null,
+      }),
+    }).catch(() => {});
+
+    setDone(status);
+    setLoading(false);
     router.refresh();
   };
+
+  if (done) {
+    return (
+      <span className={`flex items-center gap-1 text-xs font-medium ${done === "approved" ? "text-green-600" : "text-red-600"}`}>
+        {done === "approved" ? <Check size={14} /> : <X size={14} />}
+        {done === "approved" ? "Approved" : "Rejected"}
+      </span>
+    );
+  }
 
   if (showNotes) {
     return (
@@ -117,23 +134,26 @@ export function AdjustmentActions({ adjustmentId, currentStatus }: Props) {
   }
 
   return (
-    <div className="flex gap-2">
-      <button
-        onClick={() => handleAction("approved")}
-        disabled={loading}
-        className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-      >
-        <Check size={14} />
-        Approve
-      </button>
-      <button
-        onClick={() => handleAction("rejected")}
-        disabled={loading}
-        className="flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
-      >
-        <X size={14} />
-        Reject
-      </button>
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex gap-2">
+        <button
+          onClick={() => handleAction("approved")}
+          disabled={loading}
+          className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          <Check size={14} />
+          {loading ? "Approving…" : "Approve"}
+        </button>
+        <button
+          onClick={() => handleAction("rejected")}
+          disabled={loading}
+          className="flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          <X size={14} />
+          Reject
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }
