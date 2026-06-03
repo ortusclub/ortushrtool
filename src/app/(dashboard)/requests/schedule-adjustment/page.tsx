@@ -143,7 +143,9 @@ export default function ScheduleAdjustmentPage() {
 
   // Check office days whenever dates or location selection changes
   const checkOfficeDays = useCallback(async () => {
-    if (isPermanent || filteredDates.length === 0) {
+    // A time-only adjustment doesn't change work location, so it can never
+    // reduce office presence — no warning applies.
+    if (isPermanent || filteredDates.length === 0 || adjustmentType === "time") {
       setOfficeWarnings([]);
       return;
     }

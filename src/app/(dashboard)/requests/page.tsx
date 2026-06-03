@@ -140,6 +140,10 @@ export default async function RequestsPage({
     // For each pending adjustment, compute office days for its week
     for (const adj of pendingAdj) {
       if (adj.requested_date === "9999-12-31") continue; // Skip permanent
+      // A time-only adjustment doesn't change work location, so it can never
+      // reduce office presence — skip the warning. (A low office count that
+      // week comes from other days, not this time change.)
+      if (!adj.requested_work_location) continue;
 
       const reqDate = new Date(adj.requested_date + "T00:00:00");
       const weekMon = startOfWeek(reqDate, { weekStartsOn: 1 });
