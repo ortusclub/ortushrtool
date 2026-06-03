@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Lock } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { IncidentForm } from "@/components/concerns/incident-form";
@@ -29,8 +29,16 @@ export default async function IncidentReportPage() {
         </Link>
         <h1 className="text-2xl font-bold text-gray-900">Report an Incident</h1>
         <p className="text-gray-600">
-          Your name is attached so HR can follow up with you. Only you and HR
-          can see this report.
+          Your name is attached so HR can follow up with you.
+        </p>
+      </div>
+
+      <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <Lock size={18} className="mt-0.5 shrink-0 text-blue-600" />
+        <p className="text-sm text-blue-900">
+          Incident reports are confidential and only visible to the internal HR
+          team. No one else — including your manager or colleagues — can see
+          what you submit here.
         </p>
       </div>
 

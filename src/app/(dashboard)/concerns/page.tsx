@@ -42,10 +42,10 @@ export default async function ConcernsLandingPage() {
           </div>
           <p className="mt-3 text-sm text-gray-600">
             File a formal incident report. Your name is attached so HR can
-            follow up with you. Visible to you and HR only.
+            follow up with you. Only the internal HR team can see it.
           </p>
           <p className="mt-2 inline-flex items-center gap-1 text-xs text-gray-500">
-            <ShieldCheck size={12} /> Confidential to HR & you
+            <ShieldCheck size={12} /> Confidential to the internal HR team
           </p>
         </Link>
 
