@@ -71,6 +71,14 @@ export function IncidentForm({ currentUserId, candidates }: Props) {
       return;
     }
 
+    // Notify HR that a new incident report was filed (non-blocking — the
+    // report is saved regardless of whether the email goes out).
+    fetch("/api/notifications/incident-submitted", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ report_id: inserted.id }),
+    }).catch(() => {});
+
     // Upload attachments to concern-attachments/{report_id}/{filename}.
     // Failures are surfaced but don't roll back the report — the report is
     // still useful without the attachment, and HR can request a re-upload.

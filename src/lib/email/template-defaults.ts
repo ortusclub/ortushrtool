@@ -366,6 +366,20 @@ export const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateDefault[] = [
       "employee_name, document_type, addressee, request_details_html",
   },
 
+  // ── Incident reports ──
+  {
+    type: "incident_submitted",
+    name: "Incident Report — Notification (to HR)",
+    subject: "New incident report from {{employee_name}}",
+    body: [
+      `<h2>New Incident Report</h2>`,
+      `<p><strong>{{employee_name}}</strong> has filed an incident report. It is confidential to HR and the reporter.</p>`,
+      `{{incident_details_html}}`,
+      button("Review in HR Queue", "{{app_url}}/concerns/admin"),
+    ].join("\n"),
+    variables: "employee_name, incident_details_html",
+  },
+
   // ── Reminders ──
   {
     type: "reminder",
