@@ -94,7 +94,9 @@ export function SchedulesTable({
           .from("schedule_adjustments")
           .select("*")
           .eq("requested_date", selectedDate)
-          .eq("status", "approved"),
+          .eq("status", "approved")
+          // Oldest first so the most recent approved adjustment wins per employee.
+          .order("created_at", { ascending: true }),
         supabase
           .from("leave_requests")
           .select("*")

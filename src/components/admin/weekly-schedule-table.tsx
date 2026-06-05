@@ -86,7 +86,9 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
         .select("*")
         .eq("status", "approved")
         .gte("requested_date", startStr)
-        .lte("requested_date", endStr),
+        .lte("requested_date", endStr)
+        // Oldest first so the most recent approved adjustment wins per date.
+        .order("created_at", { ascending: true }),
       supabase
         .from("holiday_work_requests")
         .select("*")

@@ -195,14 +195,16 @@ export default function ScheduleAdjustmentPage() {
     for (const [weekMonday, weekDates] of datesByWeek) {
       const weekEndStr = addDaysStr(weekMonday, 4);
 
-      // Fetch approved adjustments for this employee in this week
+      // Fetch approved adjustments for this employee in this week. Oldest first
+      // so the most recent approved adjustment wins per date.
       const { data: weekAdjs } = await supabase
         .from("schedule_adjustments")
         .select("requested_date, requested_work_location")
         .eq("employee_id", user.id)
         .eq("status", "approved")
         .gte("requested_date", weekMonday)
-        .lte("requested_date", weekEndStr);
+        .lte("requested_date", weekEndStr)
+        .order("created_at", { ascending: true });
 
       const adjOverrides = new Map<string, string | null>();
       for (const a of weekAdjs ?? []) {

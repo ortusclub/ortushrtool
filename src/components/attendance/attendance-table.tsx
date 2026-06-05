@@ -146,7 +146,10 @@ export function AttendanceTable({ initialLogs, userId, schedules, initialPunches
         .eq("employee_id", userId)
         .eq("status", "approved")
         .gte("requested_date", from)
-        .lte("requested_date", to),
+        .lte("requested_date", to)
+        // Oldest first so the most recent approved adjustment wins when a date
+        // has more than one (the date→value map keeps the last write).
+        .order("created_at", { ascending: true }),
       supabase
         .from("biometric_punches")
         .select("punch_time")

@@ -174,13 +174,15 @@ export async function GET(request: Request) {
       const dateObj = new Date(syncDate + "T00:00:00");
       const dayOfWeek = (dateObj.getDay() + 6) % 7; // Monday=0
 
-      // Check for approved adjustment first
+      // Check for approved adjustment first. If more than one was approved for
+      // the same date, the most recently created one wins.
       const { data: adjustment } = await supabase
         .from("schedule_adjustments")
         .select("requested_start_time, requested_end_time")
         .eq("employee_id", userId)
         .eq("requested_date", syncDate)
         .eq("status", "approved")
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 

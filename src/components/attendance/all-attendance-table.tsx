@@ -325,7 +325,9 @@ export function AllAttendanceTable({
         .select("employee_id, requested_date, requested_work_location")
         .gte("requested_date", fromDate)
         .lte("requested_date", toDate)
-        .eq("status", "approved"),
+        .eq("status", "approved")
+        // Oldest first so the most recent approved adjustment wins per date.
+        .order("created_at", { ascending: true }),
       supabase
         .from("leave_requests")
         .select("employee_id, start_date, end_date")

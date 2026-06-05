@@ -157,7 +157,9 @@ export default async function RequestsPage({
         .eq("employee_id", adj.employee_id)
         .eq("status", "approved")
         .gte("requested_date", weekStartStr)
-        .lte("requested_date", weekEndStr);
+        .lte("requested_date", weekEndStr)
+        // Oldest first so the most recent approved adjustment wins per date.
+        .order("created_at", { ascending: true });
 
       // Build override map for the week: date -> location
       const adjOverrides = new Map<string, string | null>();

@@ -49,14 +49,16 @@ export default async function SchedulePage() {
   const weekStartStr = format(weekDates[0], "yyyy-MM-dd");
   const weekEndStr = format(weekDates[4], "yyyy-MM-dd");
 
-  // Adjustments for this week
+  // Adjustments for this week. Oldest first so the most recent approved
+  // adjustment wins per date when more than one exists.
   const { data: weekAdjustments } = await supabase
     .from("schedule_adjustments")
     .select("*")
     .eq("employee_id", user.id)
     .eq("status", "approved")
     .gte("requested_date", weekStartStr)
-    .lte("requested_date", weekEndStr);
+    .lte("requested_date", weekEndStr)
+    .order("created_at", { ascending: true });
 
   const adjByDate = new Map(
     (weekAdjustments ?? []).map((a) => [a.requested_date, a])
