@@ -7,7 +7,8 @@ export function formatDate(date: string | Date): string {
   return format(d, "MMM d, yyyy");
 }
 
-export function formatTime(time: string): string {
+export function formatTime(time: string | null | undefined): string {
+  if (!time) return "—";
   const [hours, minutes] = time.split(":");
   const h = parseInt(hours);
   const ampm = h >= 12 ? "PM" : "AM";

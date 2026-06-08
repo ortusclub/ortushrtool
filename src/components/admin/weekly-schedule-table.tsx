@@ -140,6 +140,44 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
     return [...set].sort();
   }, [users]);
 
+  // Build schedule lookup: userId -> dayOfWeek -> Schedule.
+  // Declared before filteredUsers because the day-filter path calls
+  // getCellContent (which reads these), and useMemo factories run during
+  // render — referencing them later would hit the temporal dead zone.
+  const scheduleMap = useMemo(() => {
+    const map = new Map<string, Map<number, Schedule>>();
+    for (const s of schedules) {
+      if (!map.has(s.employee_id)) map.set(s.employee_id, new Map());
+      const userMap = map.get(s.employee_id)!;
+      // Keep the most recent effective schedule per day
+      const existing = userMap.get(s.day_of_week);
+      if (!existing || s.effective_from > existing.effective_from) {
+        userMap.set(s.day_of_week, s);
+      }
+    }
+    return map;
+  }, [schedules]);
+
+  // Holiday lookup: date string -> holidays by country
+  const holidayMap = useMemo(() => {
+    const map = new Map<string, Map<string, Holiday>>();
+    for (const h of holidays) {
+      // For recurring holidays, check if date matches month/day
+      const hDate = parseISO(h.date);
+      for (const wd of weekDates) {
+        const matches = h.is_recurring
+          ? hDate.getMonth() === wd.getMonth() && hDate.getDate() === wd.getDate()
+          : isSameDay(hDate, wd);
+        if (matches) {
+          const key = format(wd, "yyyy-MM-dd");
+          if (!map.has(key)) map.set(key, new Map());
+          map.get(key)!.set(`${h.country}-${h.name}`, h);
+        }
+      }
+    }
+    return map;
+  }, [holidays, weekDates]);
+
   const filteredUsers = useMemo(() => {
     const q = search.toLowerCase();
     const filtered = users.filter((u) => {
@@ -187,41 +225,6 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
     // including the function reference would re-run on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users, search, teamFilter, countryFilter, dayFilters, sort, leaveMap, adjustmentMap, holidayWorkMap, schedules, holidays]);
-
-  // Build schedule lookup: userId -> dayOfWeek -> Schedule
-  const scheduleMap = useMemo(() => {
-    const map = new Map<string, Map<number, Schedule>>();
-    for (const s of schedules) {
-      if (!map.has(s.employee_id)) map.set(s.employee_id, new Map());
-      const userMap = map.get(s.employee_id)!;
-      // Keep the most recent effective schedule per day
-      const existing = userMap.get(s.day_of_week);
-      if (!existing || s.effective_from > existing.effective_from) {
-        userMap.set(s.day_of_week, s);
-      }
-    }
-    return map;
-  }, [schedules]);
-
-  // Holiday lookup: date string -> holidays by country
-  const holidayMap = useMemo(() => {
-    const map = new Map<string, Map<string, Holiday>>();
-    for (const h of holidays) {
-      // For recurring holidays, check if date matches month/day
-      const hDate = parseISO(h.date);
-      for (const wd of weekDates) {
-        const matches = h.is_recurring
-          ? hDate.getMonth() === wd.getMonth() && hDate.getDate() === wd.getDate()
-          : isSameDay(hDate, wd);
-        if (matches) {
-          const key = format(wd, "yyyy-MM-dd");
-          if (!map.has(key)) map.set(key, new Map());
-          map.get(key)!.set(`${h.country}-${h.name}`, h);
-        }
-      }
-    }
-    return map;
-  }, [holidays, weekDates]);
 
   function getCellContent(user: User, date: Date, dayOfWeek: number) {
     const dateStr = format(date, "yyyy-MM-dd");
