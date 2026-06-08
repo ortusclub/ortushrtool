@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import { Search, ChevronLeft, ChevronRight, Download, ExternalLink, Flag } from "lucide-react";
 import { HOLIDAY_COUNTRY_LABELS, type HolidayCountry } from "@/types/database";
 import { UserNameLink } from "@/components/shared/user-name-link";
@@ -302,56 +303,76 @@ export function AllAttendanceTable({
     const punchFrom = `${fromDate}T00:00:00+08:00`;
     const punchTo = `${toDate}T23:59:59.999+08:00`;
 
-    const [
-      logsResult,
-      schedulesResult,
-      adjustmentsResult,
-      leavesResult,
-      punchesResult,
-    ] = await Promise.all([
-      supabase
-        .from("attendance_logs")
-        .select("*")
-        .gte("date", fromDate)
-        .lte("date", toDate),
-      supabase
-        .from("schedules")
-        .select("employee_id, day_of_week, work_location, is_rest_day, start_time, end_time")
-        .in("day_of_week", [...dows])
-        .lte("effective_from", toDate)
-        .or(`effective_until.is.null,effective_until.gte.${fromDate}`),
-      supabase
-        .from("schedule_adjustments")
-        .select("employee_id, requested_date, requested_work_location")
-        .gte("requested_date", fromDate)
-        .lte("requested_date", toDate)
-        .eq("status", "approved")
-        // Oldest first so the most recent approved adjustment wins per date.
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("leave_requests")
-        .select("employee_id, start_date, end_date")
-        .eq("status", "approved")
-        .lte("start_date", toDate)
-        .gte("end_date", fromDate),
-      supabase
-        .from("biometric_punches")
-        .select("employee_id, punch_time")
-        .gte("punch_time", punchFrom)
-        .lte("punch_time", punchTo),
-    ]);
+    // Each of these can exceed PostgREST's 1000-row cap over a wide date
+    // range (e.g. attendance_logs = days × employees), so page through them
+    // all instead of relying on a single truncated request. Order by id for
+    // stable paging windows.
+    const [logsData, schedulesData, adjustmentsData, leavesData, punchesData] =
+      await Promise.all([
+        fetchAllRows<AttendanceLog>((from, to) =>
+          supabase
+            .from("attendance_logs")
+            .select("*")
+            .gte("date", fromDate)
+            .lte("date", toDate)
+            .order("id")
+            .range(from, to)
+        ),
+        fetchAllRows<ScheduleRow>((from, to) =>
+          supabase
+            .from("schedules")
+            .select("employee_id, day_of_week, work_location, is_rest_day, start_time, end_time")
+            .in("day_of_week", [...dows])
+            .lte("effective_from", toDate)
+            .or(`effective_until.is.null,effective_until.gte.${fromDate}`)
+            .order("id")
+            .range(from, to)
+        ),
+        fetchAllRows<AdjustmentRow>((from, to) =>
+          supabase
+            .from("schedule_adjustments")
+            .select("employee_id, requested_date, requested_work_location")
+            .gte("requested_date", fromDate)
+            .lte("requested_date", toDate)
+            .eq("status", "approved")
+            // Oldest first so the most recent approved adjustment wins per
+            // date; id breaks ties for stable paging.
+            .order("created_at", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to)
+        ),
+        fetchAllRows<LeaveRow>((from, to) =>
+          supabase
+            .from("leave_requests")
+            .select("employee_id, start_date, end_date")
+            .eq("status", "approved")
+            .lte("start_date", toDate)
+            .gte("end_date", fromDate)
+            .order("id")
+            .range(from, to)
+        ),
+        fetchAllRows<{ employee_id: string; punch_time: string }>((from, to) =>
+          supabase
+            .from("biometric_punches")
+            .select("employee_id, punch_time")
+            .gte("punch_time", punchFrom)
+            .lte("punch_time", punchTo)
+            .order("id")
+            .range(from, to)
+        ),
+      ]);
 
-    setLogs(logsResult.data ?? []);
-    setSchedules(schedulesResult.data ?? []);
-    setAdjustments(adjustmentsResult.data ?? []);
-    setLeaves(leavesResult.data ?? []);
+    setLogs(logsData);
+    setSchedules(schedulesData);
+    setAdjustments(adjustmentsData);
+    setLeaves(leavesData);
 
     // Bucket each punch into its Manila-local date so the row lookup is O(1).
     // For each (employee, date), also remember the earliest punch_time so we
     // can override Clock In.
     const presence = new Set<string>();
     const inByDay = new Map<string, string>();
-    for (const p of punchesResult.data ?? []) {
+    for (const p of punchesData) {
       const manilaDate = new Date(p.punch_time).toLocaleDateString("en-CA", {
         timeZone: "Asia/Manila",
       });
