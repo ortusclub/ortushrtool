@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { CheckSquare, Square, Check, ChevronDown, ChevronRight, Flag } from "lucide-react";
+import { CheckSquare, Square, Check, X, ChevronDown, ChevronRight, Flag } from "lucide-react";
 import { formatDate, displayName } from "@/lib/utils";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
 import { LeaveActions } from "@/components/leave/leave-actions";
@@ -54,13 +54,14 @@ export function BulkLeaveSection({
     setSelected(allSelected ? new Set() : new Set(approvableIds));
   }
 
-  async function bulkApprove() {
+  async function bulkDecide(status: "approved" | "rejected") {
     if (selected.size === 0) return;
+    if (status === "rejected" && !confirm(`Reject ${selected.size} selected leave request(s)?`)) return;
     setBusy(true);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from("leave_requests").update({
-      status: "approved",
+      status,
       reviewed_by: user?.id,
       reviewed_at: new Date().toISOString(),
     }).in("id", [...selected]);
@@ -93,10 +94,16 @@ export function BulkLeaveSection({
           </button>
         </div>
         {selected.size > 0 && (
-          <button onClick={bulkApprove} disabled={busy} className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
-            <Check size={15} />
-            {busy ? "Approving…" : `Approve ${selected.size} selected`}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => bulkDecide("approved")} disabled={busy} className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
+              <Check size={15} />
+              {busy ? "Working…" : `Approve ${selected.size}`}
+            </button>
+            <button onClick={() => bulkDecide("rejected")} disabled={busy} className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+              <X size={15} />
+              {busy ? "Working…" : `Reject ${selected.size}`}
+            </button>
+          </div>
         )}
       </div>
       {open && <div className="divide-y divide-gray-100">
