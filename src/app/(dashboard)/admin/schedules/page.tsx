@@ -1,8 +1,10 @@
 import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import { SchedulesTable } from "@/components/admin/schedules-table";
 import { ScheduleCsvImport } from "@/components/admin/schedule-csv-import";
 import { displayName } from "@/lib/utils";
+import type { Schedule } from "@/types/database";
 
 export default async function AdminSchedulesPage() {
   await requireRole("hr_admin");
@@ -16,11 +18,18 @@ export default async function AdminSchedulesPage() {
     .eq("is_active", true)
     .order("full_name");
 
-  const { data: allSchedules } = await supabase
-    .from("schedules")
-    .select("*")
-    .lte("effective_from", today)
-    .or(`effective_until.is.null,effective_until.gte.${today}`);
+  // Paginate: the company-wide schedule set (~1 row per employee per weekday)
+  // exceeds PostgREST's 1000-row cap, which would silently drop the tail and
+  // make those employees' whole week render as "Rest".
+  const allSchedules = await fetchAllRows<Schedule>((from, to) =>
+    supabase
+      .from("schedules")
+      .select("*")
+      .lte("effective_from", today)
+      .or(`effective_until.is.null,effective_until.gte.${today}`)
+      .order("id")
+      .range(from, to)
+  );
 
   // Build manager name lookup (preferred-name display)
   const managerMap: Record<string, string> = {};

@@ -1,7 +1,9 @@
 import { requireRole } from "@/lib/auth/helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import { WeeklyScheduleTable } from "@/components/admin/weekly-schedule-table";
 import { CalendarSyncSection } from "@/components/calendar/calendar-sync-section";
+import type { Schedule } from "@/types/database";
 
 export default async function WeeklySchedulePage() {
   const currentUser = await requireRole("employee");
@@ -19,11 +21,17 @@ export default async function WeeklySchedulePage() {
     .eq("is_active", true)
     .order("full_name");
 
-  const { data: schedules } = await supabase
-    .from("schedules")
-    .select("*")
-    .lte("effective_from", today)
-    .or(`effective_until.is.null,effective_until.gte.${today}`);
+  // Paginate past PostgREST's 1000-row cap — see admin/schedules/page.tsx.
+  // Without this, employees in the truncated tail show no schedule at all.
+  const schedules = await fetchAllRows<Schedule>((from, to) =>
+    supabase
+      .from("schedules")
+      .select("*")
+      .lte("effective_from", today)
+      .or(`effective_until.is.null,effective_until.gte.${today}`)
+      .order("id")
+      .range(from, to)
+  );
 
   const { data: holidays } = await supabase
     .from("holidays")
