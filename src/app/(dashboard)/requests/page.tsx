@@ -10,6 +10,7 @@ import { OvertimeActions } from "@/components/overtime/overtime-actions";
 import { CancelRequest } from "@/components/shared/cancel-request";
 import { BuzzManager } from "@/components/shared/buzz-manager";
 import { RequestsDateFilter } from "@/components/requests/requests-date-filter";
+import { RequestsRequesterSearch } from "@/components/requests/requests-requester-filter";
 import { CollapsibleHistory } from "@/components/requests/collapsible-history";
 import { EditAdjustmentForm } from "@/components/admin/edit-adjustment-form";
 import { EditLeaveForm } from "@/components/admin/edit-leave-form";
@@ -37,9 +38,15 @@ import { UserNameLink } from "@/components/shared/user-name-link";
 export default async function RequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; myfrom?: string; myto?: string }>;
+  // Many per-section filter params (req_*/hreq_* requester searches and
+  // <type>_p{f,t}/<type>_h{f,t} date ranges), so read them off a flat object.
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { from: teamFrom, to: teamTo, myfrom: myFrom, myto: myTo } = await searchParams;
+  const sp = await searchParams;
+  const myFrom = sp.myfrom;
+  const myTo = sp.myto;
+  const reqAdj = sp.req_adj, reqLeave = sp.req_leave, reqHw = sp.req_hw, reqOt = sp.req_ot;
+  const hreqAdj = sp.hreq_adj, hreqLeave = sp.hreq_leave, hreqHw = sp.hreq_hw, hreqOt = sp.hreq_ot;
   const user = await getCurrentUser();
   const supabase = await createClient();
   const isReviewer = hasRole(user.role, "manager");
@@ -60,13 +67,13 @@ export default async function RequestsPage({
   if (myTo)   { myAdjQ = myAdjQ.lte("requested_date", myTo);   myLeaveQ = myLeaveQ.lte("start_date", myTo);   myHwQ = myHwQ.lte("holiday_date", myTo);   myOtQ = myOtQ.lte("requested_date", myTo); }
 
   // Team requests — only for reviewers, excludes current user
-  let teamAdjQ = isReviewer ? supabase.from("schedule_adjustments").select(adjSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
-  let teamLeaveQ = isReviewer ? supabase.from("leave_requests").select(leaveSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
-  let teamHwQ = isReviewer ? supabase.from("holiday_work_requests").select(hwSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
-  let teamOtQ = isReviewer ? supabase.from("overtime_requests").select(otSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
+  const teamAdjQ = isReviewer ? supabase.from("schedule_adjustments").select(adjSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
+  const teamLeaveQ = isReviewer ? supabase.from("leave_requests").select(leaveSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
+  const teamHwQ = isReviewer ? supabase.from("holiday_work_requests").select(hwSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
+  const teamOtQ = isReviewer ? supabase.from("overtime_requests").select(otSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
 
-  if (teamFrom) { teamAdjQ = teamAdjQ?.gte("requested_date", teamFrom) ?? null; teamLeaveQ = teamLeaveQ?.gte("start_date", teamFrom) ?? null; teamHwQ = teamHwQ?.gte("holiday_date", teamFrom) ?? null; teamOtQ = teamOtQ?.gte("requested_date", teamFrom) ?? null; }
-  if (teamTo)   { teamAdjQ = teamAdjQ?.lte("requested_date", teamTo) ?? null;   teamLeaveQ = teamLeaveQ?.lte("start_date", teamTo) ?? null;   teamHwQ = teamHwQ?.lte("holiday_date", teamTo) ?? null;   teamOtQ = teamOtQ?.lte("requested_date", teamTo) ?? null; }
+  // Team date filtering is per-section (pending vs history, per type) and done
+  // in-memory below, so the team queries themselves aren't date-bounded here.
 
   const allUsersPromise = isAdmin
     ? supabase.from("users").select("id, full_name, preferred_name, first_name, last_name, email").eq("is_active", true).order("full_name")
@@ -101,14 +108,61 @@ export default async function RequestsPage({
   const myPendingOt    = (myOt    ?? []).filter(o => o.status === "pending");
   const myPastOt       = (myOt    ?? []).filter(o => o.status !== "pending");
 
-  const teamPendingAdj   = (teamAdj   ?? []).filter(a => a.status === "pending");
-  const teamPastAdj      = (teamAdj   ?? []).filter(a => a.status !== "pending");
-  const teamPendingLeave = (teamLeave ?? []).filter(l => l.status === "pending");
-  const teamPastLeave    = (teamLeave ?? []).filter(l => l.status !== "pending");
-  const teamPendingHw    = (teamHw    ?? []).filter(h => h.status === "pending");
-  const teamPastHw       = (teamHw    ?? []).filter(h => h.status !== "pending");
-  const teamPendingOt    = (teamOt    ?? []).filter(o => o.status === "pending");
-  const teamPastOt       = (teamOt    ?? []).filter(o => o.status !== "pending");
+  // My Requests gets the same date + requester search as everywhere else.
+  // Pending: myq search (date stays on the SQL myfrom/myto filter above).
+  // History: myhf/myht date + myhq search, both in-memory.
+  const myPendingAdjF   = byRequesterName(myPendingAdj,   sp.myq);
+  const myPendingLeaveF = byRequesterName(myPendingLeave, sp.myq);
+  const myPendingHwF    = byRequesterName(myPendingHw,    sp.myq);
+  const myPendingOtF    = byRequesterName(myPendingOt,    sp.myq);
+  const myPastAdjF   = byRequesterName(inDateRange(myPastAdj,   "requested_date", sp.myhf, sp.myht), sp.myhq);
+  const myPastLeaveF = byRequesterName(inDateRange(myPastLeave, "start_date",     sp.myhf, sp.myht), sp.myhq);
+  const myPastHwF    = byRequesterName(inDateRange(myPastHw,    "holiday_date",   sp.myhf, sp.myht), sp.myhq);
+  const myPastOtF    = byRequesterName(inDateRange(myPastOt,    "requested_date", sp.myhf, sp.myht), sp.myhq);
+
+  // Per-type requester search (Team section only). Each request type — and the
+  // pending vs history view of it — has its own free-text search box + URL
+  // param, matched against the requester's display name. Free text scales
+  // better than a dropdown as the team grows.
+  type NamedEmployee = { employee: { full_name: string | null; preferred_name: string | null; first_name: string | null; last_name: string | null } | null };
+  function byRequesterName<T extends NamedEmployee>(rows: T[], q?: string) {
+    const s = (q ?? "").trim().toLowerCase();
+    if (!s) return rows;
+    return rows.filter(r => r.employee && displayName(r.employee).toLowerCase().includes(s));
+  }
+  // Filter by the row's date field (yyyy-MM-dd strings compare correctly).
+  function inDateRange<T>(rows: T[], field: string, from?: string, to?: string) {
+    let out = rows;
+    if (from) out = out.filter(r => String((r as Record<string, unknown>)[field] ?? "") >= from);
+    if (to)   out = out.filter(r => String((r as Record<string, unknown>)[field] ?? "") <= to);
+    return out;
+  }
+  // Apply both requester search and date range for one section.
+  function filterSection<T extends NamedEmployee>(rows: T[], dateField: string, q: string | undefined, from: string | undefined, to: string | undefined) {
+    return byRequesterName(inDateRange(rows, dateField, from, to), q);
+  }
+
+  // Unfiltered pending/past per type — drives whether each search box shows.
+  const pendingAdjAll   = (teamAdj   ?? []).filter(a => a.status === "pending");
+  const pastAdjAll      = (teamAdj   ?? []).filter(a => a.status !== "pending");
+  const pendingLeaveAll = (teamLeave ?? []).filter(l => l.status === "pending");
+  const pastLeaveAll    = (teamLeave ?? []).filter(l => l.status !== "pending");
+  const pendingHwAll    = (teamHw    ?? []).filter(h => h.status === "pending");
+  const pastHwAll       = (teamHw    ?? []).filter(h => h.status !== "pending");
+  const pendingOtAll    = (teamOt    ?? []).filter(o => o.status === "pending");
+  const pastOtAll       = (teamOt    ?? []).filter(o => o.status !== "pending");
+
+  // Each section filters independently by its own requester search + date
+  // range. Pending uses *_p{f,t}; history uses *_h{f,t}. Date fields per type:
+  // adjustments/overtime -> requested_date, leave -> start_date, hw -> holiday_date.
+  const teamPendingAdj   = filterSection(pendingAdjAll,   "requested_date", reqAdj,   sp.adj_pf,   sp.adj_pt);
+  const teamPendingLeave = filterSection(pendingLeaveAll, "start_date",     reqLeave, sp.leave_pf, sp.leave_pt);
+  const teamPendingHw    = filterSection(pendingHwAll,    "holiday_date",   reqHw,    sp.hw_pf,    sp.hw_pt);
+  const teamPendingOt    = filterSection(pendingOtAll,    "requested_date", reqOt,    sp.ot_pf,    sp.ot_pt);
+  const teamPastAdj   = filterSection(pastAdjAll,   "requested_date", hreqAdj,   sp.adj_hf,   sp.adj_ht);
+  const teamPastLeave = filterSection(pastLeaveAll, "start_date",     hreqLeave, sp.leave_hf, sp.leave_ht);
+  const teamPastHw    = filterSection(pastHwAll,    "holiday_date",   hreqHw,    sp.hw_hf,    sp.hw_ht);
+  const teamPastOt    = filterSection(pastOtAll,    "requested_date", hreqOt,    sp.ot_hf,    sp.ot_ht);
 
   // For backwards compat with office-warnings logic
   const pendingAdj = [...myPendingAdj, ...teamPendingAdj];
@@ -239,21 +293,24 @@ export default async function RequestsPage({
 
       {/* ── MY REQUESTS ── */}
       <CollapsibleSection title="My Requests" accent="indigo" actions={actionButtons}>
-        <RequestsDateFilter from={myFrom ?? ""} to={myTo ?? ""} paramFrom="myfrom" paramTo="myto" />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <RequestsDateFilter from={myFrom ?? ""} to={myTo ?? ""} paramFrom="myfrom" paramTo="myto" />
+          <RequestsRequesterSearch param="myq" label="requests" initial={sp.myq ?? ""} />
+        </div>
 
-        {myPendingAdj.length > 0 && (
-          <BulkAdjustmentsSection adjustments={myPendingAdj} officeWarnings={officeWarningsObj} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
+        {myPendingAdjF.length > 0 && (
+          <BulkAdjustmentsSection adjustments={myPendingAdjF} officeWarnings={officeWarningsObj} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
         )}
-        {myPendingLeave.length > 0 && (
-          <BulkLeaveSection leaves={myPendingLeave} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
+        {myPendingLeaveF.length > 0 && (
+          <BulkLeaveSection leaves={myPendingLeaveF} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
         )}
-        {myPendingHw.length > 0 && (
-          <BulkHolidayWorkSection requests={myPendingHw} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
+        {myPendingHwF.length > 0 && (
+          <BulkHolidayWorkSection requests={myPendingHwF} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
         )}
-        {myPendingOt.length > 0 && (
-          <BulkOvertimeSection requests={myPendingOt} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
+        {myPendingOtF.length > 0 && (
+          <BulkOvertimeSection requests={myPendingOtF} currentUserId={user.id} isReviewer={false} isAdmin={isAdmin} />
         )}
-        {myPendingAdj.length === 0 && myPendingLeave.length === 0 && myPendingHw.length === 0 && myPendingOt.length === 0 && (
+        {myPendingAdjF.length === 0 && myPendingLeaveF.length === 0 && myPendingHwF.length === 0 && myPendingOtF.length === 0 && (
           <p className="text-sm text-gray-500">No pending requests.</p>
         )}
 
@@ -261,8 +318,16 @@ export default async function RequestsPage({
       {myPastAdj.length === 0 && myPastLeave.length === 0 && myPastHw.length === 0 && myPastOt.length === 0 ? (
           <div className="p-6 text-center text-gray-500">No history yet.</div>
         ) : (
-          <div className="divide-y divide-gray-100">
-            {myPastAdj.map((adj) => (
+          <>
+            <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <RequestsDateFilter from={sp.myhf ?? ""} to={sp.myht ?? ""} paramFrom="myhf" paramTo="myht" />
+              <RequestsRequesterSearch param="myhq" label="history" initial={sp.myhq ?? ""} />
+            </div>
+            {myPastAdjF.length === 0 && myPastLeaveF.length === 0 && myPastHwF.length === 0 && myPastOtF.length === 0 ? (
+              <p className="px-6 py-4 text-sm text-gray-500">No history matches that date range.</p>
+            ) : (
+            <div className="divide-y divide-gray-100">
+            {myPastAdjF.map((adj) => (
               <div key={adj.id} className="flex items-center justify-between p-6">
                 <div className="space-y-1">
                   <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Schedule Adjustment</span>
@@ -275,7 +340,7 @@ export default async function RequestsPage({
                 </div>
               </div>
             ))}
-            {myPastLeave.map((leave) => (
+            {myPastLeaveF.map((leave) => (
               <div key={leave.id} className="flex items-center justify-between p-6">
                 <div className="space-y-1">
                   <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">{LEAVE_TYPE_LABELS[leave.leave_type] ?? leave.leave_type}</span>
@@ -289,7 +354,7 @@ export default async function RequestsPage({
                 </div>
               </div>
             ))}
-            {myPastHw.map((hw) => (
+            {myPastHwF.map((hw) => (
               <div key={hw.id} className="flex items-center justify-between p-6">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2"><span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">Holiday Work</span><span className="text-xs text-gray-500">{hw.holiday?.name}</span></div>
@@ -302,7 +367,7 @@ export default async function RequestsPage({
                 </div>
               </div>
             ))}
-            {myPastOt.map((ot) => (
+            {myPastOtF.map((ot) => (
               <div key={ot.id} className="flex items-center justify-between p-6">
                 <div className="space-y-1">
                   <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">Overtime</span>
@@ -315,7 +380,9 @@ export default async function RequestsPage({
                 </div>
               </div>
             ))}
-          </div>
+            </div>
+            )}
+          </>
         )}
       </CollapsibleHistory>
       </CollapsibleSection>
@@ -323,29 +390,74 @@ export default async function RequestsPage({
       {/* ── TEAM REQUESTS ── */}
       {isReviewer && (
         <CollapsibleSection title="Team Requests" accent="emerald">
-          <RequestsDateFilter from={teamFrom ?? ""} to={teamTo ?? ""} />
-
-          {teamPendingAdj.length > 0 && (
-            <BulkAdjustmentsSection adjustments={teamPendingAdj} officeWarnings={officeWarningsObj} currentUserId={user.id} isReviewer={isReviewer} isAdmin={isAdmin} />
+          {pendingAdjAll.length > 0 && (
+            <BulkAdjustmentsSection
+              adjustments={teamPendingAdj}
+              officeWarnings={officeWarningsObj}
+              currentUserId={user.id}
+              isReviewer={isReviewer}
+              isAdmin={isAdmin}
+              filters={<>
+                <RequestsDateFilter from={sp.adj_pf ?? ""} to={sp.adj_pt ?? ""} paramFrom="adj_pf" paramTo="adj_pt" />
+                <RequestsRequesterSearch param="req_adj" label="adjustments" initial={reqAdj ?? ""} />
+              </>}
+            />
           )}
-          {teamPendingLeave.length > 0 && (
-            <BulkLeaveSection leaves={teamPendingLeave} currentUserId={user.id} isReviewer={isReviewer} isAdmin={isAdmin} />
+          {pendingLeaveAll.length > 0 && (
+            <BulkLeaveSection
+              leaves={teamPendingLeave}
+              currentUserId={user.id}
+              isReviewer={isReviewer}
+              isAdmin={isAdmin}
+              filters={<>
+                <RequestsDateFilter from={sp.leave_pf ?? ""} to={sp.leave_pt ?? ""} paramFrom="leave_pf" paramTo="leave_pt" />
+                <RequestsRequesterSearch param="req_leave" label="leave" initial={reqLeave ?? ""} />
+              </>}
+            />
           )}
-          {teamPendingHw.length > 0 && (
-            <BulkHolidayWorkSection requests={teamPendingHw} currentUserId={user.id} isReviewer={isReviewer} isAdmin={isAdmin} />
+          {pendingHwAll.length > 0 && (
+            <BulkHolidayWorkSection
+              requests={teamPendingHw}
+              currentUserId={user.id}
+              isReviewer={isReviewer}
+              isAdmin={isAdmin}
+              filters={<>
+                <RequestsDateFilter from={sp.hw_pf ?? ""} to={sp.hw_pt ?? ""} paramFrom="hw_pf" paramTo="hw_pt" />
+                <RequestsRequesterSearch param="req_hw" label="holiday work" initial={reqHw ?? ""} />
+              </>}
+            />
           )}
-          {teamPendingOt.length > 0 && (
-            <BulkOvertimeSection requests={teamPendingOt} currentUserId={user.id} isReviewer={isReviewer} isAdmin={isAdmin} />
+          {pendingOtAll.length > 0 && (
+            <BulkOvertimeSection
+              requests={teamPendingOt}
+              currentUserId={user.id}
+              isReviewer={isReviewer}
+              isAdmin={isAdmin}
+              filters={<>
+                <RequestsDateFilter from={sp.ot_pf ?? ""} to={sp.ot_pt ?? ""} paramFrom="ot_pf" paramTo="ot_pt" />
+                <RequestsRequesterSearch param="req_ot" label="overtime" initial={reqOt ?? ""} />
+              </>}
+            />
           )}
-          {teamPendingAdj.length === 0 && teamPendingLeave.length === 0 && teamPendingHw.length === 0 && teamPendingOt.length === 0 && (
+          {pendingAdjAll.length === 0 && pendingLeaveAll.length === 0 && pendingHwAll.length === 0 && pendingOtAll.length === 0 && (
             <p className="text-sm text-gray-500">No pending team requests.</p>
           )}
 
-          <CollapsibleHistory count={teamPastAdj.length + teamPastLeave.length + teamPastHw.length + teamPastOt.length}>
-            {teamPastAdj.length === 0 && teamPastLeave.length === 0 && teamPastHw.length === 0 && teamPastOt.length === 0 ? (
+          <CollapsibleHistory count={pastAdjAll.length + pastLeaveAll.length + pastHwAll.length + pastOtAll.length}>
+            {pastAdjAll.length === 0 && pastLeaveAll.length === 0 && pastHwAll.length === 0 && pastOtAll.length === 0 ? (
               <div className="p-6 text-center text-gray-500">No history yet.</div>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-gray-200">
+                {pastAdjAll.length > 0 && (
+                <div>
+                  <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <RequestsDateFilter from={sp.adj_hf ?? ""} to={sp.adj_ht ?? ""} paramFrom="adj_hf" paramTo="adj_ht" />
+                    <RequestsRequesterSearch param="hreq_adj" label="adjustments" initial={hreqAdj ?? ""} />
+                  </div>
+                  {teamPastAdj.length === 0 ? (
+                    <p className="px-6 py-4 text-sm text-gray-500">No adjustments match that requester.</p>
+                  ) : (
+                  <div className="divide-y divide-gray-100">
                 {teamPastAdj.map((adj) => (
                   <div key={adj.id} className="flex items-center justify-between p-6">
                     <div className="space-y-1">
@@ -364,6 +476,20 @@ export default async function RequestsPage({
                     </div>
                   </div>
                 ))}
+                  </div>
+                  )}
+                </div>
+                )}
+                {pastLeaveAll.length > 0 && (
+                <div>
+                  <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <RequestsDateFilter from={sp.leave_hf ?? ""} to={sp.leave_ht ?? ""} paramFrom="leave_hf" paramTo="leave_ht" />
+                    <RequestsRequesterSearch param="hreq_leave" label="leave" initial={hreqLeave ?? ""} />
+                  </div>
+                  {teamPastLeave.length === 0 ? (
+                    <p className="px-6 py-4 text-sm text-gray-500">No leave matches that requester.</p>
+                  ) : (
+                  <div className="divide-y divide-gray-100">
                 {teamPastLeave.map((leave) => (
                   <div key={leave.id} className="flex items-center justify-between p-6">
                     <div className="space-y-1">
@@ -383,6 +509,20 @@ export default async function RequestsPage({
                     </div>
                   </div>
                 ))}
+                  </div>
+                  )}
+                </div>
+                )}
+                {pastHwAll.length > 0 && (
+                <div>
+                  <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <RequestsDateFilter from={sp.hw_hf ?? ""} to={sp.hw_ht ?? ""} paramFrom="hw_hf" paramTo="hw_ht" />
+                    <RequestsRequesterSearch param="hreq_hw" label="holiday work" initial={hreqHw ?? ""} />
+                  </div>
+                  {teamPastHw.length === 0 ? (
+                    <p className="px-6 py-4 text-sm text-gray-500">No holiday work matches that requester.</p>
+                  ) : (
+                  <div className="divide-y divide-gray-100">
                 {teamPastHw.map((hw) => (
                   <div key={hw.id} className="flex items-center justify-between p-6">
                     <div className="space-y-1">
@@ -402,6 +542,20 @@ export default async function RequestsPage({
                     </div>
                   </div>
                 ))}
+                  </div>
+                  )}
+                </div>
+                )}
+                {pastOtAll.length > 0 && (
+                <div>
+                  <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <RequestsDateFilter from={sp.ot_hf ?? ""} to={sp.ot_ht ?? ""} paramFrom="ot_hf" paramTo="ot_ht" />
+                    <RequestsRequesterSearch param="hreq_ot" label="overtime" initial={hreqOt ?? ""} />
+                  </div>
+                  {teamPastOt.length === 0 ? (
+                    <p className="px-6 py-4 text-sm text-gray-500">No overtime matches that requester.</p>
+                  ) : (
+                  <div className="divide-y divide-gray-100">
                 {teamPastOt.map((ot) => (
                   <div key={ot.id} className="flex items-center justify-between p-6">
                     <div className="space-y-1">
@@ -420,6 +574,10 @@ export default async function RequestsPage({
                     </div>
                   </div>
                 ))}
+                  </div>
+                  )}
+                </div>
+                )}
               </div>
             )}
           </CollapsibleHistory>

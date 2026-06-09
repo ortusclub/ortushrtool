@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CheckSquare, Square, Check, X, ChevronDown, ChevronRight, Flag } from "lucide-react";
@@ -35,12 +35,14 @@ export function BulkAdjustmentsSection({
   currentUserId,
   isReviewer,
   isAdmin,
+  filters,
 }: {
   adjustments: Adj[];
   officeWarnings: Record<string, Warning>;
   currentUserId: string;
   isReviewer: boolean;
   isAdmin: boolean;
+  filters?: ReactNode;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -83,7 +85,13 @@ export function BulkAdjustmentsSection({
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-      <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between gap-4">
+      <div className="border-b border-gray-200 px-6 py-4">
+        {filters && (
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2" onClick={(e) => e.stopPropagation()}>
+            {filters}
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           {isReviewer && approvableIds.length > 0 && (
             <button onClick={toggleAll} className="text-gray-400 hover:text-gray-600">
@@ -122,8 +130,12 @@ export function BulkAdjustmentsSection({
             </button>
           </div>
         )}
+        </div>
       </div>
       {open && <div className="divide-y divide-gray-100">
+        {adjustments.length === 0 && (
+          <p className="px-6 py-4 text-sm text-gray-500">No requests match these filters.</p>
+        )}
         {adjustments.map((adj) => {
           const warning = officeWarnings[adj.id];
           const isOwn = adj.employee_id === currentUserId;

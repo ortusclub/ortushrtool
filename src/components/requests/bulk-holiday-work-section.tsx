@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CheckSquare, Square, Check, X, ChevronDown, ChevronRight, Flag } from "lucide-react";
@@ -31,11 +31,13 @@ export function BulkHolidayWorkSection({
   currentUserId,
   isReviewer,
   isAdmin,
+  filters,
 }: {
   requests: HW[];
   currentUserId: string;
   isReviewer: boolean;
   isAdmin: boolean;
+  filters?: ReactNode;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -70,7 +72,13 @@ export function BulkHolidayWorkSection({
 
   return (
     <div className="rounded-xl border border-teal-200 bg-white shadow-sm">
-      <div className="border-b border-teal-200 px-6 py-4 flex items-center justify-between gap-4">
+      <div className="border-b border-teal-200 px-6 py-4">
+        {filters && (
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2" onClick={(e) => e.stopPropagation()}>
+            {filters}
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           {isReviewer && approvableIds.length > 0 && (
             <button onClick={toggleAll} className="text-gray-400 hover:text-gray-600">
@@ -99,8 +107,12 @@ export function BulkHolidayWorkSection({
             </button>
           </div>
         )}
+        </div>
       </div>
       {open && <div className="divide-y divide-gray-100">
+        {requests.length === 0 && (
+          <p className="px-6 py-4 text-sm text-gray-500">No requests match these filters.</p>
+        )}
         {requests.map((hw) => {
           const isOwn = hw.employee_id === currentUserId;
           return (
