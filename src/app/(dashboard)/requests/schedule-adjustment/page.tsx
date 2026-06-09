@@ -103,17 +103,40 @@ export default function ScheduleAdjustmentPage() {
     ? getWeekdaysInRange(rangeStart, rangeEnd)
     : dates.filter((d) => d);
 
-  // Filter dates by the employee's scheduled work location for that day-of-week
-  function getScheduledLocation(dateStr: string): string | null {
+  // The employee's working schedule for a given date's day-of-week (null on rest days)
+  function getScheduleForDate(dateStr: string): ScheduleRow | null {
     const jsDay = new Date(dateStr + "T00:00:00").getDay();
     const dow = (jsDay + 6) % 7; // Mon=0
     const s = currentSchedules.find((r) => r.day_of_week === dow);
-    if (!s || s.is_rest_day) return null;
-    return s.work_location;
+    return s && !s.is_rest_day ? s : null;
   }
-  const filteredDates = locationFilter === "all"
+  function getScheduledLocation(dateStr: string): string | null {
+    return getScheduleForDate(dateStr)?.work_location ?? null;
+  }
+  // The day-location filter only makes sense across multiple days; for a single
+  // day it's noise (and a stale selection could wrongly hide that day), so it's
+  // ignored when there's just one valid date.
+  const effectiveLocationFilter = validDates.length > 1 ? locationFilter : "all";
+  const filteredDates = effectiveLocationFilter === "all"
     ? validDates
-    : validDates.filter((d) => getScheduledLocation(d) === locationFilter);
+    : validDates.filter((d) => getScheduledLocation(d) === effectiveLocationFilter);
+
+  // Original schedule summary for the day(s) this adjustment will apply to,
+  // so the form can show "current → requested".
+  const fmtHm = (t: string) => t.slice(0, 5);
+  const origLocations = [...new Set(filteredDates.map(getScheduledLocation).filter((x): x is string => !!x))];
+  const origTimes = [...new Set(
+    filteredDates.map((d) => {
+      const s = getScheduleForDate(d);
+      return s ? `${fmtHm(s.start_time)} – ${fmtHm(s.end_time)}` : null;
+    }).filter((x): x is string => !!x)
+  )];
+  const origLocationLabel = origLocations.length === 0 ? "—"
+    : origLocations.length === 1 ? (origLocations[0] === "office" ? "Office" : "Online")
+    : "Varies by day";
+  const origTimeLabel = origTimes.length === 0 ? "—"
+    : origTimes.length === 1 ? origTimes[0]
+    : "Varies by day";
 
   // Helper: format Date to YYYY-MM-DD in local time (avoids UTC shift)
   function toLocalDateStr(d: Date): string {
@@ -534,13 +557,13 @@ export default function ScheduleAdjustmentPage() {
                 {validDates.length > 0 && (
                   <p className="text-xs text-gray-500">
                     {filteredDates.length} of {validDates.length} weekday{validDates.length !== 1 ? "s" : ""} selected
-                    {locationFilter !== "all" ? ` (${locationFilter} days only)` : ""}
+                    {effectiveLocationFilter !== "all" ? ` (${effectiveLocationFilter} days only)` : ""}
                   </p>
                 )}
               </div>
             )}
-          {/* Location filter */}
-          {schedulesLoaded && currentSchedules.length > 0 && validDates.length > 0 && (
+          {/* Day-location filter — only relevant when adjusting more than one day */}
+          {schedulesLoaded && currentSchedules.length > 0 && validDates.length > 1 && (
             <div className="rounded-lg border border-gray-200 p-4">
               <p className="mb-3 text-sm font-medium text-gray-700">Apply adjustment to which days?</p>
               <div className="flex flex-wrap gap-4">
@@ -592,6 +615,33 @@ export default function ScheduleAdjustmentPage() {
               />
             ) : (
               <p className="text-sm text-red-600">Not authenticated.</p>
+            )}
+          </div>
+        )}
+
+        {/* Current → requested summary, scoped to what's being adjusted */}
+        {!isPermanent && filteredDates.length > 0 && (showTimeFields || showLocationField) && (
+          <div className="space-y-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm">
+            <p className="font-medium text-gray-700">
+              Your current schedule{filteredDates.length === 1 ? ` on ${filteredDates[0]}` : " for the selected days"}:
+            </p>
+            {showTimeFields && (
+              <p className="text-gray-600">
+                Time: <span className="font-medium text-gray-900">{origTimeLabel}</span>
+                {" → "}
+                <span className="font-medium text-blue-700">
+                  {requestedStart && requestedEnd ? `${requestedStart} – ${requestedEnd}` : "—"}
+                </span>
+              </p>
+            )}
+            {showLocationField && (
+              <p className="text-gray-600">
+                Location: <span className="font-medium text-gray-900">{origLocationLabel}</span>
+                {" → "}
+                <span className="font-medium text-blue-700">
+                  {requestedLocation === "office" ? "Office" : "Online"}
+                </span>
+              </p>
             )}
           </div>
         )}
