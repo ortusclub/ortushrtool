@@ -198,7 +198,9 @@ export function BulkAdjustmentsSection({
                     </>
                   )}
                   {isAdmin && !isOwn && <CancelRequest requestId={adj.id} table="schedule_adjustments" />}
-                  {isAdmin && (
+                  {/* Owners can edit their own pending request (RLS
+                      adjustments_update_own_pending backs it). */}
+                  {(isAdmin || isOwn) && (
                     <EditAdjustmentForm
                       id={adj.id}
                       requestedDate={adj.requested_date}

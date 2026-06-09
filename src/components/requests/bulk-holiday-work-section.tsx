@@ -166,7 +166,9 @@ export function BulkHolidayWorkSection({
                     </>
                   )}
                   {isAdmin && !isOwn && <CancelRequest requestId={hw.id} table="holiday_work_requests" />}
-                  {isAdmin && (
+                  {/* Owners can edit their own pending request (RLS
+                      holiday_work_update_own_pending backs it). */}
+                  {(isAdmin || isOwn) && (
                     <EditHolidayWorkForm
                       id={hw.id}
                       duration={hw.duration}

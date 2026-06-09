@@ -335,7 +335,7 @@ export default async function RequestsPage({
                   {adj.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {adj.reviewer_notes}</p>}
                 </div>
                 <div className="flex items-center gap-3">
-                  <EditAdjustmentForm id={adj.id} requestedDate={adj.requested_date} adjustmentType={adj.adjustment_type} requestedStartTime={adj.requested_start_time} requestedEndTime={adj.requested_end_time} requestedWorkLocation={adj.requested_work_location} reason={adj.reason} />
+                  {isAdmin && <EditAdjustmentForm id={adj.id} requestedDate={adj.requested_date} adjustmentType={adj.adjustment_type} requestedStartTime={adj.requested_start_time} requestedEndTime={adj.requested_end_time} requestedWorkLocation={adj.requested_work_location} reason={adj.reason} />}
                   <StatusBadge status={adj.status} />
                 </div>
               </div>
@@ -349,7 +349,9 @@ export default async function RequestsPage({
                 </div>
                 <div className="flex items-center gap-3">
                   <CancelApprovedLeave leaveId={leave.id} startDate={leave.start_date} currentStatus={leave.status} />
-                  <EditLeaveForm id={leave.id} leaveType={leave.leave_type} leaveDuration={leave.leave_duration} halfDayPeriod={leave.half_day_period} startDate={leave.start_date} endDate={leave.end_date} reason={leave.reason} />
+                  {/* History is past/non-pending; self-edit is pending-only, so
+                      only admins edit here. Owners edit pending leave above. */}
+                  {isAdmin && <EditLeaveForm id={leave.id} leaveType={leave.leave_type} leaveDuration={leave.leave_duration} halfDayPeriod={leave.half_day_period} startDate={leave.start_date} endDate={leave.end_date} reason={leave.reason} />}
                   <StatusBadge status={leave.status} />
                 </div>
               </div>
@@ -362,7 +364,7 @@ export default async function RequestsPage({
                   {hw.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {hw.reviewer_notes}</p>}
                 </div>
                 <div className="flex items-center gap-3">
-                  <EditHolidayWorkForm id={hw.id} duration={hw.duration} startTime={hw.start_time} endTime={hw.end_time} workLocation={hw.work_location} compensation={hw.compensation} reason={hw.reason} />
+                  {isAdmin && <EditHolidayWorkForm id={hw.id} duration={hw.duration} startTime={hw.start_time} endTime={hw.end_time} workLocation={hw.work_location} compensation={hw.compensation} reason={hw.reason} />}
                   <StatusBadge status={hw.status} />
                 </div>
               </div>
@@ -375,7 +377,7 @@ export default async function RequestsPage({
                   {ot.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {ot.reviewer_notes}</p>}
                 </div>
                 <div className="flex items-center gap-3">
-                  <EditOvertimeForm id={ot.id} requestedDate={ot.requested_date} startTime={ot.start_time} endTime={ot.end_time} reason={ot.reason} />
+                  {isAdmin && <EditOvertimeForm id={ot.id} requestedDate={ot.requested_date} startTime={ot.start_time} endTime={ot.end_time} reason={ot.reason} />}
                   <StatusBadge status={ot.status} />
                 </div>
               </div>

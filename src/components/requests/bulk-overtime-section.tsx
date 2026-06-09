@@ -139,7 +139,9 @@ export function BulkOvertimeSection({
                     </>
                   )}
                   {isAdmin && !isOwn && <CancelRequest requestId={ot.id} table="overtime_requests" />}
-                  {isAdmin && (
+                  {/* Owners can edit their own pending request (RLS
+                      overtime_update_own_pending backs it). */}
+                  {(isAdmin || isOwn) && (
                     <EditOvertimeForm
                       id={ot.id}
                       requestedDate={ot.requested_date}

@@ -168,7 +168,9 @@ export function BulkLeaveSection({
                     </>
                   )}
                   {isAdmin && !isOwn && <CancelRequest requestId={leave.id} table="leave_requests" />}
-                  {isAdmin && (
+                  {/* Owners can edit their own request here (these are all
+                      pending); RLS leave_update_own_pending backs it. */}
+                  {(isAdmin || isOwn) && (
                     <EditLeaveForm
                       id={leave.id}
                       leaveType={leave.leave_type}
