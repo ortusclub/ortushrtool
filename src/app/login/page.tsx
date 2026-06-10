@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -15,6 +15,19 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
+
+  // Password-reset links land here with the recovery token in the URL hash:
+  // Supabase redirects admin recovery links to the site root, which the
+  // middleware bounces to /login (the browser preserves the #hash). Forward it
+  // to /auth/set-password, which uses the token to start a session so they can
+  // set a new password.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash;
+    if (hash.includes("access_token") && hash.includes("type=recovery")) {
+      window.location.replace("/auth/set-password" + hash);
+    }
+  }, []);
 
   const handleGoogleLogin = async () => {
     const supabase = createClient();
