@@ -1,1 +1,62 @@
 @import "tailwindcss";
+
+/* Enable class-based dark mode (Tailwind v4): `dark:` applies under .dark. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ───────────────────────── Dark theme (retrofit) ─────────────────────────
+   The app styles thousands of elements with hardcoded neutral utilities
+   (bg-white, bg-gray-50, text-gray-*, border-gray-*). Rather than add dark:
+   variants to every component, we re-map those neutral utilities under .dark.
+   Unlayered rules beat Tailwind's layered utilities in the cascade, so no
+   !important is needed. Brand/accent colors (blue-600 buttons, colored chips)
+   are intentionally left alone; full-width -50 banners get dark tints. */
+
+.dark body { color: #e2e8f0; }
+
+/* Surfaces */
+.dark .bg-white { background-color: #1e293b; }
+.dark .bg-gray-50 { background-color: #0f172a; }
+.dark .bg-gray-100 { background-color: #334155; }
+.dark .bg-gray-200 { background-color: #475569; }
+
+/* Hover surfaces */
+.dark .hover\:bg-gray-50:hover { background-color: #273349; }
+.dark .hover\:bg-gray-100:hover { background-color: #3b495e; }
+.dark .hover\:bg-blue-50:hover { background-color: #1e293b; }
+
+/* Text */
+.dark .text-gray-900 { color: #f1f5f9; }
+.dark .text-gray-800 { color: #e2e8f0; }
+.dark .text-gray-700 { color: #cbd5e1; }
+.dark .text-gray-600 { color: #94a3b8; }
+.dark .text-gray-500 { color: #8493a6; }
+.dark .text-gray-400 { color: #64748b; }
+.dark .text-gray-300 { color: #475569; }
+
+/* Borders */
+.dark .border-gray-100 { border-color: #243044; }
+.dark .border-gray-200 { border-color: #334155; }
+.dark .border-gray-300 { border-color: #475569; }
+
+/* Dividers (Tailwind v4 divide-* selector) */
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #243044; }
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #334155; }
+
+/* Full-width pastel banners → dark tints (chips at -100 stay as-is, readable) */
+.dark .bg-blue-50 { background-color: #15233f; }
+.dark .bg-red-50 { background-color: #341a22; }
+.dark .bg-amber-50 { background-color: #2e2310; }
+.dark .bg-yellow-50 { background-color: #2e2710; }
+.dark .bg-green-50 { background-color: #13301f; }
+.dark .bg-emerald-50 { background-color: #0f2e22; }
+.dark .bg-purple-50 { background-color: #241a3a; }
+.dark .bg-teal-50 { background-color: #0f2e2a; }
+.dark .bg-orange-50 { background-color: #311e0e; }
+.dark .bg-indigo-50 { background-color: #1b1f3a; }
+.dark .bg-pink-50 { background-color: #311825; }
+
+/* Inputs: native pickers + placeholder follow the dark scheme */
+.dark input,
+.dark textarea,
+.dark select { color-scheme: dark; }
+.dark ::placeholder { color: #64748b; }

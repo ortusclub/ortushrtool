@@ -6,6 +6,7 @@ import Link from "next/link";
 import { LogOut } from "lucide-react";
 import type { User } from "@/types/database";
 import { UserAvatar } from "@/components/shared/user-avatar";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { displayName } from "@/lib/utils";
 
 export function Header({ user }: { user: User }) {
@@ -37,6 +38,7 @@ export function Header({ user }: { user: User }) {
     <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
       <div />
       <div className="flex items-center gap-4">
+        <ThemeToggle />
         <span
           className={`rounded-full px-3 py-1 text-xs font-medium ${roleBadgeColor[user.role]}`}
         >
