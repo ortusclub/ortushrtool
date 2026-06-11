@@ -271,6 +271,67 @@ function PayloadPreview({
       </div>
     );
   }
+  if (changeType === "schedule_weekly_change") {
+    const days =
+      (payload?.days as Array<{
+        day_of_week: number;
+        start_time: string;
+        end_time: string;
+        is_rest_day: boolean;
+        work_location: string;
+      }>) ?? [];
+    const eff = payload?.effective_from as string | undefined;
+    const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const sorted = [...days].sort((a, b) => a.day_of_week - b.day_of_week);
+    const hm = (t: string) => (t || "").slice(0, 5);
+    return (
+      <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
+        {eff && (
+          <p className="mb-1.5 text-gray-500">
+            Effective from <strong>{eff}</strong>
+          </p>
+        )}
+        <table className="w-full">
+          <tbody className="divide-y divide-gray-200">
+            {sorted.map((d, i) => (
+              <tr key={i}>
+                <td className="w-12 py-1 pr-3 font-medium text-gray-600">
+                  {dayNames[d.day_of_week] ?? d.day_of_week}
+                </td>
+                <td className="py-1">
+                  {d.is_rest_day ? (
+                    <span className="text-gray-400">Rest day</span>
+                  ) : (
+                    <span>
+                      {hm(d.start_time)} – {hm(d.end_time)}
+                      <span
+                        className={`ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          d.work_location === "online"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-blue-100 text-blue-700"
+                        }`}
+                      >
+                        {d.work_location === "online" ? "Online" : "Office"}
+                      </span>
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <details className="mt-2">
+          <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+            View raw payload
+          </summary>
+          <pre className="mt-2 max-h-64 overflow-auto rounded bg-white p-2 text-[10px]">
+            {JSON.stringify(payload, null, 2)}
+          </pre>
+        </details>
+      </div>
+    );
+  }
+
   return (
     <pre className="max-h-64 overflow-auto rounded-lg bg-gray-50 p-2 text-[10px] text-gray-700">
       {JSON.stringify(payload, null, 2)}
