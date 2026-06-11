@@ -1,7 +1,16 @@
 import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { PendingChangesQueue } from "@/components/admin/pending-changes-queue";
 import type { PendingChangeWithRequester } from "@/types/database";
+
+type ScheduleDay = {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_rest_day: boolean;
+  work_location: string;
+};
 
 export default async function PendingChangesPage() {
   await requireRole("hr_admin");
@@ -16,6 +25,37 @@ export default async function PendingChangesPage() {
 
   const all = (changes ?? []) as PendingChangeWithRequester[];
 
+  // Current effective schedules for the targets of pending weekly-schedule
+  // changes, so the reviewer can compare current vs requested side by side.
+  const schedTargets = [
+    ...new Set(
+      all
+        .filter((c) => c.change_type === "schedule_weekly_change" && c.status === "pending")
+        .map((c) => c.target_employee_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const currentSchedules: Record<string, ScheduleDay[]> = {};
+  if (schedTargets.length > 0) {
+    const admin = createAdminClient();
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: scheds } = await admin
+      .from("schedules")
+      .select("employee_id, day_of_week, start_time, end_time, is_rest_day, work_location")
+      .in("employee_id", schedTargets)
+      .lte("effective_from", today)
+      .or(`effective_until.is.null,effective_until.gte.${today}`);
+    for (const s of scheds ?? []) {
+      (currentSchedules[s.employee_id] ??= []).push({
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        is_rest_day: s.is_rest_day,
+        work_location: s.work_location,
+      });
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -25,7 +65,7 @@ export default async function PendingChangesPage() {
           database; rejecting discards them. Decisions are logged.
         </p>
       </div>
-      <PendingChangesQueue initialChanges={all} />
+      <PendingChangesQueue initialChanges={all} currentSchedules={currentSchedules} />
     </div>
   );
 }

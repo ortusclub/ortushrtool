@@ -16,6 +16,14 @@ import { displayName, formatDate } from "@/lib/utils";
 
 type Filter = "pending" | "approved" | "rejected" | "all";
 
+type ScheduleDay = {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_rest_day: boolean;
+  work_location: string;
+};
+
 const changeTypeLabel: Record<string, string> = {
   bulk_import: "Bulk import",
   field_value_upsert: "Field value update",
@@ -23,12 +31,16 @@ const changeTypeLabel: Record<string, string> = {
   multi_row_insert: "Add row",
   multi_row_update: "Update row",
   multi_row_delete: "Delete row",
+  schedule_weekly_change: "Permanent schedule change",
 };
 
 export function PendingChangesQueue({
   initialChanges,
+  currentSchedules = {},
 }: {
   initialChanges: PendingChangeWithRequester[];
+  /** employee_id -> their current effective weekly schedule (for diffing). */
+  currentSchedules?: Record<string, ScheduleDay[]>;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("pending");
@@ -178,6 +190,7 @@ export function PendingChangesQueue({
                       <PayloadPreview
                         changeType={c.change_type}
                         payload={c.payload}
+                        currentDays={currentSchedules[c.target_employee_id ?? ""] ?? []}
                       />
                     </div>
 
@@ -237,9 +250,11 @@ function StatusBadge({ status }: { status: string }) {
 function PayloadPreview({
   changeType,
   payload,
+  currentDays = [],
 }: {
   changeType: string;
   payload: Record<string, unknown>;
+  currentDays?: ScheduleDay[];
 }) {
   if (changeType === "bulk_import") {
     const rows = (payload?.rows as Array<Record<string, unknown>>) ?? [];
@@ -272,18 +287,24 @@ function PayloadPreview({
     );
   }
   if (changeType === "schedule_weekly_change") {
-    const days =
-      (payload?.days as Array<{
-        day_of_week: number;
-        start_time: string;
-        end_time: string;
-        is_rest_day: boolean;
-        work_location: string;
-      }>) ?? [];
+    const reqDays = (payload?.days as ScheduleDay[]) ?? [];
     const eff = payload?.effective_from as string | undefined;
     const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const sorted = [...days].sort((a, b) => a.day_of_week - b.day_of_week);
-    const hm = (t: string) => (t || "").slice(0, 5);
+    const hm = (t?: string) => (t || "").slice(0, 5);
+    const fmt = (d?: ScheduleDay) =>
+      !d
+        ? "—"
+        : d.is_rest_day
+          ? "Rest day"
+          : `${hm(d.start_time)} – ${hm(d.end_time)} · ${d.work_location === "online" ? "Online" : "Office"}`;
+    const byDow = (arr: ScheduleDay[]) => {
+      const m = new Map<number, ScheduleDay>();
+      for (const d of arr) m.set(d.day_of_week, d);
+      return m;
+    };
+    const curMap = byDow(currentDays);
+    const reqMap = byDow(reqDays);
+    const dows = [...new Set([...curMap.keys(), ...reqMap.keys()])].sort((a, b) => a - b);
     return (
       <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
         {eff && (
@@ -292,34 +313,43 @@ function PayloadPreview({
           </p>
         )}
         <table className="w-full">
+          <thead>
+            <tr className="text-left text-[10px] uppercase tracking-wider text-gray-400">
+              <th className="w-10 py-1 font-medium" />
+              <th className="py-1 pr-3 font-medium">Current</th>
+              <th className="py-1 font-medium">Requested</th>
+            </tr>
+          </thead>
           <tbody className="divide-y divide-gray-200">
-            {sorted.map((d, i) => (
-              <tr key={i}>
-                <td className="w-12 py-1 pr-3 font-medium text-gray-600">
-                  {dayNames[d.day_of_week] ?? d.day_of_week}
-                </td>
-                <td className="py-1">
-                  {d.is_rest_day ? (
-                    <span className="text-gray-400">Rest day</span>
-                  ) : (
-                    <span>
-                      {hm(d.start_time)} – {hm(d.end_time)}
-                      <span
-                        className={`ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                          d.work_location === "online"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {d.work_location === "online" ? "Online" : "Office"}
-                      </span>
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {dows.map((dow) => {
+              const cur = curMap.get(dow);
+              const req = reqMap.get(dow);
+              const curStr = fmt(cur);
+              const reqStr = fmt(req);
+              const changed = req !== undefined && curStr !== reqStr;
+              return (
+                <tr key={dow} className={changed ? "bg-amber-50" : ""}>
+                  <td className="w-10 py-1 pr-2 font-medium text-gray-600">
+                    {dayNames[dow] ?? dow}
+                  </td>
+                  <td className="py-1 pr-3 text-gray-500">{curStr}</td>
+                  <td className={`py-1 ${changed ? "font-semibold text-amber-800" : "text-gray-700"}`}>
+                    {req === undefined ? (
+                      <span className="text-gray-400">(unchanged)</span>
+                    ) : (
+                      reqStr
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
+        {currentDays.length === 0 && (
+          <p className="mt-1.5 text-[10px] text-gray-400">
+            No current schedule on file for this employee.
+          </p>
+        )}
         <details className="mt-2">
           <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
             View raw payload

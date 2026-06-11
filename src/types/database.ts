@@ -672,7 +672,8 @@ export type PendingChangeType =
   | "field_value_delete"
   | "multi_row_insert"
   | "multi_row_update"
-  | "multi_row_delete";
+  | "multi_row_delete"
+  | "schedule_weekly_change";
 
 export type PendingChangeStatus = "pending" | "approved" | "rejected";
 
