@@ -43,7 +43,8 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  * Credits and leaves are both scoped to `cycleStart`, so a new cycle opens
  * fresh: prior-cycle credits and leaves drop off automatically (CTO and any
  * other credit are therefore use-it-or-lose-it within the cycle). Expired
- * credits (past expires_at) are excluded too.
+ * credits stay in the ledger so a used credit nets to zero and the type stays
+ * visible; only their unused remainder is forfeited.
  */
 export function buildLeaveLedger(args: {
   leaveType: string;
@@ -69,14 +70,19 @@ export function buildLeaveLedger(args: {
     });
   }
 
-  // Credits granted within this cycle and still active (not expired).
+  // Credits granted within this cycle. Expired credits are KEPT in the ledger
+  // (so a credit that was used before expiring still nets to zero, and the
+  // leave type stays visible after expiry); their unused remainder is forfeited
+  // below rather than dropped outright (which would make a used credit read -1).
+  let expiredPositive = 0;
+  let latestExpiry = "";
   for (const c of credits) {
     const granted = c.granted_at.slice(0, 10);
     if (granted < cycleStart || granted > today) continue;
-    if (c.expires_at && c.expires_at < today) continue;
     const days = Number(c.days);
+    const expired = !!(c.expires_at && c.expires_at < today);
     const note = c.notes?.trim();
-    const label =
+    const base =
       days >= 0
         ? note
           ? `Credit — ${note}`
@@ -86,7 +92,19 @@ export function buildLeaveLedger(args: {
         : note
           ? `Deduction — ${note}`
           : "Manual deduction";
-    entries.push({ date: granted, label, delta: r2(days), running: 0, kind: "credit" });
+    entries.push({
+      date: granted,
+      label: expired ? `${base} (expired)` : base,
+      delta: r2(days),
+      running: 0,
+      kind: "credit",
+    });
+    if (expired && days > 0) {
+      expiredPositive += days;
+      if (!latestExpiry || (c.expires_at as string) > latestExpiry) {
+        latestExpiry = c.expires_at as string;
+      }
+    }
   }
 
   // Approved leaves taken within this cycle.
@@ -113,6 +131,21 @@ export function buildLeaveLedger(args: {
       delta: r2(-days),
       running: 0,
       kind: "leave",
+    });
+  }
+
+  // Use-it-or-lose-it: leaves draw down expiring credits first, so only the
+  // unused remainder of expired credits is forfeited. Deducting it makes a
+  // fully-used credit net to zero (instead of going negative) while an unused
+  // expired credit doesn't inflate the balance.
+  const expiredUnused = r2(Math.max(0, expiredPositive - usedDays));
+  if (expiredUnused > 0) {
+    entries.push({
+      date: latestExpiry || today,
+      label: "Expired (unused, forfeited)",
+      delta: r2(-expiredUnused),
+      running: 0,
+      kind: "credit",
     });
   }
 

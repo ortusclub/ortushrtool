@@ -85,13 +85,14 @@ export default async function TeamMemberTimeOffTab({
       .from("holidays")
       .select("date, is_recurring")
       .eq("country", user.holiday_country),
-    // Active manual leave credits (admin-issued + earned CTO).
+    // Manual leave credits (admin-issued + earned CTO). Includes expired ones
+    // so the type still shows after expiry; the ledger forfeits unused expired
+    // days while keeping used ones netted correctly.
     supabase
       .from("leave_credits")
       .select("leave_type, days, granted_at, expires_at, notes, source")
       .eq("employee_id", userId)
-      .lte("granted_at", today)
-      .or(`expires_at.is.null,expires_at.gte.${today}`),
+      .lte("granted_at", today),
   ]);
 
   const todayYear = parseInt(today.slice(0, 4));
@@ -177,7 +178,9 @@ export default async function TeamMemberTimeOffTab({
     }
   }
 
-  // Every leave_type that has a plan OR any credit gets a balance row.
+  // Every leave_type that has a plan or any credit (now incl. expired ones)
+  // gets a balance row — so a used-up/expired credited type (e.g. birthday
+  // leave already taken) still shows instead of disappearing.
   const allTypes = new Set<string>([
     ...planBuckets.keys(),
     ...(leaveCredits ?? []).map((c) => c.leave_type),
