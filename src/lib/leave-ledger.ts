@@ -81,6 +81,10 @@ export function buildLeaveLedger(args: {
     if (granted < cycleStart || granted > today) continue;
     const days = Number(c.days);
     const expired = !!(c.expires_at && c.expires_at < today);
+    // Expired DEBITS (negative, e.g. clawbacks) keep the prior behavior — once
+    // lapsed they're dropped. Only expired positive credits are kept (and their
+    // unused part forfeited below), to fix the "used credit reads -1" case.
+    if (expired && days < 0) continue;
     const note = c.notes?.trim();
     const base =
       days >= 0
