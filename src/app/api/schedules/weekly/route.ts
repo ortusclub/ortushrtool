@@ -2,10 +2,16 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasRole, displayName } from "@/lib/utils";
+import { sendEmail } from "@/lib/email/resend";
+import { applyEmailStyles } from "@/lib/email/styles";
 import {
   applyScheduleWeeklyChange,
   type ScheduleWeeklyChangePayload,
 } from "@/lib/pending-changes";
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -82,5 +88,39 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Notify reviewers so the queued change doesn't sit unseen. Best-effort:
+  // the request still succeeds even if the email fails.
+  try {
+    const { data: requester } = await admin
+      .from("users")
+      .select("full_name, preferred_name, first_name, last_name, email")
+      .eq("id", authUser.id)
+      .single();
+    const { data: admins } = await admin
+      .from("users")
+      .select("email")
+      .in("role", ["hr_admin", "super_admin"])
+      .eq("is_active", true);
+    const adminEmails = (admins ?? []).map((a) => a.email).filter(Boolean);
+    if (adminEmails.length > 0) {
+      const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const requesterName = requester ? displayName(requester) : "An employee";
+      const html = applyEmailStyles(
+        `<h2>Permanent Schedule Change Request</h2>\n` +
+          `<p>${escapeHtml(requesterName)} submitted a permanent weekly schedule change for <strong>${escapeHtml(who)}</strong>.</p>\n` +
+          `<p>Review and approve or reject it in the app.</p>\n` +
+          `<p><a class="button" href="${APP_URL}/admin/pending-changes">Review Request</a></p>`
+      );
+      await sendEmail({
+        to: adminEmails,
+        subject: `Schedule change request for ${who}`,
+        html,
+      });
+    }
+  } catch {
+    /* notification is best-effort; never block the queued change */
+  }
+
   return NextResponse.json({ ok: true, queued: true });
 }
