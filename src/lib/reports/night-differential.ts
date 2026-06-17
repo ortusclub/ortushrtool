@@ -1,94 +1,130 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { DAYS_OF_WEEK } from "@/lib/constants";
 import { nightDifferentialHours } from "@/lib/utils";
+import type { FilterValues } from "@/lib/reports/sources";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type NightDiffScheduleRow = {
+export type NightDiffPeriodRow = {
   employee_id: string;
   employee_name: string;
   employee_email: string;
   department: string;
-  timezone: string;
+  period: string;
   nd_days: number;
-  nd_hours_week: number;
-  nd_schedule: string;
+  nd_hours: number;
+  nd_detail: string;
 };
 
 const hm = (t?: string | null) => (t || "").slice(0, 5);
+const round = (n: number) => Math.round(n * 100) / 100;
+
+// Statuses that represent the employee actually working that day, so a
+// night-touching scheduled shift earns ND. Excludes rest_day, on_leave,
+// holiday, absent, not_started, no_schedule — none of which are worked nights.
+const WORKED_STATUSES = [
+  "on_time",
+  "working",
+  "late_arrival",
+  "early_departure",
+  "late_and_early",
+  "inconclusive",
+];
 
 /**
- * Payroll-facing list of every ACTIVE employee whose currently-effective
- * assigned weekly schedule includes any shift overlapping the night-
- * differential window (22:00–06:00). One row per employee, with the total
- * scheduled ND hours per week and a per-day breakdown. Employees with no
- * scheduled ND hours are omitted — the report IS the flag.
+ * Payroll-facing night-differential report for a PAY PERIOD.
  *
- * Reads the company-wide `schedules` table, so it paginates past the
- * 1000-row PostgREST cap.
+ * Sourced from `attendance_logs`, which snapshots each day's effective
+ * `scheduled_start`/`scheduled_end` (the DeskTime sync resolves approved
+ * one-off adjustments first, then the recurring schedule). Because each day
+ * is frozen, this survives mid-period schedule changes — unlike the live
+ * `schedules` table, which only ever holds the current schedule and keeps no
+ * history.
+ *
+ * One row per employee who has any scheduled ND (22:00–06:00) within the
+ * period, with total ND hours, distinct ND days, and a per-shift breakdown.
+ * Defaults to the current calendar month-to-date when no range is given.
  */
 export async function computeNightDifferentialSchedules(
-  admin: SupabaseClient
-): Promise<NightDiffScheduleRow[]> {
+  admin: SupabaseClient,
+  filters: FilterValues = {}
+): Promise<NightDiffPeriodRow[]> {
   const today = new Date().toISOString().slice(0, 10);
+  const dr =
+    filters.date_range && typeof filters.date_range === "object"
+      ? filters.date_range
+      : {};
+  const from = dr.from || `${today.slice(0, 7)}-01`;
+  const to = dr.to || today;
 
-  const { data: users } = await admin
-    .from("users")
-    .select("id, full_name, email, department, timezone")
-    .eq("is_active", true);
-  const userMap = new Map((users ?? []).map((u: any) => [u.id, u]));
-
-  // Currently-effective, non-rest schedule rows, paginated.
+  // Per-date scheduled times across the period. attendance_logs is one row per
+  // (employee, date); paginate past the 1000-row cap.
   const PAGE = 1000;
-  const schedules: any[] = [];
-  for (let from = 0; ; from += PAGE) {
+  const logs: any[] = [];
+  for (let off = 0; ; off += PAGE) {
     const { data, error } = await admin
-      .from("schedules")
-      .select("employee_id, day_of_week, start_time, end_time")
-      .eq("is_rest_day", false)
-      .lte("effective_from", today)
-      .or(`effective_until.is.null,effective_until.gte.${today}`)
-      .range(from, from + PAGE - 1);
-    if (error) throw new Error(`schedules: ${error.message}`);
-    schedules.push(...(data ?? []));
+      .from("attendance_logs")
+      .select("employee_id, date, scheduled_start, scheduled_end")
+      .gte("date", from)
+      .lte("date", to)
+      .not("scheduled_start", "is", null)
+      .in("status", WORKED_STATUSES)
+      .range(off, off + PAGE - 1);
+    if (error) throw new Error(`attendance_logs: ${error.message}`);
+    logs.push(...(data ?? []));
     if (!data || data.length < PAGE) break;
   }
 
-  type Acc = { days: { dow: number; label: string }[]; total: number };
+  type Acc = {
+    dates: Set<string>;
+    total: number;
+    byShift: Map<string, { days: number; hours: number }>;
+  };
   const byEmp = new Map<string, Acc>();
-  for (const s of schedules) {
-    const nd = nightDifferentialHours(s.start_time, s.end_time);
+  for (const l of logs) {
+    const nd = nightDifferentialHours(l.scheduled_start, l.scheduled_end);
     if (nd <= 0) continue;
-    if (!userMap.has(s.employee_id)) continue; // skip inactive/unknown
-    const acc = byEmp.get(s.employee_id) ?? { days: [], total: 0 };
-    const dayName = (DAYS_OF_WEEK[s.day_of_week] ?? `Day ${s.day_of_week}`).slice(0, 3);
-    acc.days.push({
-      dow: s.day_of_week,
-      label: `${dayName} ${hm(s.start_time)}–${hm(s.end_time)} (${nd}h)`,
-    });
+    const acc =
+      byEmp.get(l.employee_id) ?? { dates: new Set<string>(), total: 0, byShift: new Map() };
+    acc.dates.add(l.date);
     acc.total += nd;
-    byEmp.set(s.employee_id, acc);
+    const key = `${hm(l.scheduled_start)}–${hm(l.scheduled_end)}`;
+    const sh = acc.byShift.get(key) ?? { days: 0, hours: 0 };
+    sh.days += 1;
+    sh.hours += nd;
+    acc.byShift.set(key, sh);
+    byEmp.set(l.employee_id, acc);
   }
 
-  const rows: NightDiffScheduleRow[] = [];
-  for (const [empId, acc] of byEmp) {
-    const u: any = userMap.get(empId);
-    acc.days.sort((a, b) => a.dow - b.dow);
+  // Names/departments — include departed employees too (they still need paying
+  // for nights worked in the period), so look up by id rather than is_active.
+  const ids = [...byEmp.keys()];
+  const { data: users } = ids.length
+    ? await admin.from("users").select("id, full_name, email, department").in("id", ids)
+    : { data: [] as any[] };
+  const umap = new Map((users ?? []).map((u: any) => [u.id, u]));
+
+  const period = `${from} → ${to}`;
+  const rows: NightDiffPeriodRow[] = [];
+  for (const [id, acc] of byEmp) {
+    const u: any = umap.get(id) ?? {};
+    const detail = [...acc.byShift.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([shift, v]) => `${shift}: ${v.days}d, ${round(v.hours)}h`)
+      .join("; ");
     rows.push({
-      employee_id: empId,
-      employee_name: u.full_name ?? u.email ?? empId,
+      employee_id: id,
+      employee_name: u.full_name ?? u.email ?? id,
       employee_email: u.email ?? "",
       department: u.department ?? "",
-      timezone: u.timezone || "Asia/Manila",
-      nd_days: acc.days.length,
-      nd_hours_week: Math.round(acc.total * 100) / 100,
-      nd_schedule: acc.days.map((d) => d.label).join("; "),
+      period,
+      nd_days: acc.dates.size,
+      nd_hours: round(acc.total),
+      nd_detail: detail,
     });
   }
   rows.sort(
     (a, b) =>
-      b.nd_hours_week - a.nd_hours_week ||
-      a.employee_name.localeCompare(b.employee_name)
+      b.nd_hours - a.nd_hours || a.employee_name.localeCompare(b.employee_name)
   );
   return rows;
 }

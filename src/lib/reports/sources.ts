@@ -578,32 +578,33 @@ export const SOURCES: SourceDef[] = [
     applyFilter: (q) => q,
   },
 
-  // ─────── Night Differential (Schedules) ───────
+  // ─────── Night Differential (Payroll) ───────
   {
     id: "night_differential",
-    label: "Night Differential (Schedules)",
+    label: "Night Differential (Payroll)",
     description:
-      "Active employees whose assigned weekly schedule overlaps night hours (22:00–06:00), with scheduled night-differential hours per week. Only employees with ND hours are listed.",
+      "Per pay period: employees whose scheduled hours overlapped night hours (22:00–06:00), with total scheduled night-differential hours, days, and a per-shift breakdown. Built from each day's snapshotted schedule (survives mid-period schedule changes). Defaults to the current month-to-date; pick a date range for the pay period.",
     table: "__computed__",
     select: "",
-    orderBy: { column: "nd_hours_week", ascending: false },
+    orderBy: { column: "nd_hours", ascending: false },
     columns: [
       { id: "employee_name", label: "Employee", value: (r) => r.employee_name },
       { id: "employee_email", label: "Email", value: (r) => r.employee_email },
       { id: "department", label: "Department", value: (r) => r.department },
-      { id: "timezone", label: "Timezone", value: (r) => r.timezone },
-      { id: "nd_days", label: "ND Days / Week", value: (r) => r.nd_days },
-      { id: "nd_hours_week", label: "ND Hours / Week", value: (r) => r.nd_hours_week },
-      { id: "nd_schedule", label: "ND Schedule", value: (r) => r.nd_schedule },
+      { id: "period", label: "Period", value: (r) => r.period },
+      { id: "nd_days", label: "ND Days", value: (r) => r.nd_days },
+      { id: "nd_hours", label: "ND Hours", value: (r) => r.nd_hours },
+      { id: "nd_detail", label: "ND Breakdown", value: (r) => r.nd_detail },
     ],
     defaultColumns: [
       "employee_name",
       "department",
+      "period",
       "nd_days",
-      "nd_hours_week",
-      "nd_schedule",
+      "nd_hours",
+      "nd_detail",
     ],
-    filters: [],
+    filters: [{ id: "date_range", label: "Pay period", type: "date_range" }],
     applyFilter: (q) => q,
   },
 
