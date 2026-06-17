@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -362,9 +362,133 @@ function PayloadPreview({
     );
   }
 
+  if (changeType === "field_value_upsert") {
+    const value = payload?.value;
+    return (
+      <DetailBlock payload={payload}>
+        {value === undefined || value === null || value === "" ? (
+          <p className="text-gray-500">Sets an empty value.</p>
+        ) : (
+          <div className="whitespace-pre-wrap break-words text-gray-800">
+            {String(value)}
+          </div>
+        )}
+      </DetailBlock>
+    );
+  }
+
+  if (changeType === "field_value_delete") {
+    return (
+      <DetailBlock payload={payload}>
+        <p className="text-gray-500">Clears this field&apos;s value for the employee.</p>
+      </DetailBlock>
+    );
+  }
+
+  if (changeType === "multi_row_insert" || changeType === "multi_row_update") {
+    const data = (payload?.data as Record<string, unknown>) ?? {};
+    return (
+      <DetailBlock payload={payload}>
+        <KeyValueLines data={data} />
+      </DetailBlock>
+    );
+  }
+
+  if (changeType === "multi_row_delete") {
+    return (
+      <DetailBlock payload={payload}>
+        <p className="text-gray-500">Removes this entry.</p>
+      </DetailBlock>
+    );
+  }
+
+  // Generic fallback: render whatever the payload holds as readable lines
+  // instead of a raw JSON blob.
   return (
-    <pre className="max-h-64 overflow-auto rounded-lg bg-gray-50 p-2 text-[10px] text-gray-700">
-      {JSON.stringify(payload, null, 2)}
-    </pre>
+    <DetailBlock payload={payload}>
+      <KeyValueLines data={payload} />
+    </DetailBlock>
   );
+}
+
+/** Gray panel wrapping a friendly summary, with the raw payload tucked
+ * behind a "View raw payload" disclosure for parity with the other views. */
+function DetailBlock({
+  payload,
+  children,
+}: {
+  payload: Record<string, unknown>;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
+      {children}
+      <details className="mt-2">
+        <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+          View raw payload
+        </summary>
+        <pre className="mt-2 max-h-64 overflow-auto rounded bg-white p-2 text-[10px]">
+          {JSON.stringify(payload, null, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+/** Renders an object as aligned label → value lines, recursing one level
+ * into nested objects/arrays so nothing shows up as `{...}`. */
+function KeyValueLines({ data }: { data: Record<string, unknown> }) {
+  const SKIP = new Set(["field_id", "employee_id", "row_id"]);
+  const entries = Object.entries(data ?? {}).filter(([k]) => !SKIP.has(k));
+  if (entries.length === 0) {
+    return <p className="text-gray-500">No additional details.</p>;
+  }
+  return (
+    <dl className="space-y-1">
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+          <dt className="shrink-0 font-medium text-gray-500 sm:w-40">
+            {humanizeKey(k)}
+          </dt>
+          <dd className="whitespace-pre-wrap break-words text-gray-800">
+            {renderLeaf(v)}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function renderLeaf(v: unknown): ReactNode {
+  if (v === null || v === undefined || v === "") {
+    return <span className="text-gray-400">—</span>;
+  }
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (Array.isArray(v)) {
+    return v.length === 0 ? (
+      <span className="text-gray-400">(none)</span>
+    ) : (
+      <ul className="list-disc pl-4">
+        {v.map((item, i) => (
+          <li key={i}>{renderLeaf(item)}</li>
+        ))}
+      </ul>
+    );
+  }
+  if (typeof v === "object") {
+    return (
+      <div className="pl-2">
+        <KeyValueLines data={v as Record<string, unknown>} />
+      </div>
+    );
+  }
+  return String(v);
+}
+
+function humanizeKey(key: string): string {
+  return key
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (m) => m.toUpperCase())
+    .trim();
 }
