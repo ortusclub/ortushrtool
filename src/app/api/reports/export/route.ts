@@ -56,8 +56,9 @@ export async function POST(request: Request) {
     // Computed source — bypass the standard query path.
     data = await computeLeaveBalances(admin);
   } else if (source.id === "night_differential") {
-    // Computed source — derived from currently-effective schedules.
-    data = await computeNightDifferentialSchedules(admin);
+    // Computed source — period-bound, derived from per-date attendance_logs
+    // schedule snapshots. Takes the date-range filter (the pay period).
+    data = await computeNightDifferentialSchedules(admin, filters);
   } else {
     let query = admin.from(source.table).select(source.select);
     for (const [filterId, value] of Object.entries(filters)) {

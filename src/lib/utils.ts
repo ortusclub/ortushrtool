@@ -111,7 +111,8 @@ export function nightDifferentialHours(
   const s = toMin(startTime);
   let e = toMin(endTime);
   if (s === null || e === null) return 0;
-  if (e <= s) e += 24 * 60; // wraps past midnight
+  if (e === s) return 0; // zero-length / placeholder (e.g. 00:00–00:00 rest day)
+  if (e < s) e += 24 * 60; // wraps past midnight
 
   // ND windows laid out on a two-day minute timeline so a shift starting in
   // [00:00,24:00) and ending up to +24h is fully covered:
