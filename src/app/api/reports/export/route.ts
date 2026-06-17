@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { hasRole } from "@/lib/utils";
 import { getSource, type FilterValues } from "@/lib/reports/sources";
 import { computeLeaveBalances } from "@/lib/reports/leave-balances";
+import { computeNightDifferentialSchedules } from "@/lib/reports/night-differential";
 
 function csvEscape(v: unknown): string {
   if (v === null || v === undefined) return "";
@@ -54,6 +55,9 @@ export async function POST(request: Request) {
   if (source.id === "leave_balances") {
     // Computed source — bypass the standard query path.
     data = await computeLeaveBalances(admin);
+  } else if (source.id === "night_differential") {
+    // Computed source — derived from currently-effective schedules.
+    data = await computeNightDifferentialSchedules(admin);
   } else {
     let query = admin.from(source.table).select(source.select);
     for (const [filterId, value] of Object.entries(filters)) {

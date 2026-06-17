@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { hasNightDifferentialHours, nightDifferentialHours } from "@/lib/utils";
+import { NightDiffBanner } from "@/components/shared/night-diff-banner";
 
 export default function OvertimeRequestPage() {
   const router = useRouter();
@@ -202,6 +204,12 @@ export default function OvertimeRequestPage() {
             />
           </div>
         </div>
+
+        {hasNightDifferentialHours(startTime, endTime) && (
+          <NightDiffBanner
+            message={`Heads up: this OT overlaps night hours (22:00–06:00), so night differential applies — about ${nightDifferentialHours(startTime, endTime)}h of this request qualifies.`}
+          />
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700">

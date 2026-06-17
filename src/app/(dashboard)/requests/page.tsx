@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
-import { hasRole, formatDate, formatTime, displayName } from "@/lib/utils";
+import { hasRole, formatDate, formatTime, displayName, hasNightDifferentialHours } from "@/lib/utils";
+import { NightDiffNote } from "@/components/shared/night-diff-note";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
 import { AdjustmentActions } from "@/components/adjustments/adjustment-actions";
 import { LeaveActions } from "@/components/leave/leave-actions";
@@ -372,7 +373,10 @@ export default async function RequestsPage({
             {myPastOtF.map((ot) => (
               <div key={ot.id} className="flex items-center justify-between p-6">
                 <div className="space-y-1">
-                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">Overtime</span>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">Overtime</span>
+                    {hasNightDifferentialHours(ot.start_time, ot.end_time) && <NightDiffNote size="xs" />}
+                  </div>
                   <p className="text-sm text-gray-700">{formatDate(ot.requested_date)} &mdash; {formatTime(ot.start_time)} – {formatTime(ot.end_time)}</p>
                   {ot.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {ot.reviewer_notes}</p>}
                 </div>
@@ -564,6 +568,7 @@ export default async function RequestsPage({
                       <div className="flex items-center gap-2">
                         <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">Overtime</span>
                         {ot.employee && <span className="text-sm font-medium text-gray-900"><UserNameLink userId={ot.employee_id} name={displayName(ot.employee)} /></span>}
+                        {hasNightDifferentialHours(ot.start_time, ot.end_time) && <NightDiffNote size="xs" />}
                       </div>
                       <p className="text-sm text-gray-700">{formatDate(ot.requested_date)} &mdash; {formatTime(ot.start_time)} – {formatTime(ot.end_time)}</p>
                       {ot.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {ot.reviewer_notes}</p>}

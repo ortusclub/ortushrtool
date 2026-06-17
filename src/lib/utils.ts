@@ -92,6 +92,43 @@ export function hasNightDifferentialHours(
 }
 
 /**
+ * Number of hours of a shift that fall inside the night-differential window
+ * (22:00–06:00) — i.e. how many ND hours payroll should pay for this span.
+ * Companion to `hasNightDifferentialHours` (which is the boolean "does it
+ * touch ND"; this returns the quantity). Handles overnight shifts (end <=
+ * start wraps past midnight) and midnight-end. Accepts "HH:MM" or "HH:MM:SS".
+ * Returns 0 when a time is missing/unparseable or there's no overlap.
+ */
+export function nightDifferentialHours(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined
+): number {
+  if (!startTime || !endTime) return 0;
+  const toMin = (t: string) => {
+    const [h, m] = t.slice(0, 5).split(":").map(Number);
+    return Number.isNaN(h) || Number.isNaN(m) ? null : h * 60 + m;
+  };
+  const s = toMin(startTime);
+  let e = toMin(endTime);
+  if (s === null || e === null) return 0;
+  if (e <= s) e += 24 * 60; // wraps past midnight
+
+  // ND windows laid out on a two-day minute timeline so a shift starting in
+  // [00:00,24:00) and ending up to +24h is fully covered:
+  //   00:00–06:00 (day 0), 22:00–06:00 (day 0→1), 22:00–24:00 (day 1).
+  const windows: [number, number][] = [
+    [0, 360],
+    [1320, 1800],
+    [2760, 3240],
+  ];
+  let mins = 0;
+  for (const [ws, we] of windows) {
+    mins += Math.max(0, Math.min(e, we) - Math.max(s, ws));
+  }
+  return Math.round((mins / 60) * 100) / 100;
+}
+
+/**
  * Compensation policy for a holiday-work request, given the requester's
  * profile.
  *

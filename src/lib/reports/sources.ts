@@ -10,6 +10,7 @@
  */
 
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
+import { nightDifferentialHours } from "@/lib/utils";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -70,6 +71,26 @@ const employeeColumns: ColumnDef[] = [
   { id: "employee_name", label: "Employee", value: (r) => emp(r)?.full_name ?? "" },
   { id: "employee_email", label: "Employee Email", value: (r) => emp(r)?.email ?? "" },
 ];
+
+/**
+ * Total hours between a start and end time (e.g. "23:00" → "02:00").
+ * Mirrors the OT form: when the end is at or before the start, the shift is
+ * treated as wrapping past midnight, so 24h is added. Returns "" when either
+ * time is missing or unparseable.
+ */
+function hoursBetween(start?: string | null, end?: string | null): string {
+  if (!start || !end) return "";
+  const toMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return Number.isNaN(h) || Number.isNaN(m) ? null : h * 60 + m;
+  };
+  const s = toMin(start);
+  const e = toMin(end);
+  if (s === null || e === null) return "";
+  let diff = e - s;
+  if (diff <= 0) diff += 24 * 60; // overnight wrap
+  return (diff / 60).toFixed(2).replace(/\.?0+$/, "");
+}
 
 const STATUS_PENDING_APPROVED_REJECTED = [
   { value: "pending", label: "Pending" },
@@ -329,12 +350,23 @@ export const SOURCES: SourceDef[] = [
       { id: "requested_date", label: "Date", value: (r) => r.requested_date ?? "" },
       { id: "start_time", label: "Start", value: (r) => r.start_time ?? "" },
       { id: "end_time", label: "End", value: (r) => r.end_time ?? "" },
+      { id: "total_hours", label: "Total Hours", value: (r) => hoursBetween(r.start_time, r.end_time) },
+      {
+        id: "night_diff_hours",
+        label: "Night Diff Hours",
+        // Blank (not 0) when the OT doesn't touch 22:00–06:00, so payroll can
+        // scan for who actually needs night-differential pay.
+        value: (r) => {
+          const h = nightDifferentialHours(r.start_time, r.end_time);
+          return h > 0 ? h : "";
+        },
+      },
       { id: "status", label: "Status", value: (r) => r.status ?? "" },
       { id: "reason", label: "Reason", value: (r) => r.reason ?? "" },
       { id: "reviewer_notes", label: "Reviewer Notes", value: (r) => r.reviewer_notes ?? "" },
       { id: "created_at", label: "Submitted At", value: (r) => r.created_at?.slice(0, 19).replace("T", " ") ?? "" },
     ],
-    defaultColumns: ["employee_name", "requested_date", "start_time", "end_time", "status"],
+    defaultColumns: ["employee_name", "requested_date", "start_time", "end_time", "total_hours", "night_diff_hours", "status"],
     filters: [
       {
         id: "status",
@@ -541,6 +573,35 @@ export const SOURCES: SourceDef[] = [
       "allocated_days",
       "used_days",
       "remaining_days",
+    ],
+    filters: [],
+    applyFilter: (q) => q,
+  },
+
+  // ─────── Night Differential (Schedules) ───────
+  {
+    id: "night_differential",
+    label: "Night Differential (Schedules)",
+    description:
+      "Active employees whose assigned weekly schedule overlaps night hours (22:00–06:00), with scheduled night-differential hours per week. Only employees with ND hours are listed.",
+    table: "__computed__",
+    select: "",
+    orderBy: { column: "nd_hours_week", ascending: false },
+    columns: [
+      { id: "employee_name", label: "Employee", value: (r) => r.employee_name },
+      { id: "employee_email", label: "Email", value: (r) => r.employee_email },
+      { id: "department", label: "Department", value: (r) => r.department },
+      { id: "timezone", label: "Timezone", value: (r) => r.timezone },
+      { id: "nd_days", label: "ND Days / Week", value: (r) => r.nd_days },
+      { id: "nd_hours_week", label: "ND Hours / Week", value: (r) => r.nd_hours_week },
+      { id: "nd_schedule", label: "ND Schedule", value: (r) => r.nd_schedule },
+    ],
+    defaultColumns: [
+      "employee_name",
+      "department",
+      "nd_days",
+      "nd_hours_week",
+      "nd_schedule",
     ],
     filters: [],
     applyFilter: (q) => q,
