@@ -178,12 +178,15 @@ export default async function TeamMemberTimeOffTab({
     }
   }
 
-  // Every leave_type that has a plan or any credit (now incl. expired ones)
-  // gets a balance row — so a used-up/expired credited type (e.g. birthday
-  // leave already taken) still shows instead of disappearing.
+  // Every leave_type that has a plan, any credit (now incl. expired ones), or
+  // any non-rejected leave request gets a balance row — so a used-up/expired
+  // credited type (e.g. birthday leave already taken) still shows, and so does
+  // a type the employee has actually taken with no plan allocation or credit
+  // at all (e.g. a one-off Trinity leave). Rejected requests don't count.
   const allTypes = new Set<string>([
     ...planBuckets.keys(),
     ...(leaveCredits ?? []).map((c) => c.leave_type),
+    ...allLeaves.filter((l) => l.status !== "rejected").map((l) => l.leave_type),
   ]);
 
   const balances = Array.from(allTypes).map((leaveType) => {
