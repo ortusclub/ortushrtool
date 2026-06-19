@@ -42,7 +42,30 @@ export async function GET(request: Request) {
       .eq("is_active", true)
       .not("desktime_employee_id", "is", null);
 
-    const loggedEmployeeIds = new Set((logs ?? []).map((l) => l.employee_id));
+    // Every employee who has ANY log for this date (regardless of status) — so
+    // the no-log absent path below only fires for genuinely missing logs.
+    // NOTE: the `logs` query above is filtered to violation statuses only, so
+    // it must NOT be used for this — doing so treated every on_time /
+    // inconclusive / on_leave employee as "no log" and flagged them absent.
+    const { data: allLogsForDate } = await supabase
+      .from("attendance_logs")
+      .select("employee_id")
+      .eq("date", flagDate);
+    const employeesWithAnyLog = new Set(
+      (allLogsForDate ?? []).map((l) => l.employee_id)
+    );
+
+    // Employees on approved leave covering this date — never absent-flag them,
+    // even if a stale log says "absent" or they have no log at all.
+    const { data: approvedLeaves } = await supabase
+      .from("leave_requests")
+      .select("employee_id")
+      .eq("status", "approved")
+      .lte("start_date", flagDate)
+      .gte("end_date", flagDate);
+    const employeesOnLeave = new Set(
+      (approvedLeaves ?? []).map((l) => l.employee_id)
+    );
 
     // Get HR admins for notifications
     const { data: hrAdmins } = await supabase
@@ -112,7 +135,7 @@ export async function GET(request: Request) {
         });
       }
 
-      if (log.status === "absent") {
+      if (log.status === "absent" && !employeesOnLeave.has(employee.id)) {
         flagTypes.push({
           type: "absent",
           scheduled: log.scheduled_start,
@@ -209,7 +232,14 @@ export async function GET(request: Request) {
     const dayOfWeek = (dateObj.getDay() + 6) % 7;
 
     for (const user of allActiveUsers ?? []) {
-      if (loggedEmployeeIds.has(user.id)) continue;
+      // Skip anyone who already has a log for the day — present, late, early,
+      // inconclusive, on leave, etc. are all handled above; only genuinely
+      // missing logs fall through here.
+      if (employeesWithAnyLog.has(user.id)) continue;
+
+      // Skip employees on approved leave (they may have no log at all if
+      // DeskTime didn't sync them that day).
+      if (employeesOnLeave.has(user.id)) continue;
 
       // Skip if it's a holiday for this employee's country
       if (user.holiday_country && holidayCountries.has(user.holiday_country)) continue;
