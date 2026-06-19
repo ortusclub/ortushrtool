@@ -33,9 +33,8 @@ export function LeavePlansManager({
   const [newGrantType, setNewGrantType] = useState<GrantType>("custom");
   const [newRenewalMonth, setNewRenewalMonth] = useState(1);
   const [newRenewalDay, setNewRenewalDay] = useState(1);
-  const [newAllocations, setNewAllocations] = useState<Record<string, number>>(
-    Object.fromEntries(ALL_LEAVE_TYPE_KEYS.map((k) => [k, 0]))
-  );
+  const [newLeaveType, setNewLeaveType] = useState<string>("");
+  const [newDays, setNewDays] = useState<number>(0);
   const [editAllocations, setEditAllocations] = useState<Record<string, number>>({});
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -56,6 +55,10 @@ export function LeavePlansManager({
 
   const handleCreate = async () => {
     if (!newPlanName.trim()) return;
+    if (!newLeaveType) {
+      setMessage("Select a leave type — every plan must declare one.");
+      return;
+    }
     setSaving(true);
     setMessage("");
 
@@ -79,17 +82,16 @@ export function LeavePlansManager({
       return;
     }
 
-    // Insert allocations
-    const allocsToInsert = ALL_LEAVE_TYPE_KEYS
-      .filter((k) => (newAllocations[k] ?? 0) > 0)
-      .map((k) => ({
-        plan_id: plan.id,
-        leave_type: k,
-        days_per_year: newAllocations[k],
-      }));
-
-    if (allocsToInsert.length > 0) {
-      await supabase.from("leave_plan_allocations").insert(allocsToInsert);
+    // Every plan must declare its leave type. Insert the allocation even when
+    // days = 0 (credit-funded plans like Birthday/CTO/Trinity), so the type
+    // still surfaces in balances for assigned employees.
+    const { error: allocErr } = await supabase
+      .from("leave_plan_allocations")
+      .insert({ plan_id: plan.id, leave_type: newLeaveType, days_per_year: newDays });
+    if (allocErr) {
+      setMessage(allocErr.message);
+      setSaving(false);
+      return;
     }
 
     setShowCreate(false);
@@ -98,7 +100,8 @@ export function LeavePlansManager({
     setNewGrantType("custom");
     setNewRenewalMonth(1);
     setNewRenewalDay(1);
-    setNewAllocations(Object.fromEntries(ALL_LEAVE_TYPE_KEYS.map((k) => [k, 0])));
+    setNewLeaveType("");
+    setNewDays(0);
     setSaving(false);
     router.refresh();
   };
@@ -125,6 +128,25 @@ export function LeavePlansManager({
       setMessage("Plan name is required");
       return;
     }
+
+    // Preserve every declared leave type — including 0-day, credit-funded ones
+    // (Birthday/CTO/Trinity) — so editing a plan never silently drops its type.
+    // Keep a type if it has days > 0 OR was already declared on the plan.
+    const existingTypes = new Set(
+      allocations.filter((a) => a.plan_id === planId).map((a) => a.leave_type)
+    );
+    const allocsToInsert = ALL_LEAVE_TYPE_KEYS
+      .filter((k) => (editAllocations[k] ?? 0) > 0 || existingTypes.has(k))
+      .map((k) => ({
+        plan_id: planId,
+        leave_type: k,
+        days_per_year: editAllocations[k] ?? 0,
+      }));
+    if (allocsToInsert.length === 0) {
+      setMessage("A plan must declare at least one leave type.");
+      return;
+    }
+
     setSaving(true);
     setMessage("");
     const supabase = createClient();
@@ -153,21 +175,10 @@ export function LeavePlansManager({
       );
     }
 
-    // Delete existing allocations for this plan
+    // Replace allocations with the declared set computed above (guaranteed
+    // non-empty, so the plan always keeps at least one leave type).
     await supabase.from("leave_plan_allocations").delete().eq("plan_id", planId);
-
-    // Insert updated allocations
-    const allocsToInsert = ALL_LEAVE_TYPE_KEYS
-      .filter((k) => (editAllocations[k] ?? 0) > 0)
-      .map((k) => ({
-        plan_id: planId,
-        leave_type: k,
-        days_per_year: editAllocations[k],
-      }));
-
-    if (allocsToInsert.length > 0) {
-      await supabase.from("leave_plan_allocations").insert(allocsToInsert);
-    }
+    await supabase.from("leave_plan_allocations").insert(allocsToInsert);
 
     setEditingPlanId(null);
     setSaving(false);
@@ -272,26 +283,34 @@ export function LeavePlansManager({
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Days per leave type</label>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {ALL_LEAVE_TYPE_KEYS.map((key) => (
-                <div key={key} className="rounded-lg border border-gray-200 p-3">
-                  <label className="block text-xs text-gray-500 mb-1">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Leave Type</label>
+              <p className="text-xs text-gray-500 mb-1">Which leave this plan grants (required)</p>
+              <select
+                value={newLeaveType}
+                onChange={(e) => setNewLeaveType(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">Select a leave type…</option>
+                {ALL_LEAVE_TYPE_KEYS.map((key) => (
+                  <option key={key} value={key}>
                     {LEAVE_TYPES[key as keyof typeof LEAVE_TYPES].label}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={newAllocations[key] ?? 0}
-                    onChange={(e) =>
-                      setNewAllocations({ ...newAllocations, [key]: parseFloat(e.target.value) || 0 })
-                    }
-                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-              ))}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Days per year</label>
+              <p className="text-xs text-gray-500 mb-1">Use 0 for credit-funded leave (e.g. Birthday, CTO)</p>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={newDays}
+                onChange={(e) => setNewDays(parseFloat(e.target.value) || 0)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
             </div>
           </div>
 
@@ -302,7 +321,7 @@ export function LeavePlansManager({
           <div className="flex gap-3">
             <button
               onClick={handleCreate}
-              disabled={saving || !newPlanName.trim()}
+              disabled={saving || !newPlanName.trim() || !newLeaveType}
               className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
               <Save size={16} />
