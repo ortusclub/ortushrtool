@@ -150,3 +150,10 @@
 .dark textarea,
 .dark select { color-scheme: dark; }
 .dark ::placeholder { color: #6e6e6e; }
+
+/* Native <select> dropdowns: color-scheme alone leaves the control and its
+   option popup white/translucent in several browsers, so set them explicitly
+   (covers selects that have no bg utility of their own). */
+.dark select { background-color: #1a1a1a; color: #d6d6d6; }
+.dark select option,
+.dark select optgroup { background-color: #1a1a1a; color: #d6d6d6; }
