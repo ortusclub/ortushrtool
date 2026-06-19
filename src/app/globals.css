@@ -11,52 +11,142 @@
    !important is needed. Brand/accent colors (blue-600 buttons, colored chips)
    are intentionally left alone; full-width -50 banners get dark tints. */
 
-.dark body { color: #e2e8f0; }
+.dark body { color: #d6d6d6; }
 
-/* Surfaces */
-.dark .bg-white { background-color: #1e293b; }
-.dark .bg-gray-50 { background-color: #0f172a; }
-.dark .bg-gray-100 { background-color: #334155; }
-.dark .bg-gray-200 { background-color: #475569; }
+/* Surfaces — soft, muted neutral dark (no blue tint, lifted off pure black so
+   it reads subdued rather than stark). Page is the darkest layer, cards sit one
+   step up, controls/raised chips a step above that. */
+.dark .bg-white { background-color: #1a1a1a; }    /* cards / panels / modals */
+.dark .bg-gray-50 { background-color: #131313; }   /* page background */
+.dark .bg-gray-100 { background-color: #242424; }
+.dark .bg-gray-200 { background-color: #353535; }
+.dark .bg-slate-100 { background-color: #242424; }
+
+/* Semi-transparent light surfaces — opacity utilities the rules above don't
+   match (escaped slash in the class name). These were the leftover white
+   patches (e.g. table subheaders, sticky bars). */
+.dark .bg-white\/95 { background-color: #1a1a1a; }
+.dark .bg-gray-50\/60 { background-color: #171717; }
+.dark .bg-gray-50\/50 { background-color: #171717; }
 
 /* Hover surfaces */
-.dark .hover\:bg-gray-50:hover { background-color: #273349; }
-.dark .hover\:bg-gray-100:hover { background-color: #3b495e; }
-.dark .hover\:bg-blue-50:hover { background-color: #1e293b; }
+.dark .hover\:bg-gray-50:hover { background-color: #1f1f1f; }
+.dark .hover\:bg-gray-100:hover { background-color: #2a2a2a; }
+.dark .hover\:bg-blue-50:hover { background-color: #1d1d1d; }
 
-/* Text */
-.dark .text-gray-900 { color: #f1f5f9; }
-.dark .text-gray-800 { color: #e2e8f0; }
-.dark .text-gray-700 { color: #cbd5e1; }
-.dark .text-gray-600 { color: #94a3b8; }
-.dark .text-gray-500 { color: #8493a6; }
-.dark .text-gray-400 { color: #64748b; }
-.dark .text-gray-300 { color: #475569; }
+/* Text — soft neutral grays (eased off pure white to cut glare) */
+.dark .text-gray-900 { color: #e6e6e6; }
+.dark .text-gray-800 { color: #d6d6d6; }
+.dark .text-gray-700 { color: #bdbdbd; }
+.dark .text-gray-600 { color: #969696; }
+.dark .text-gray-500 { color: #7d7d7d; }
+.dark .text-gray-400 { color: #676767; }
+.dark .text-gray-300 { color: #4d4d4d; }
 
 /* Borders */
-.dark .border-gray-100 { border-color: #243044; }
-.dark .border-gray-200 { border-color: #334155; }
-.dark .border-gray-300 { border-color: #475569; }
+.dark .border-gray-100 { border-color: #232323; }
+.dark .border-gray-200 { border-color: #2c2c2c; }
+.dark .border-gray-300 { border-color: #383838; }
 
 /* Dividers (Tailwind v4 divide-* selector) */
-.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #243044; }
-.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #334155; }
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #232323; }
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #2c2c2c; }
 
 /* Full-width pastel banners → dark tints (chips at -100 stay as-is, readable) */
-.dark .bg-blue-50 { background-color: #15233f; }
-.dark .bg-red-50 { background-color: #341a22; }
-.dark .bg-amber-50 { background-color: #2e2310; }
-.dark .bg-yellow-50 { background-color: #2e2710; }
-.dark .bg-green-50 { background-color: #13301f; }
-.dark .bg-emerald-50 { background-color: #0f2e22; }
-.dark .bg-purple-50 { background-color: #241a3a; }
-.dark .bg-teal-50 { background-color: #0f2e2a; }
-.dark .bg-orange-50 { background-color: #311e0e; }
-.dark .bg-indigo-50 { background-color: #1b1f3a; }
-.dark .bg-pink-50 { background-color: #311825; }
+.dark .bg-blue-50 { background-color: #1b2330; }
+.dark .bg-red-50 { background-color: #2b2023; }
+.dark .bg-amber-50 { background-color: #29241a; }
+.dark .bg-yellow-50 { background-color: #29251a; }
+.dark .bg-green-50 { background-color: #1c2a22; }
+.dark .bg-emerald-50 { background-color: #1a2a24; }
+.dark .bg-purple-50 { background-color: #232130; }
+.dark .bg-teal-50 { background-color: #1a2a28; }
+.dark .bg-orange-50 { background-color: #2a221a; }
+.dark .bg-indigo-50 { background-color: #20222e; }
+.dark .bg-pink-50 { background-color: #2a2024; }
+
+/* Accent buttons — full-saturation solids glare on a dark background, so dim
+   them to muted, lower-lightness versions (white text stays legible). Hover
+   shades sit a touch lighter than their base for visible feedback. */
+.dark .bg-blue-600 { background-color: #2f5694; }
+.dark .bg-blue-500 { background-color: #335c9c; }
+.dark .bg-blue-700,
+.dark .hover\:bg-blue-700:hover { background-color: #3a64a8; }
+
+.dark .bg-red-600 { background-color: #9e3535; }
+.dark .bg-red-500 { background-color: #a83d3d; }
+.dark .bg-red-700,
+.dark .hover\:bg-red-700:hover { background-color: #ad4242; }
+
+.dark .bg-green-600 { background-color: #2f7d4f; }
+.dark .bg-green-500 { background-color: #348556; }
+.dark .bg-green-700,
+.dark .hover\:bg-green-700:hover { background-color: #38855a; }
+
+.dark .bg-teal-600 { background-color: #2c7068; }
+.dark .bg-teal-700,
+.dark .hover\:bg-teal-700:hover { background-color: #357a72; }
+
+.dark .bg-purple-600 { background-color: #5e4596; }
+.dark .bg-purple-700,
+.dark .hover\:bg-purple-700:hover { background-color: #6b4ea3; }
+
+.dark .bg-orange-600 { background-color: #9c5126; }
+.dark .bg-orange-700,
+.dark .hover\:bg-orange-700:hover { background-color: #ab5a2e; }
+
+.dark .bg-emerald-500 { background-color: #2f7d63; }
+.dark .bg-emerald-600 { background-color: #2c7058; }
+.dark .bg-emerald-700,
+.dark .hover\:bg-emerald-700:hover { background-color: #357a63; }
+
+.dark .bg-yellow-500 { background-color: #8f7825; }
+.dark .bg-amber-500 { background-color: #8f6e25; }
+.dark .bg-indigo-500 { background-color: #4a4d99; }
+
+/* Colored chips & badges (bg-*-100/200) — light pastels become dark tints so
+   they don't read as bright blobs on a dark page. */
+.dark .bg-amber-100 { background-color: #2f2817; }
+.dark .bg-yellow-100 { background-color: #2f2a17; }
+.dark .bg-red-100 { background-color: #382226; }
+.dark .bg-green-100 { background-color: #1b3026; }
+.dark .bg-emerald-100 { background-color: #183028; }
+.dark .bg-blue-100 { background-color: #1d2a3c; }
+.dark .bg-blue-200 { background-color: #243652; }
+.dark .bg-indigo-100 { background-color: #22253b; }
+.dark .bg-purple-100 { background-color: #282440; }
+.dark .bg-teal-100 { background-color: #163230; }
+.dark .bg-orange-100 { background-color: #312619; }
+.dark .bg-pink-100 { background-color: #312029; }
+
+/* Colored text — dark colored text (used on the now-dark tints, and as
+   links/status text on dark cards) becomes a readable light shade. The
+   stronger -800/-900 weights go a touch brighter for emphasis. */
+.dark .text-amber-500, .dark .text-amber-600, .dark .text-amber-700 { color: #f3c970; }
+.dark .text-amber-800, .dark .text-amber-900 { color: #fcd98a; }
+.dark .text-yellow-500, .dark .text-yellow-600, .dark .text-yellow-700 { color: #ddc94f; }
+.dark .text-yellow-800, .dark .text-yellow-900 { color: #f0dd6a; }
+.dark .text-red-500, .dark .text-red-600, .dark .text-red-700 { color: #f0908f; }
+.dark .text-red-800, .dark .text-red-900 { color: #f7a8a8; }
+.dark .text-green-500, .dark .text-green-600, .dark .text-green-700 { color: #74cf95; }
+.dark .text-green-800, .dark .text-green-900 { color: #92e0ae; }
+.dark .text-emerald-500, .dark .text-emerald-600, .dark .text-emerald-700 { color: #66c6a0; }
+.dark .text-emerald-800, .dark .text-emerald-900 { color: #84dcb4; }
+.dark .text-blue-500, .dark .text-blue-600, .dark .text-blue-700 { color: #84b4ee; }
+.dark .text-blue-800, .dark .text-blue-900 { color: #a5cbf6; }
+.dark .text-indigo-500, .dark .text-indigo-600, .dark .text-indigo-700 { color: #9aa6ee; }
+.dark .text-indigo-800, .dark .text-indigo-900 { color: #b3bdf6; }
+.dark .text-purple-500, .dark .text-purple-600, .dark .text-purple-700 { color: #c0a0e8; }
+.dark .text-purple-800, .dark .text-purple-900 { color: #d6b8f2; }
+.dark .text-teal-500, .dark .text-teal-600, .dark .text-teal-700 { color: #5cc6b8; }
+.dark .text-teal-800, .dark .text-teal-900 { color: #79d8c9; }
+.dark .text-orange-500, .dark .text-orange-600, .dark .text-orange-700 { color: #eaa05e; }
+.dark .text-orange-800, .dark .text-orange-900 { color: #f5b67e; }
+.dark .text-pink-500, .dark .text-pink-600, .dark .text-pink-700 { color: #e892bf; }
+.dark .text-pink-800, .dark .text-pink-900 { color: #f2a8d0; }
 
 /* Inputs: native pickers + placeholder follow the dark scheme */
 .dark input,
 .dark textarea,
 .dark select { color-scheme: dark; }
-.dark ::placeholder { color: #64748b; }
+.dark ::placeholder { color: #6e6e6e; }
