@@ -25,12 +25,16 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Allow auth callback, login, and cron routes without auth processing
+  // Allow auth callback, login, cron, and the calendar feed without session
+  // auth. The calendar feed is polled by external clients (Google Calendar)
+  // with no cookies — it authenticates itself via its ?token= query param,
+  // so a session redirect here would break every subscription.
   const isAuthRoute =
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/auth") ||
     request.nextUrl.pathname.startsWith("/api/auth") ||
-    request.nextUrl.pathname.startsWith("/api/cron");
+    request.nextUrl.pathname.startsWith("/api/cron") ||
+    request.nextUrl.pathname.startsWith("/api/calendar/feed");
 
   // Skip getUser() for auth routes — calling it during the PKCE callback
   // can interfere with the code verifier cookie before exchangeCodeForSession runs
