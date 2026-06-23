@@ -36,7 +36,7 @@ export default async function FeedbackReviewPage() {
       .order("created_at", { ascending: false }),
     admin
       .from("users")
-      .select("id, full_name, preferred_name, first_name, last_name, email, role, department")
+      .select("id, full_name, preferred_name, first_name, last_name, email, role, department, job_title")
       .eq("is_active", true)
       .order("full_name"),
   ]);
@@ -53,10 +53,32 @@ export default async function FeedbackReviewPage() {
     email: u.email,
   }));
 
-  // Suggested recipient for a department = first manager in that department.
-  const defaultRecipientFor = (dept: string): string | null =>
-    users.find((u) => u.role === "manager" && u.department === dept)?.id ??
-    null;
+  // Suggested recipient for a department = its "head". There's no head field,
+  // so infer it from the people in that department who hold an elevated role,
+  // preferring a "Head/Director/Lead" job title, then role seniority, then name.
+  // (HR can always override in the picker.)
+  const roleRank: Record<string, number> = {
+    manager: 1,
+    hr_admin: 2,
+    super_admin: 3,
+  };
+  const isHeadTitle = (title: string | null) =>
+    /head|director|chief|lead/i.test(title ?? "");
+  const defaultRecipientFor = (dept: string): string | null => {
+    const inDept = users.filter(
+      (u) => u.department === dept && roleRank[u.role] !== undefined
+    );
+    if (inDept.length === 0) return null;
+    inDept.sort((a, b) => {
+      const headDiff =
+        Number(isHeadTitle(b.job_title)) - Number(isHeadTitle(a.job_title));
+      if (headDiff !== 0) return headDiff;
+      const rankDiff = (roleRank[b.role] ?? 0) - (roleRank[a.role] ?? 0);
+      if (rankDiff !== 0) return rankDiff;
+      return (a.full_name ?? "").localeCompare(b.full_name ?? "");
+    });
+    return inDept[0].id;
+  };
 
   const pending = feedback.filter((f) => f.status === "new");
   const actioned = feedback.filter((f) => f.status !== "new");

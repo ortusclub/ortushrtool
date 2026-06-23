@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Inbox } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { displayName, hasRole, formatDate } from "@/lib/utils";
@@ -52,7 +52,14 @@ export default async function PerformanceFeedbackPage() {
     .eq("author_id", user.id)
     .order("created_at", { ascending: false });
 
+  const { count: receivedCount } = await admin
+    .from("p2p_feedback")
+    .select("id", { count: "exact", head: true })
+    .eq("recipient_user_id", user.id)
+    .eq("status", "forwarded");
+
   const isHR = hasRole(user.role, "hr_admin");
+  const hasReceived = (receivedCount ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -66,14 +73,24 @@ export default async function PerformanceFeedbackPage() {
             recipient.
           </p>
         </div>
-        {isHR && (
-          <Link
-            href="/performance/feedback/review"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-          >
-            <ShieldCheck size={14} /> Review queue
-          </Link>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {hasReceived && (
+            <Link
+              href="/performance/feedback/received"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <Inbox size={14} /> View feedback history ({receivedCount})
+            </Link>
+          )}
+          {isHR && (
+            <Link
+              href="/performance/feedback/review"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <ShieldCheck size={14} /> Review queue
+            </Link>
+          )}
+        </div>
       </div>
 
       <FeedbackForm

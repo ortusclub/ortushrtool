@@ -394,19 +394,6 @@ export const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateDefault[] = [
     ].join("\n"),
     variables: "author_name, feedback_details_html, feedback_message",
   },
-  {
-    type: "p2p_feedback_forwarded",
-    name: "Peer Feedback — Forwarded (to manager/head)",
-    subject: "Peer feedback for your team",
-    body: [
-      `<h2>Hi {{preferred_name}},</h2>`,
-      `<p>HR has reviewed and forwarded the following peer feedback. The author&apos;s identity is kept confidential.</p>`,
-      `{{feedback_details_html}}`,
-      `<p>{{feedback_message}}</p>`,
-      `{{#if hr_note}}<p class="muted"><strong>Note from HR:</strong> {{hr_note}}</p>{{/if}}`,
-    ].join("\n"),
-    variables: "feedback_details_html, feedback_message, hr_note",
-  },
 
   // ── Reminders ──
   {
