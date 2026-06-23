@@ -30,15 +30,25 @@ export function ReceivedFeedbackList({
 }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [name, setName] = useState("");
+
+  const names = useMemo(
+    () =>
+      Array.from(
+        new Set(items.map((i) => i.targetName).filter(Boolean))
+      ).sort() as string[],
+    [items]
+  );
 
   const filtered = useMemo(() => {
     return items.filter((it) => {
       const day = it.forwardedAt ? it.forwardedAt.slice(0, 10) : "";
       if (from && day < from) return false;
       if (to && day > to) return false;
+      if (name && it.targetName !== name) return false;
       return true;
     });
-  }, [items, from, to]);
+  }, [items, from, to, name]);
 
   const dateInput =
     "rounded-lg border border-gray-300 px-2 py-1.5 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100";
@@ -67,12 +77,28 @@ export function ReceivedFeedbackList({
           className={dateInput}
           aria-label="To date"
         />
-        {(from || to) && (
+        {names.length > 0 && (
+          <select
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={dateInput}
+            aria-label="Filter by name"
+          >
+            <option value="">All names</option>
+            {names.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        )}
+        {(from || to || name) && (
           <button
             type="button"
             onClick={() => {
               setFrom("");
               setTo("");
+              setName("");
             }}
             className="ml-1 inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2 py-1 font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
           >
