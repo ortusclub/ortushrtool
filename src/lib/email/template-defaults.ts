@@ -380,6 +380,34 @@ export const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateDefault[] = [
     variables: "employee_name, incident_details_html",
   },
 
+  // ── P2P (peer) feedback ──
+  {
+    type: "p2p_feedback_submitted",
+    name: "Peer Feedback — Notification (to HR)",
+    subject: "New peer feedback from {{author_name}}",
+    body: [
+      `<h2>New Peer Feedback</h2>`,
+      `<p><strong>{{author_name}}</strong> submitted peer feedback for your review.</p>`,
+      `{{feedback_details_html}}`,
+      `<p>{{feedback_message}}</p>`,
+      button("Review in HR Queue", "{{app_url}}/performance/feedback/review"),
+    ].join("\n"),
+    variables: "author_name, feedback_details_html, feedback_message",
+  },
+  {
+    type: "p2p_feedback_forwarded",
+    name: "Peer Feedback — Forwarded (to manager/head)",
+    subject: "Peer feedback for your team",
+    body: [
+      `<h2>Hi {{preferred_name}},</h2>`,
+      `<p>HR has reviewed and forwarded the following peer feedback. The author&apos;s identity is kept confidential.</p>`,
+      `{{feedback_details_html}}`,
+      `<p>{{feedback_message}}</p>`,
+      `{{#if hr_note}}<p class="muted"><strong>Note from HR:</strong> {{hr_note}}</p>{{/if}}`,
+    ].join("\n"),
+    variables: "feedback_details_html, feedback_message, hr_note",
+  },
+
   // ── Reminders ──
   {
     type: "reminder",

@@ -532,6 +532,37 @@ export interface AnonymousFeedback {
   created_at: string;
 }
 
+// ─── Standalone P2P (peer) feedback, moderated by HR ────────────────────────
+export type P2PFeedbackStatus = "new" | "forwarded" | "dismissed";
+
+export const P2P_FEEDBACK_STATUS_LABELS: Record<P2PFeedbackStatus, string> = {
+  new: "New",
+  forwarded: "Forwarded",
+  dismissed: "Dismissed",
+};
+
+export interface P2PFeedback {
+  id: string;
+  author_id: string;
+  target_department: string;
+  target_user_id: string | null;
+  subject: string;
+  message: string;
+  status: P2PFeedbackStatus;
+  recipient_user_id: string | null;
+  hr_notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface P2PFeedbackWithUsers extends P2PFeedback {
+  author?: MiniUser | null;
+  target?: MiniUser | null;
+  recipient?: MiniUser | null;
+}
+
 // Extended types with joins
 export interface UserWithManager extends User {
   manager?: User | null;

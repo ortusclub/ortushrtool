@@ -23,6 +23,7 @@ export default async function PerformanceLayout({
     { label: "Overview", href: "/performance" },
     { label: "Reviews", href: "/performance/reviews" },
     { label: "Peer Requests", href: "/performance/peer-requests" },
+    { label: "Peer Feedback", href: "/performance/feedback" },
     { label: "KPIs", href: "/performance/kpis" },
     { label: "Kudos", href: "/performance/kudos" },
     { label: "1-on-1s", href: "/performance/one-on-ones" },
