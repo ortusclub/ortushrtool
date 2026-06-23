@@ -79,7 +79,7 @@ export default async function PerformanceFeedbackPage() {
               href="/performance/feedback/received"
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
             >
-              <Inbox size={14} /> View feedback ({receivedCount})
+              <Inbox size={14} /> View feedback
             </Link>
           )}
           {isHR && (
