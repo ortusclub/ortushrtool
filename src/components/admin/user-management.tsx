@@ -1062,6 +1062,13 @@ function AddUserModal({
     desktime_employee_id: "",
     desktime_url: "",
     holiday_country: "PH" as HolidayCountry,
+    timezone: "Asia/Manila",
+    birthday: "",
+    hire_date: "",
+    regularization_date: "",
+    end_date: "",
+    is_active: true,
+    overtime_eligible: false,
   });
   const [includeSchedule, setIncludeSchedule] = useState(false);
   const [days, setDays] = useState<DaySchedule[]>(
@@ -1110,6 +1117,11 @@ function AddUserModal({
           company: form.company || null,
           department: form.department || null,
           job_title: form.job_title || null,
+          birthday: form.birthday || null,
+          hire_date: form.hire_date || null,
+          regularization_date: form.regularization_date || null,
+          end_date: form.end_date || null,
+          timezone: form.timezone || "Asia/Manila",
           schedule,
         }),
       });
@@ -1218,6 +1230,52 @@ function AddUserModal({
               <label className="mb-1 block text-sm font-medium text-gray-700">DeskTime URL</label>
               <input type="url" placeholder="https://..." value={form.desktime_url} onChange={(e) => setForm({ ...form, desktime_url: e.target.value })} className={inputClass} />
             </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Timezone</label>
+              <select value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} className={inputClass}>
+                {TIMEZONE_OPTIONS.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Birthday</label>
+              <input type="date" value={form.birthday} onChange={(e) => setForm({ ...form, birthday: e.target.value })} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Hire Date</label>
+              <input type="date" value={form.hire_date} onChange={(e) => setForm({ ...form, hire_date: e.target.value })} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Regularization Date</label>
+              <input type="date" value={form.regularization_date} onChange={(e) => setForm({ ...form, regularization_date: e.target.value })} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">End Date</label>
+              <input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} className={inputClass} />
+            </div>
+          </div>
+
+          {/* Status flags */}
+          <div className="flex flex-wrap gap-6 border-t border-gray-200 pt-4">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700">Active</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.overtime_eligible}
+                onChange={(e) => setForm({ ...form, overtime_eligible: e.target.checked })}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700">Overtime Eligible</span>
+            </label>
           </div>
 
           {/* Schedule toggle */}

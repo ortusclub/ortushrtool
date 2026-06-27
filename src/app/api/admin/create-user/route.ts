@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { full_name, preferred_name, first_name, middle_name, last_name, email, role, company, department, job_title, manager_id, desktime_employee_id, desktime_url, holiday_country, schedule } = body;
+  const { full_name, preferred_name, first_name, middle_name, last_name, email, role, company, department, job_title, manager_id, desktime_employee_id, desktime_url, holiday_country, timezone, birthday, hire_date, regularization_date, end_date, is_active, overtime_eligible, schedule } = body;
 
   if (!email) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -71,6 +71,9 @@ export async function POST(request: Request) {
     last_name: last_name || null,
     role: role || "employee",
     holiday_country: holiday_country || "PH",
+    timezone: timezone || "Asia/Manila",
+    is_active: is_active !== false,
+    overtime_eligible: Boolean(overtime_eligible),
   };
   if (company) updateFields.company = company;
   if (department) updateFields.department = department;
@@ -78,6 +81,10 @@ export async function POST(request: Request) {
   if (manager_id) updateFields.manager_id = manager_id;
   if (desktime_employee_id) updateFields.desktime_employee_id = parseInt(desktime_employee_id);
   if (desktime_url) updateFields.desktime_url = desktime_url;
+  if (birthday) updateFields.birthday = birthday;
+  if (hire_date) updateFields.hire_date = hire_date;
+  if (regularization_date) updateFields.regularization_date = regularization_date;
+  if (end_date) updateFields.end_date = end_date;
 
   const { error: updateError } = await admin
     .from("users")
