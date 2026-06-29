@@ -11,8 +11,14 @@ export function AdminLeaveForm({ userId }: { userId: string }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [leaveType, setLeaveType] = useState("annual");
+  const [leaveDuration, setLeaveDuration] = useState<"full_day" | "half_day">("full_day");
+  const [halfDayPeriod, setHalfDayPeriod] = useState<"am" | "pm">("am");
+  const [halfDayStart, setHalfDayStart] = useState("");
+  const [halfDayEnd, setHalfDayEnd] = useState("");
   const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set());
   const [reason, setReason] = useState("");
+
+  const isHalfDay = leaveDuration === "half_day";
   const [viewMonth, setViewMonth] = useState(() => new Date());
   const [availableTypes, setAvailableTypes] = useState<string[]>(UNIVERSAL_LEAVE_TYPES);
 
@@ -79,6 +85,12 @@ export function AdminLeaveForm({ userId }: { userId: string }) {
   }, [viewMonth]);
 
   const toggleDay = (date: string) => {
+    // A half-day leave is a single date, so selecting a day replaces any
+    // prior selection rather than adding to it.
+    if (isHalfDay) {
+      setSelectedDays((prev) => (prev.has(date) ? new Set() : new Set([date])));
+      return;
+    }
     const next = new Set(selectedDays);
     if (next.has(date)) {
       next.delete(date);
@@ -86,6 +98,17 @@ export function AdminLeaveForm({ userId }: { userId: string }) {
       next.add(date);
     }
     setSelectedDays(next);
+  };
+
+  const selectDuration = (duration: "full_day" | "half_day") => {
+    setLeaveDuration(duration);
+    // Switching to half day collapses any multi-day selection to one day.
+    if (duration === "half_day") {
+      setSelectedDays((prev) => {
+        const first = Array.from(prev).sort()[0];
+        return first ? new Set([first]) : new Set();
+      });
+    }
   };
 
   const prevMonth = () => {
@@ -107,6 +130,51 @@ export function AdminLeaveForm({ userId }: { userId: string }) {
     e.preventDefault();
     if (selectedDays.size === 0) {
       setMessage("Please select at least one day on the calendar.");
+      return;
+    }
+
+    // Half-day leave: a single date with AM/PM and start/end times.
+    if (isHalfDay) {
+      if (selectedDays.size !== 1) {
+        setMessage("Select exactly one day for a half-day leave.");
+        return;
+      }
+      if (!halfDayStart || !halfDayEnd) {
+        setMessage("Please set the start and end time for the half day.");
+        return;
+      }
+      setSaving(true);
+      setMessage("");
+      const supabase = createClient();
+      const currentUser = (await supabase.auth.getUser()).data.user;
+      const day = sortedSelected[0];
+      const { error } = await supabase.from("leave_requests").insert({
+        employee_id: userId,
+        leave_type: leaveType,
+        leave_duration: "half_day",
+        half_day_period: halfDayPeriod,
+        half_day_start_time: halfDayStart,
+        half_day_end_time: halfDayEnd,
+        start_date: day,
+        end_date: day,
+        reason: reason || "Admin-added leave",
+        status: "approved",
+        reviewed_by: currentUser?.id,
+        reviewed_at: new Date().toISOString(),
+      });
+      if (error) {
+        setMessage(`Couldn't add leave: ${error.message}`);
+      } else {
+        setMessage(
+          `Half-day (${halfDayPeriod.toUpperCase()}) leave added — auto-approved.`
+        );
+        setSelectedDays(new Set());
+        setReason("");
+        setHalfDayStart("");
+        setHalfDayEnd("");
+      }
+      setSaving(false);
+      router.refresh();
       return;
     }
 
@@ -142,6 +210,7 @@ export function AdminLeaveForm({ userId }: { userId: string }) {
       const { error } = await supabase.from("leave_requests").insert({
         employee_id: userId,
         leave_type: leaveType,
+        leave_duration: "full_day",
         start_date: range.start,
         end_date: range.end,
         reason: reason || "Admin-added leave",
@@ -172,8 +241,9 @@ export function AdminLeaveForm({ userId }: { userId: string }) {
       className="rounded-xl border border-purple-200 bg-white p-6 space-y-4"
     >
       <p className="text-sm text-gray-600">
-        Select the days this person will be on leave. Click individual days on
-        the calendar below.
+        {isHalfDay
+          ? "Pick the single day for this person's half-day leave on the calendar below."
+          : "Select the days this person will be on leave. Click individual days on the calendar below."}
       </p>
 
       <div>
@@ -192,6 +262,91 @@ export function AdminLeaveForm({ userId }: { userId: string }) {
           ))}
         </select>
       </div>
+
+      {/* Duration: full day or half day */}
+      <div className="rounded-lg border border-gray-200 p-4">
+        <p className="mb-3 text-sm font-medium text-gray-700">Duration</p>
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="leave_duration"
+              checked={leaveDuration === "full_day"}
+              onChange={() => selectDuration("full_day")}
+              className="h-4 w-4 text-purple-600"
+            />
+            <span className="text-sm text-gray-700">Full day</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="leave_duration"
+              checked={leaveDuration === "half_day"}
+              onChange={() => selectDuration("half_day")}
+              className="h-4 w-4 text-purple-600"
+            />
+            <span className="text-sm text-gray-700">Half day</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Half day options */}
+      {isHalfDay && (
+        <div className="space-y-4 rounded-lg border border-gray-200 p-4">
+          <div>
+            <p className="mb-2 text-sm font-medium text-gray-700">
+              Which half of the day?
+            </p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="half_day_period"
+                  checked={halfDayPeriod === "am"}
+                  onChange={() => setHalfDayPeriod("am")}
+                  className="h-4 w-4 text-purple-600"
+                />
+                <span className="text-sm text-gray-700">AM (morning)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="half_day_period"
+                  checked={halfDayPeriod === "pm"}
+                  onChange={() => setHalfDayPeriod("pm")}
+                  className="h-4 w-4 text-purple-600"
+                />
+                <span className="text-sm text-gray-700">PM (afternoon)</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Leave starts at
+              </label>
+              <input
+                type="time"
+                value={halfDayStart}
+                onChange={(e) => setHalfDayStart(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Leave ends at
+              </label>
+              <input
+                type="time"
+                value={halfDayEnd}
+                onChange={(e) => setHalfDayEnd(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Calendar */}
       <div className="rounded-lg border border-gray-200 p-4">
@@ -226,25 +381,21 @@ export function AdminLeaveForm({ userId }: { userId: string }) {
           ))}
           {calendarDays.map(({ date, day, isCurrentMonth, isWeekend }) => {
             const isSelected = selectedDays.has(date);
-            const today = new Date().toISOString().split("T")[0];
-            const isPast = date < today;
 
             return (
               <button
                 key={date}
                 type="button"
-                onClick={() => !isPast && !isWeekend && toggleDay(date)}
-                disabled={isPast || isWeekend}
+                onClick={() => !isWeekend && toggleDay(date)}
+                disabled={isWeekend}
                 className={`rounded-lg py-1.5 text-xs transition-colors ${
                   isSelected
                     ? "bg-purple-600 text-white font-bold"
                     : isWeekend
                       ? "text-gray-300 cursor-not-allowed"
-                      : isPast
-                        ? "text-gray-300 cursor-not-allowed"
-                        : isCurrentMonth
-                          ? "text-gray-700 hover:bg-purple-100"
-                          : "text-gray-300 hover:bg-gray-50"
+                      : isCurrentMonth
+                        ? "text-gray-700 hover:bg-purple-100"
+                        : "text-gray-300 hover:bg-gray-50"
                 }`}
               >
                 {day}
