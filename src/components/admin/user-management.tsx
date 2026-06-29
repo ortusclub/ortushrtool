@@ -5,12 +5,20 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Pencil, Save, X, Calendar, Trash2, Plus, KeyRound, Palmtree, Download, UserCog } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import { EmployeeLeaveTypesModal } from "./employee-leave-types";
 import type { User, UserRole, HolidayCountry, Company } from "@/types/database";
 import { HOLIDAY_COUNTRY_LABELS, COMPANY_OPTIONS } from "@/types/database";
 import { displayName } from "@/lib/utils";
 import { HeaderFilter } from "@/components/shared/header-filter";
 import { SortButton, type SortDir } from "@/components/shared/sort-button";
+
+type UserWithActivity = User & { last_sign_in_at: string | null };
+
+function formatRelative(ts: string | null): string {
+  if (!ts) return "Never";
+  return `${formatDistanceToNow(new Date(ts))} ago`;
+}
 
 const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE"];
 
@@ -28,7 +36,7 @@ export function UserManagement({
   users,
   currentUserRole,
 }: {
-  users: User[];
+  users: UserWithActivity[];
   currentUserRole: UserRole;
 }) {
   const router = useRouter();
@@ -45,7 +53,9 @@ export function UserManagement({
     | "department"
     | "job_title"
     | "country"
-    | "hire_date";
+    | "hire_date"
+    | "last_sign_in_at"
+    | "last_active_at";
   const [sort, setSort] = useState<{ column: SortColumn; dir: SortDir } | null>(
     null
   );
@@ -123,7 +133,7 @@ export function UserManagement({
     });
 
     if (sort) {
-      const key = (u: User): string => {
+      const key = (u: UserWithActivity): string => {
         switch (sort.column) {
           case "preferred_name":
             return (u.preferred_name ?? u.first_name ?? u.full_name ?? "").toLowerCase();
@@ -141,6 +151,10 @@ export function UserManagement({
             return (HOLIDAY_COUNTRY_LABELS[u.holiday_country] ?? "").toLowerCase();
           case "hire_date":
             return u.hire_date ?? "";
+          case "last_sign_in_at":
+            return u.last_sign_in_at ?? "";
+          case "last_active_at":
+            return u.last_active_at ?? "";
         }
       };
       result.sort((a, b) => {
@@ -471,10 +485,10 @@ export function UserManagement({
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="max-h-[70vh] overflow-auto">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-left">
+            <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_rgb(229_231_235)]">
+              <tr className="text-left">
                 <th className="px-3 py-3 font-medium text-gray-600">
                   <input
                     type="checkbox"
@@ -483,7 +497,7 @@ export function UserManagement({
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th className="px-4 py-3 font-medium text-gray-600">
+                <th className="sticky left-0 z-20 min-w-[10rem] bg-white px-4 py-3 font-medium text-gray-600 shadow-[1px_0_0_0_rgb(229_231_235)]">
                   <span className="align-middle">Preferred Name</span>
                   <SortButton label="Preferred Name" active={sortDir("preferred_name")} onClick={() => toggleSort("preferred_name")} />
                 </th>
@@ -536,6 +550,14 @@ export function UserManagement({
                   <HeaderFilter label="Active" options={activeOptions} selected={activeFilter} onChange={setActiveFilter} align="right" />
                 </th>
                 <th className="px-4 py-3 font-medium text-gray-600">OT Eligible</th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Last Sign-In</span>
+                  <SortButton label="Last Sign-In" active={sortDir("last_sign_in_at")} onClick={() => toggleSort("last_sign_in_at")} />
+                </th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Last Active</span>
+                  <SortButton label="Last Active" active={sortDir("last_active_at")} onClick={() => toggleSort("last_active_at")} />
+                </th>
                 <th className="px-4 py-3 font-medium text-gray-600">Actions</th>
               </tr>
             </thead>
@@ -543,7 +565,7 @@ export function UserManagement({
               {filteredUsers.map((user) => {
                 const isEditing = editingId === user.id;
                 return (
-                  <tr key={user.id} className="hover:bg-gray-50">
+                  <tr key={user.id} className="bg-white hover:bg-gray-50">
                     <td className="px-3 py-3">
                       <input
                         type="checkbox"
@@ -552,7 +574,7 @@ export function UserManagement({
                         className="rounded border-gray-300"
                       />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="sticky left-0 z-10 bg-inherit px-4 py-3 shadow-[1px_0_0_0_rgb(229_231_235)]">
                       {isEditing ? (
                         <input
                           value={editForm.preferred_name ?? ""}
@@ -928,6 +950,12 @@ export function UserManagement({
                       ) : (
                         <span className="text-gray-400">No</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600" title={user.last_sign_in_at ?? ""}>
+                      {formatRelative(user.last_sign_in_at)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600" title={user.last_active_at ?? ""}>
+                      {formatRelative(user.last_active_at)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">

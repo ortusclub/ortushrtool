@@ -105,6 +105,7 @@ export interface User {
   overtime_eligible: boolean;
   employment_type: EmploymentType;
   calendar_token: string | null;
+  last_active_at: string | null;
   created_at: string;
   updated_at: string;
 }

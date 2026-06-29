@@ -60,5 +60,20 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Bump last_active_at at most once per minute per session. The cookie is the
+  // hot-path throttle (no DB round-trip when fresh); the SQL function carries
+  // its own 1-minute WHERE guard so a missing/forged cookie can't cause write
+  // amplification.
+  const lastBump = Number(request.cookies.get("last_active_bump")?.value);
+  if (!lastBump || Date.now() - lastBump > 60_000) {
+    await supabase.rpc("touch_last_active");
+    supabaseResponse.cookies.set("last_active_bump", String(Date.now()), {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24,
+    });
+  }
+
   return supabaseResponse;
 }
