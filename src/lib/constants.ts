@@ -45,6 +45,26 @@ export const LEAVE_TYPE_LABELS: Record<string, string> = Object.fromEntries(
 
 export const MANILA_TIMEZONE = "Asia/Manila";
 
+// Single source of truth for selectable work timezones + their display labels.
+export const TIMEZONE_OPTIONS: { value: string; label: string; abbrev: string }[] = [
+  { value: "Asia/Manila", label: "PHT (Manila)", abbrev: "PHT" },
+  { value: "Europe/Berlin", label: "CET (Berlin)", abbrev: "CET" },
+  { value: "Asia/Dubai", label: "GST (Dubai)", abbrev: "GST" },
+  { value: "America/New_York", label: "ET (New York)", abbrev: "ET" },
+  { value: "America/Chicago", label: "CT (Chicago)", abbrev: "CT" },
+  { value: "America/Denver", label: "MT (Denver)", abbrev: "MT" },
+  { value: "America/Phoenix", label: "MST (Phoenix)", abbrev: "MST" },
+  { value: "America/Los_Angeles", label: "PT (Los Angeles)", abbrev: "PT" },
+  { value: "America/Anchorage", label: "AKT (Anchorage)", abbrev: "AKT" },
+  { value: "Pacific/Honolulu", label: "HST (Honolulu)", abbrev: "HST" },
+];
+
+export const getTzLabel = (tz: string | null | undefined): string =>
+  TIMEZONE_OPTIONS.find((t) => t.value === tz)?.label ?? tz ?? "—";
+
+export const getTzAbbrev = (tz: string | null | undefined): string =>
+  TIMEZONE_OPTIONS.find((t) => t.value === tz)?.abbrev ?? tz ?? "—";
+
 export const KPI_UNIT_TYPES = {
   percentage: { label: "Percentage", suffix: "%" },
   currency: { label: "Currency", suffix: "" },

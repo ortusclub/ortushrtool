@@ -13,6 +13,7 @@ const RECIPIENTS = ["dfoz@ortusclub.com", "brad.u@ortusclub.com"];
 const FETCHABLE = [
   { code: "PH", label: "Philippines" },
   { code: "IT", label: "Italy" },
+  { code: "US", label: "United States" },
 ] as const;
 const UNFETCHABLE = [
   { code: "XK", label: "Kosovo" },

@@ -15,13 +15,8 @@ import {
   type UserRole,
 } from "@/types/database";
 import { displayName } from "@/lib/utils";
+import { TIMEZONE_OPTIONS } from "@/lib/constants";
 import { AvatarUpload } from "@/components/shared/avatar-upload";
-
-const TIMEZONE_OPTIONS = [
-  { value: "Asia/Manila", label: "PHT (Manila)" },
-  { value: "Europe/Berlin", label: "CET (Berlin)" },
-  { value: "Asia/Dubai", label: "GST (Dubai)" },
-];
 
 const ROLE_OPTIONS: UserRole[] = ["employee", "manager", "hr_support", "hr_admin", "super_admin"];
 

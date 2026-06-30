@@ -13,7 +13,7 @@ interface ImportResult {
 }
 
 const SAMPLE_CSV = `Preferred Name,Given Name(s),Middle Name,Last Name,Email,Role,Company,Department,Job Title,Manager Email,Country,Timezone,Desktime ID,Desktime URL,Birthday,Hire Date,Regularization Date,End Date,Active,Overtime Eligible,M,T,W,TH,F
-OPTIONS:,,,,(email),(employee / manager / hr_admin / super_admin),(Ortus Strategy Pte. Ltd. / m-Club Coaching LTD. / Trinity Outsourcing Solutions Inc. / APEX Strategy),(free text),(free text),(email of manager),(PH / XK / IT / AE),(PHT / CET / GST),(number),(URL),(YYYY-MM-DD),(YYYY-MM-DD),(YYYY-MM-DD),(YYYY-MM-DD),(Yes / No),(Yes / No),(Office / Online - HH:MM - HH:MM / Rest),(same),(same),(same),(same)
+OPTIONS:,,,,(email),(employee / manager / hr_admin / super_admin),(Ortus Strategy Pte. Ltd. / m-Club Coaching LTD. / Trinity Outsourcing Solutions Inc. / APEX Strategy),(free text),(free text),(email of manager),(PH / XK / IT / AE / US),(PHT / CET / GST / ET / CT / MT / MST / PT / AKT / HST),(number),(URL),(YYYY-MM-DD),(YYYY-MM-DD),(YYYY-MM-DD),(YYYY-MM-DD),(Yes / No),(Yes / No),(Office / Online - HH:MM - HH:MM / Rest),(same),(same),(same),(same)
 Johnny,Juan,Dela,Cruz,juan@ortusclub.com,employee,Ortus Strategy Pte. Ltd.,Operations,Operations Analyst,maria@ortusclub.com,PH,PHT,12345,https://desktime.com/app/12345,1990-05-15,2024-01-15,2024-07-15,,Yes,Yes,Office - 09:00 - 18:00,Office - 09:00 - 18:00,Office - 09:00 - 18:00,Office - 09:00 - 18:00,Office - 09:00 - 18:00
 ,Maria,,Santos,maria@ortusclub.com,manager,Trinity Outsourcing Solutions Inc.,Operations,Operations Manager,,IT,CET,,,1988-03-20,2023-06-01,2023-12-01,,Yes,No,Online - 10:00 - 19:00,Online - 10:00 - 19:00,Online - 10:00 - 19:00,Online - 10:00 - 19:00,Rest`;
 

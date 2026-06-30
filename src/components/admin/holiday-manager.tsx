@@ -10,7 +10,7 @@ import { format, parseISO } from "date-fns";
 import { HeaderFilter } from "@/components/shared/header-filter";
 import { SortButton, type SortDir } from "@/components/shared/sort-button";
 
-const COUNTRIES: HolidayCountry[] = ["PH", "XK", "IT", "AE"];
+const COUNTRIES: HolidayCountry[] = ["PH", "XK", "IT", "AE", "US"];
 const VALID_COUNTRIES = new Set<string>(COUNTRIES);
 
 export function HolidayManager({ holidays }: { holidays: Holiday[] }) {

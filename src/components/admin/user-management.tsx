@@ -10,6 +10,7 @@ import { EmployeeLeaveTypesModal } from "./employee-leave-types";
 import type { User, UserRole, HolidayCountry, Company } from "@/types/database";
 import { HOLIDAY_COUNTRY_LABELS, COMPANY_OPTIONS } from "@/types/database";
 import { displayName } from "@/lib/utils";
+import { TIMEZONE_OPTIONS, getTzLabel } from "@/lib/constants";
 import { HeaderFilter } from "@/components/shared/header-filter";
 import { SortButton, type SortDir } from "@/components/shared/sort-button";
 
@@ -20,17 +21,7 @@ function formatRelative(ts: string | null): string {
   return `${formatDistanceToNow(new Date(ts))} ago`;
 }
 
-const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE"];
-
-const TIMEZONE_OPTIONS = [
-  { value: "Asia/Manila", label: "PHT (Manila)" },
-  { value: "Europe/Berlin", label: "CET (Berlin)" },
-  { value: "Asia/Dubai", label: "GST (Dubai)" },
-];
-
-function getTzLabel(tz: string): string {
-  return TIMEZONE_OPTIONS.find((t) => t.value === tz)?.label ?? tz;
-}
+const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE", "US"];
 
 export function UserManagement({
   users,

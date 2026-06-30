@@ -7,6 +7,13 @@ const TIMEZONE_MAP: Record<string, string> = {
   PHT: "Asia/Manila",
   CET: "Europe/Berlin",
   GST: "Asia/Dubai",
+  ET: "America/New_York",
+  CT: "America/Chicago",
+  MT: "America/Denver",
+  MST: "America/Phoenix",
+  PT: "America/Los_Angeles",
+  AKT: "America/Anchorage",
+  HST: "Pacific/Honolulu",
 };
 
 const COUNTRY_MAP: Record<string, string> = {
@@ -14,6 +21,7 @@ const COUNTRY_MAP: Record<string, string> = {
   XK: "XK", KOSOVO: "XK",
   IT: "IT", ITALY: "IT",
   AE: "AE", UAE: "AE", DUBAI: "AE",
+  US: "US", USA: "US", "UNITED STATES": "US",
 };
 
 const ROLE_MAP: Record<string, string> = {

@@ -23,6 +23,7 @@ import {
   type Company,
   type HolidayCountry,
 } from "@/types/database";
+import { TIMEZONE_OPTIONS, getTzLabel } from "@/lib/constants";
 
 type DetailsUser = {
   id: string;
@@ -46,17 +47,7 @@ type Props = {
   canSeeEndDate: boolean;
 };
 
-const tzLabel = (tz: string | null) =>
-  tz === "Asia/Manila"
-    ? "PHT (Asia/Manila)"
-    : tz === "Europe/Berlin"
-      ? "CET (Europe/Berlin)"
-      : tz === "Asia/Dubai"
-        ? "GST (Asia/Dubai)"
-        : (tz ?? "—");
-
-const TZ_OPTIONS = ["Asia/Manila", "Europe/Berlin", "Asia/Dubai"];
-const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE"];
+const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE", "US"];
 
 export function DetailsEditor({
   user,
@@ -190,14 +181,14 @@ export function DetailsEditor({
                 className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
               >
                 <option value="">—</option>
-                {TZ_OPTIONS.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tzLabel(tz)}
+                {TIMEZONE_OPTIONS.map((tz) => (
+                  <option key={tz.value} value={tz.value}>
+                    {tz.label}
                   </option>
                 ))}
               </select>
             ) : (
-              <span className="text-gray-900">{tzLabel(user.timezone)}</span>
+              <span className="text-gray-900">{getTzLabel(user.timezone)}</span>
             )}
           </Row>
         )}

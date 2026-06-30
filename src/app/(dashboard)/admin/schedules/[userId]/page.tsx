@@ -6,6 +6,7 @@ import { AdminLeaveForm } from "@/components/admin/admin-leave-form";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { formatDate, formatTime, displayName } from "@/lib/utils";
+import { getTzAbbrev } from "@/lib/constants";
 
 export default async function UserSchedulePage({
   params,
@@ -65,14 +66,7 @@ export default async function UserSchedulePage({
     managerName = manager ? displayName(manager) : null;
   }
 
-  const tz =
-    user.timezone === "Asia/Manila"
-      ? "PHT"
-      : user.timezone === "Europe/Berlin"
-        ? "CET"
-        : user.timezone === "Asia/Dubai"
-          ? "GST"
-          : user.timezone;
+  const tz = getTzAbbrev(user.timezone);
 
   return (
     <div className="space-y-6">
