@@ -121,7 +121,13 @@ function buildEmailHtml(
   perCountry: { code: string; label: string; staged: number; skipped: number; error?: string }[],
   inserted: number
 ): string {
-  const reviewUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://ortushrtool.vercel.app"}/admin/holidays`;
+  // This email always points HR at the production tool. NEXT_PUBLIC_APP_URL is
+  // localhost in local/dev env, so ignore that and fall back to the prod URL —
+  // otherwise a locally-triggered run emails real HR a localhost link.
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const baseUrl =
+    envUrl && !envUrl.includes("localhost") ? envUrl : "https://ortushrtool.vercel.app";
+  const reviewUrl = `${baseUrl}/admin/holidays`;
 
   const fetchedRows = perCountry
     .map((c) => {
