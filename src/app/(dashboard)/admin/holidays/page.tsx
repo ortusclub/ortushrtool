@@ -1,15 +1,20 @@
 import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { HolidayManager } from "@/components/admin/holiday-manager";
+import { HolidaySuggestionsReview } from "@/components/admin/holiday-suggestions-review";
 
 export default async function AdminHolidaysPage() {
   await requireRole("hr_admin");
   const supabase = await createClient();
 
-  const { data: holidays } = await supabase
-    .from("holidays")
-    .select("*")
-    .order("date", { ascending: true });
+  const [{ data: holidays }, { data: suggestions }] = await Promise.all([
+    supabase.from("holidays").select("*").order("date", { ascending: true }),
+    supabase
+      .from("holiday_suggestions")
+      .select("id, country, name, date, year")
+      .order("country", { ascending: true })
+      .order("date", { ascending: true }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -19,6 +24,7 @@ export default async function AdminHolidaysPage() {
           Add, edit, and remove public holidays for all office locations
         </p>
       </div>
+      <HolidaySuggestionsReview suggestions={suggestions ?? []} />
       <HolidayManager holidays={holidays ?? []} />
     </div>
   );
