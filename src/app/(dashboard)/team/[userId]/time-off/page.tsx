@@ -287,7 +287,9 @@ export default async function TeamMemberTimeOffTab({
             Calendar
           </h2>
           <TimeOffCalendar
-            leaves={allLeaves.map((l) => ({
+            leaves={allLeaves
+              .filter((l) => l.status !== "cancelled")
+              .map((l) => ({
               id: l.id,
               leave_type: l.leave_type,
               leave_duration: l.leave_duration,
