@@ -109,17 +109,17 @@ export default async function RequestsPage({
   const myPendingOt    = (myOt    ?? []).filter(o => o.status === "pending");
   const myPastOt       = (myOt    ?? []).filter(o => o.status !== "pending");
 
-  // My Requests gets the same date + requester search as everywhere else.
-  // Pending: myq search (date stays on the SQL myfrom/myto filter above).
-  // History: myhf/myht date + myhq search, both in-memory.
+  // My Requests pending: myq search (date stays on the SQL myfrom/myto filter above).
   const myPendingAdjF   = byRequesterName(myPendingAdj,   sp.myq);
   const myPendingLeaveF = byRequesterName(myPendingLeave, sp.myq);
   const myPendingHwF    = byRequesterName(myPendingHw,    sp.myq);
   const myPendingOtF    = byRequesterName(myPendingOt,    sp.myq);
-  const myPastAdjF   = byRequesterName(inDateRange(myPastAdj,   "requested_date", sp.myhf, sp.myht), sp.myhq);
-  const myPastLeaveF = byRequesterName(inDateRange(myPastLeave, "start_date",     sp.myhf, sp.myht), sp.myhq);
-  const myPastHwF    = byRequesterName(inDateRange(myPastHw,    "holiday_date",   sp.myhf, sp.myht), sp.myhq);
-  const myPastOtF    = byRequesterName(inDateRange(myPastOt,    "requested_date", sp.myhf, sp.myht), sp.myhq);
+  // My Requests history is split per type, each its own collapsible with its own
+  // date range (my<type>_h{f,t}). No requester search — it's all the current user.
+  const myPastAdjF   = inDateRange(myPastAdj,   "requested_date", sp.myadj_hf,   sp.myadj_ht);
+  const myPastLeaveF = inDateRange(myPastLeave, "start_date",     sp.myleave_hf, sp.myleave_ht);
+  const myPastHwF    = inDateRange(myPastHw,    "holiday_date",   sp.myhw_hf,    sp.myhw_ht);
+  const myPastOtF    = inDateRange(myPastOt,    "requested_date", sp.myot_hf,    sp.myot_ht);
 
   // Per-type requester search (Team section only). Each request type — and the
   // pending vs history view of it — has its own free-text search box + URL
@@ -315,82 +315,136 @@ export default async function RequestsPage({
           <p className="text-sm text-gray-500">No pending requests.</p>
         )}
 
-        <CollapsibleHistory count={myPastAdj.length + myPastLeave.length + myPastHw.length + myPastOt.length}>
-      {myPastAdj.length === 0 && myPastLeave.length === 0 && myPastHw.length === 0 && myPastOt.length === 0 ? (
-          <div className="p-6 text-center text-gray-500">No history yet.</div>
-        ) : (
-          <>
-            <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <RequestsDateFilter from={sp.myhf ?? ""} to={sp.myht ?? ""} paramFrom="myhf" paramTo="myht" />
-              <RequestsRequesterSearch param="myhq" label="history" initial={sp.myhq ?? ""} />
-            </div>
-            {myPastAdjF.length === 0 && myPastLeaveF.length === 0 && myPastHwF.length === 0 && myPastOtF.length === 0 ? (
-              <p className="px-6 py-4 text-sm text-gray-500">No history matches that date range.</p>
-            ) : (
-            <div className="divide-y divide-gray-100">
-            {myPastAdjF.map((adj) => (
-              <div key={adj.id} className="flex items-center justify-between p-6">
-                <div className="space-y-1">
-                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Schedule Adjustment</span>
-                  <p className="text-sm text-gray-700">{formatDate(adj.requested_date)} &mdash; {formatTime(adj.requested_start_time)} – {formatTime(adj.requested_end_time)}</p>
-                  {adj.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {adj.reviewer_notes}</p>}
-                </div>
-                <div className="flex items-center gap-3">
-                  {isAdmin && <EditAdjustmentForm id={adj.id} requestedDate={adj.requested_date} adjustmentType={adj.adjustment_type} requestedStartTime={adj.requested_start_time} requestedEndTime={adj.requested_end_time} requestedWorkLocation={adj.requested_work_location} reason={adj.reason} />}
-                  <StatusBadge status={adj.status} />
-                </div>
+        {/* History is split per request type — each its own collapsible. */}
+        <CollapsibleHistory label="Schedule Adjustment History" count={myPastAdj.length}>
+          {myPastAdj.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">No history yet.</div>
+          ) : (
+            <>
+              <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <RequestsDateFilter from={sp.myadj_hf ?? ""} to={sp.myadj_ht ?? ""} paramFrom="myadj_hf" paramTo="myadj_ht" />
               </div>
-            ))}
-            {myPastLeaveF.map((leave) => (
-              <div key={leave.id} className="flex items-center justify-between p-6">
-                <div className="space-y-1">
-                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">{LEAVE_TYPE_LABELS[leave.leave_type] ?? leave.leave_type}</span>
-                  <p className="text-sm text-gray-700">{formatDate(leave.start_date)}{leave.leave_duration === "half_day" ? <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">Half day ({leave.half_day_period === "am" ? "AM" : "PM"})</span> : <> &mdash; {formatDate(leave.end_date)}</>}</p>
-                  {leave.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {leave.reviewer_notes}</p>}
+              {myPastAdjF.length === 0 ? (
+                <p className="px-6 py-4 text-sm text-gray-500">No adjustments match that date range.</p>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {myPastAdjF.map((adj) => (
+                    <div key={adj.id} className="flex items-center justify-between p-6">
+                      <div className="space-y-1">
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Schedule Adjustment</span>
+                        <p className="text-sm text-gray-700">{formatDate(adj.requested_date)} &mdash; {formatTime(adj.requested_start_time)} – {formatTime(adj.requested_end_time)}</p>
+                        {adj.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {adj.reviewer_notes}</p>}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {isAdmin && <EditAdjustmentForm id={adj.id} requestedDate={adj.requested_date} adjustmentType={adj.adjustment_type} requestedStartTime={adj.requested_start_time} requestedEndTime={adj.requested_end_time} requestedWorkLocation={adj.requested_work_location} reason={adj.reason} />}
+                        <StatusBadge status={adj.status} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-3">
-                  <CancelApprovedLeave leaveId={leave.id} startDate={leave.start_date} currentStatus={leave.status} />
-                  {/* History is past/non-pending; self-edit is pending-only, so
-                      only admins edit here. Owners edit pending leave above. */}
-                  {isAdmin && <EditLeaveForm id={leave.id} leaveType={leave.leave_type} leaveDuration={leave.leave_duration} halfDayPeriod={leave.half_day_period} startDate={leave.start_date} endDate={leave.end_date} reason={leave.reason} />}
-                  <StatusBadge status={leave.status} />
-                </div>
+              )}
+            </>
+          )}
+        </CollapsibleHistory>
+
+        <CollapsibleHistory label="Leave History" count={myPastLeave.length}>
+          {myPastLeave.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">No history yet.</div>
+          ) : (
+            <>
+              <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <RequestsDateFilter from={sp.myleave_hf ?? ""} to={sp.myleave_ht ?? ""} paramFrom="myleave_hf" paramTo="myleave_ht" />
               </div>
-            ))}
-            {myPastHwF.map((hw) => (
-              <div key={hw.id} className="flex items-center justify-between p-6">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2"><span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">Holiday Work</span><span className="text-xs text-gray-500">{hw.holiday?.name}</span></div>
-                  <p className="text-sm text-gray-700">{formatDate(hw.holiday_date)} &mdash; {formatTime(hw.start_time)} – {formatTime(hw.end_time)}</p>
-                  {hw.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {hw.reviewer_notes}</p>}
+              {myPastLeaveF.length === 0 ? (
+                <p className="px-6 py-4 text-sm text-gray-500">No leave matches that date range.</p>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {myPastLeaveF.map((leave) => (
+                    <div key={leave.id} className="flex items-center justify-between p-6">
+                      <div className="space-y-1">
+                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">{LEAVE_TYPE_LABELS[leave.leave_type] ?? leave.leave_type}</span>
+                        <p className="text-sm text-gray-700">{formatDate(leave.start_date)}{leave.leave_duration === "half_day" ? <span className="ml-2 rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">Half day ({leave.half_day_period === "am" ? "AM" : "PM"})</span> : <> &mdash; {formatDate(leave.end_date)}</>}</p>
+                        {leave.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {leave.reviewer_notes}</p>}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CancelApprovedLeave leaveId={leave.id} startDate={leave.start_date} currentStatus={leave.status} />
+                        {/* History is past/non-pending; self-edit is pending-only, so
+                            only admins edit here. Owners edit pending leave above. */}
+                        {isAdmin && <EditLeaveForm id={leave.id} leaveType={leave.leave_type} leaveDuration={leave.leave_duration} halfDayPeriod={leave.half_day_period} startDate={leave.start_date} endDate={leave.end_date} reason={leave.reason} />}
+                        <StatusBadge status={leave.status} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-3">
-                  {isAdmin && <EditHolidayWorkForm id={hw.id} duration={hw.duration} startTime={hw.start_time} endTime={hw.end_time} workLocation={hw.work_location} compensation={hw.compensation} reason={hw.reason} />}
-                  <StatusBadge status={hw.status} />
-                </div>
+              )}
+            </>
+          )}
+        </CollapsibleHistory>
+
+        <CollapsibleHistory label="Holiday Work History" count={myPastHw.length}>
+          {myPastHw.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">No history yet.</div>
+          ) : (
+            <>
+              <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <RequestsDateFilter from={sp.myhw_hf ?? ""} to={sp.myhw_ht ?? ""} paramFrom="myhw_hf" paramTo="myhw_ht" />
               </div>
-            ))}
-            {myPastOtF.map((ot) => (
-              <div key={ot.id} className="flex items-center justify-between p-6">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">Overtime</span>
-                    {hasNightDifferentialHours(ot.start_time, ot.end_time) && <NightDiffNote size="xs" />}
-                  </div>
-                  <p className="text-sm text-gray-700">{formatDate(ot.requested_date)} &mdash; {formatTime(ot.start_time)} – {formatTime(ot.end_time)}</p>
-                  {ot.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {ot.reviewer_notes}</p>}
+              {myPastHwF.length === 0 ? (
+                <p className="px-6 py-4 text-sm text-gray-500">No holiday work matches that date range.</p>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {myPastHwF.map((hw) => (
+                    <div key={hw.id} className="flex items-center justify-between p-6">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2"><span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700">Holiday Work</span><span className="text-xs text-gray-500">{hw.holiday?.name}</span></div>
+                        <p className="text-sm text-gray-700">{formatDate(hw.holiday_date)} &mdash; {formatTime(hw.start_time)} – {formatTime(hw.end_time)}</p>
+                        {hw.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {hw.reviewer_notes}</p>}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {isAdmin && <EditHolidayWorkForm id={hw.id} duration={hw.duration} startTime={hw.start_time} endTime={hw.end_time} workLocation={hw.work_location} compensation={hw.compensation} reason={hw.reason} />}
+                        <StatusBadge status={hw.status} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-3">
-                  {isAdmin && <EditOvertimeForm id={ot.id} requestedDate={ot.requested_date} startTime={ot.start_time} endTime={ot.end_time} reason={ot.reason} />}
-                  <StatusBadge status={ot.status} />
-                </div>
+              )}
+            </>
+          )}
+        </CollapsibleHistory>
+
+        <CollapsibleHistory label="Overtime History" count={myPastOt.length}>
+          {myPastOt.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">No history yet.</div>
+          ) : (
+            <>
+              <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <RequestsDateFilter from={sp.myot_hf ?? ""} to={sp.myot_ht ?? ""} paramFrom="myot_hf" paramTo="myot_ht" />
               </div>
-            ))}
-            </div>
-            )}
-          </>
-        )}
-      </CollapsibleHistory>
+              {myPastOtF.length === 0 ? (
+                <p className="px-6 py-4 text-sm text-gray-500">No overtime matches that date range.</p>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {myPastOtF.map((ot) => (
+                    <div key={ot.id} className="flex items-center justify-between p-6">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">Overtime</span>
+                          {hasNightDifferentialHours(ot.start_time, ot.end_time) && <NightDiffNote size="xs" />}
+                        </div>
+                        <p className="text-sm text-gray-700">{formatDate(ot.requested_date)} &mdash; {formatTime(ot.start_time)} – {formatTime(ot.end_time)}</p>
+                        {ot.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {ot.reviewer_notes}</p>}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {isAdmin && <EditOvertimeForm id={ot.id} requestedDate={ot.requested_date} startTime={ot.start_time} endTime={ot.end_time} reason={ot.reason} />}
+                        <StatusBadge status={ot.status} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </CollapsibleHistory>
       </CollapsibleSection>
 
       {/* ── TEAM REQUESTS ── */}
@@ -449,21 +503,20 @@ export default async function RequestsPage({
             <p className="text-sm text-gray-500">No pending team requests.</p>
           )}
 
-          <CollapsibleHistory count={pastAdjAll.length + pastLeaveAll.length + pastHwAll.length + pastOtAll.length}>
-            {pastAdjAll.length === 0 && pastLeaveAll.length === 0 && pastHwAll.length === 0 && pastOtAll.length === 0 ? (
+          {/* History is split per request type — each its own collapsible. */}
+          <CollapsibleHistory label="Schedule Adjustment History" count={pastAdjAll.length}>
+            {pastAdjAll.length === 0 ? (
               <div className="p-6 text-center text-gray-500">No history yet.</div>
             ) : (
-              <div className="divide-y divide-gray-200">
-                {pastAdjAll.length > 0 && (
-                <div>
-                  <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <RequestsDateFilter from={sp.adj_hf ?? ""} to={sp.adj_ht ?? ""} paramFrom="adj_hf" paramTo="adj_ht" />
-                    <RequestsRequesterSearch param="hreq_adj" label="adjustments" initial={hreqAdj ?? ""} />
-                  </div>
-                  {teamPastAdj.length === 0 ? (
-                    <p className="px-6 py-4 text-sm text-gray-500">No adjustments match that requester.</p>
-                  ) : (
-                  <div className="divide-y divide-gray-100">
+              <>
+                <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <RequestsDateFilter from={sp.adj_hf ?? ""} to={sp.adj_ht ?? ""} paramFrom="adj_hf" paramTo="adj_ht" />
+                  <RequestsRequesterSearch param="hreq_adj" label="adjustments" initial={hreqAdj ?? ""} />
+                </div>
+                {teamPastAdj.length === 0 ? (
+                  <p className="px-6 py-4 text-sm text-gray-500">No adjustments match that filter.</p>
+                ) : (
+                <div className="divide-y divide-gray-100">
                 {teamPastAdj.map((adj) => (
                   <div key={adj.id} className="flex items-center justify-between p-6">
                     <div className="space-y-1">
@@ -482,20 +535,25 @@ export default async function RequestsPage({
                     </div>
                   </div>
                 ))}
-                  </div>
-                  )}
                 </div>
                 )}
-                {pastLeaveAll.length > 0 && (
-                <div>
-                  <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <RequestsDateFilter from={sp.leave_hf ?? ""} to={sp.leave_ht ?? ""} paramFrom="leave_hf" paramTo="leave_ht" />
-                    <RequestsRequesterSearch param="hreq_leave" label="leave" initial={hreqLeave ?? ""} />
-                  </div>
-                  {teamPastLeave.length === 0 ? (
-                    <p className="px-6 py-4 text-sm text-gray-500">No leave matches that requester.</p>
-                  ) : (
-                  <div className="divide-y divide-gray-100">
+              </>
+            )}
+          </CollapsibleHistory>
+
+          <CollapsibleHistory label="Leave History" count={pastLeaveAll.length}>
+            {pastLeaveAll.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">No history yet.</div>
+            ) : (
+              <>
+                <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <RequestsDateFilter from={sp.leave_hf ?? ""} to={sp.leave_ht ?? ""} paramFrom="leave_hf" paramTo="leave_ht" />
+                  <RequestsRequesterSearch param="hreq_leave" label="leave" initial={hreqLeave ?? ""} />
+                </div>
+                {teamPastLeave.length === 0 ? (
+                  <p className="px-6 py-4 text-sm text-gray-500">No leave matches that filter.</p>
+                ) : (
+                <div className="divide-y divide-gray-100">
                 {teamPastLeave.map((leave) => (
                   <div key={leave.id} className="flex items-center justify-between p-6">
                     <div className="space-y-1">
@@ -515,20 +573,25 @@ export default async function RequestsPage({
                     </div>
                   </div>
                 ))}
-                  </div>
-                  )}
                 </div>
                 )}
-                {pastHwAll.length > 0 && (
-                <div>
-                  <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <RequestsDateFilter from={sp.hw_hf ?? ""} to={sp.hw_ht ?? ""} paramFrom="hw_hf" paramTo="hw_ht" />
-                    <RequestsRequesterSearch param="hreq_hw" label="holiday work" initial={hreqHw ?? ""} />
-                  </div>
-                  {teamPastHw.length === 0 ? (
-                    <p className="px-6 py-4 text-sm text-gray-500">No holiday work matches that requester.</p>
-                  ) : (
-                  <div className="divide-y divide-gray-100">
+              </>
+            )}
+          </CollapsibleHistory>
+
+          <CollapsibleHistory label="Holiday Work History" count={pastHwAll.length}>
+            {pastHwAll.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">No history yet.</div>
+            ) : (
+              <>
+                <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <RequestsDateFilter from={sp.hw_hf ?? ""} to={sp.hw_ht ?? ""} paramFrom="hw_hf" paramTo="hw_ht" />
+                  <RequestsRequesterSearch param="hreq_hw" label="holiday work" initial={hreqHw ?? ""} />
+                </div>
+                {teamPastHw.length === 0 ? (
+                  <p className="px-6 py-4 text-sm text-gray-500">No holiday work matches that filter.</p>
+                ) : (
+                <div className="divide-y divide-gray-100">
                 {teamPastHw.map((hw) => (
                   <div key={hw.id} className="flex items-center justify-between p-6">
                     <div className="space-y-1">
@@ -548,20 +611,25 @@ export default async function RequestsPage({
                     </div>
                   </div>
                 ))}
-                  </div>
-                  )}
                 </div>
                 )}
-                {pastOtAll.length > 0 && (
-                <div>
-                  <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <RequestsDateFilter from={sp.ot_hf ?? ""} to={sp.ot_ht ?? ""} paramFrom="ot_hf" paramTo="ot_ht" />
-                    <RequestsRequesterSearch param="hreq_ot" label="overtime" initial={hreqOt ?? ""} />
-                  </div>
-                  {teamPastOt.length === 0 ? (
-                    <p className="px-6 py-4 text-sm text-gray-500">No overtime matches that requester.</p>
-                  ) : (
-                  <div className="divide-y divide-gray-100">
+              </>
+            )}
+          </CollapsibleHistory>
+
+          <CollapsibleHistory label="Overtime History" count={pastOtAll.length}>
+            {pastOtAll.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">No history yet.</div>
+            ) : (
+              <>
+                <div className="bg-gray-50/60 px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <RequestsDateFilter from={sp.ot_hf ?? ""} to={sp.ot_ht ?? ""} paramFrom="ot_hf" paramTo="ot_ht" />
+                  <RequestsRequesterSearch param="hreq_ot" label="overtime" initial={hreqOt ?? ""} />
+                </div>
+                {teamPastOt.length === 0 ? (
+                  <p className="px-6 py-4 text-sm text-gray-500">No overtime matches that filter.</p>
+                ) : (
+                <div className="divide-y divide-gray-100">
                 {teamPastOt.map((ot) => (
                   <div key={ot.id} className="flex items-center justify-between p-6">
                     <div className="space-y-1">
@@ -581,11 +649,9 @@ export default async function RequestsPage({
                     </div>
                   </div>
                 ))}
-                  </div>
-                  )}
                 </div>
                 )}
-              </div>
+              </>
             )}
           </CollapsibleHistory>
         </CollapsibleSection>
