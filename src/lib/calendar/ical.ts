@@ -73,6 +73,12 @@ export function buildICal({
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeText(calendarName)}`,
     "X-WR-TIMEZONE:Asia/Manila",
+    // Tell subscribers (Google/Apple/Outlook) to re-poll hourly. Without a
+    // hint, clients fall back to their own lazy default (often 24h+), so newly
+    // approved leaves — and dropped cancelled ones — can take days to appear.
+    // It's a hint, not a guarantee, but far better than emitting nothing.
+    "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+    "X-PUBLISHED-TTL:PT1H",
   ];
 
   for (const e of events) {

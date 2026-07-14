@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildICal, type CalendarEvent } from "@/lib/calendar/ical";
 import { displayName } from "@/lib/utils";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 
 export const runtime = "nodejs";
 // Google polls iCal feeds infrequently; let edge caches hold for a few mins.
@@ -132,14 +133,18 @@ export async function GET(request: Request) {
 
   // Pull the active user list once — needed for scope resolution and for
   // attaching display names to events.
-  const { data: allUsers } = await admin
-    .from("users")
-    .select(
-      "id, email, full_name, preferred_name, first_name, last_name, manager_id, department, birthday, hire_date, is_active"
-    )
-    .eq("is_active", true);
-
-  const users = (allUsers ?? []) as UserRow[];
+  // Company-wide read — page past PostgREST's 1000-row cap so large orgs
+  // don't silently lose users (which would drop them from scope + events).
+  const users = (await fetchAllRows((from, to) =>
+    admin
+      .from("users")
+      .select(
+        "id, email, full_name, preferred_name, first_name, last_name, manager_id, department, birthday, hire_date, is_active"
+      )
+      .eq("is_active", true)
+      .order("id")
+      .range(from, to)
+  )) as UserRow[];
   const byId = new Map(users.map((u) => [u.id, u]));
   const byManager = new Map<string, string[]>();
   for (const u of users) {
@@ -200,52 +205,70 @@ export async function GET(request: Request) {
     return u ? displayName(u) : "Someone";
   };
 
-  // Fetch only the event sources the user asked for.
-  const [
-    leavesRes,
-    schedAdjRes,
-    overtimeRes,
-    holidayWorkRes,
-    holidaysRes,
-  ] = await Promise.all([
+  // Fetch only the event sources the user asked for. Company-wide reads can
+  // exceed PostgREST's 1000-row cap, so page through each (fetchAllRows) with
+  // an ordered query — otherwise approved leaves silently drop past row 1000.
+  const [leaveRows, adjRows, otRows, hwRows, holidayRows] = await Promise.all([
     enabled.has("leaves")
-      ? admin
-          .from("leave_requests")
-          .select(
-            "id, employee_id, leave_type, start_date, end_date, leave_duration, half_day_period, half_day_start_time, half_day_end_time"
-          )
-          .in("employee_id", ids)
-          .eq("status", "approved")
-      : Promise.resolve({ data: [] }),
+      ? fetchAllRows((from, to) =>
+          admin
+            .from("leave_requests")
+            .select(
+              "id, employee_id, leave_type, start_date, end_date, leave_duration, half_day_period, half_day_start_time, half_day_end_time"
+            )
+            .in("employee_id", ids)
+            .eq("status", "approved")
+            .order("id")
+            .range(from, to)
+        )
+      : Promise.resolve([]),
     enabled.has("adjustments")
-      ? admin
-          .from("schedule_adjustments")
-          .select(
-            "id, employee_id, requested_date, requested_start_time, requested_end_time"
-          )
-          .in("employee_id", ids)
-          .eq("status", "approved")
-          .neq("requested_date", "9999-12-31")
-      : Promise.resolve({ data: [] }),
+      ? fetchAllRows((from, to) =>
+          admin
+            .from("schedule_adjustments")
+            .select(
+              "id, employee_id, requested_date, requested_start_time, requested_end_time"
+            )
+            .in("employee_id", ids)
+            .eq("status", "approved")
+            .neq("requested_date", "9999-12-31")
+            .order("id")
+            .range(from, to)
+        )
+      : Promise.resolve([]),
     enabled.has("overtime")
-      ? admin
-          .from("overtime_requests")
-          .select("id, employee_id, requested_date, start_time, end_time, reason")
-          .in("employee_id", ids)
-          .eq("status", "approved")
-      : Promise.resolve({ data: [] }),
+      ? fetchAllRows((from, to) =>
+          admin
+            .from("overtime_requests")
+            .select("id, employee_id, requested_date, start_time, end_time, reason")
+            .in("employee_id", ids)
+            .eq("status", "approved")
+            .order("id")
+            .range(from, to)
+        )
+      : Promise.resolve([]),
     enabled.has("holiday_work")
-      ? admin
-          .from("holiday_work_requests")
-          .select(
-            "id, employee_id, holiday_date, start_time, end_time, work_location, holiday:holidays!holiday_work_requests_holiday_id_fkey(name)"
-          )
-          .in("employee_id", ids)
-          .eq("status", "approved")
-      : Promise.resolve({ data: [] }),
+      ? fetchAllRows((from, to) =>
+          admin
+            .from("holiday_work_requests")
+            .select(
+              "id, employee_id, holiday_date, start_time, end_time, work_location, holiday:holidays!holiday_work_requests_holiday_id_fkey(name)"
+            )
+            .in("employee_id", ids)
+            .eq("status", "approved")
+            .order("id")
+            .range(from, to)
+        )
+      : Promise.resolve([]),
     enabled.has("holidays")
-      ? admin.from("holidays").select("id, name, date, country, is_recurring")
-      : Promise.resolve({ data: [] }),
+      ? fetchAllRows((from, to) =>
+          admin
+            .from("holidays")
+            .select("id, name, date, country, is_recurring")
+            .order("id")
+            .range(from, to)
+        )
+      : Promise.resolve([]),
   ]);
 
   const events: CalendarEvent[] = [];
@@ -277,7 +300,7 @@ export async function GET(request: Request) {
   }
 
   // Approved leaves (full and half-day)
-  for (const l of leavesRes.data ?? []) {
+  for (const l of leaveRows) {
     const name = nameOf(l.employee_id);
     const label = LEAVE_TYPE_LABELS[l.leave_type] ?? "Leave";
     if (l.leave_duration === "half_day") {
@@ -321,7 +344,7 @@ export async function GET(request: Request) {
   }
 
   // Approved schedule adjustments (timed events on the requested date)
-  for (const a of schedAdjRes.data ?? []) {
+  for (const a of adjRows) {
     const name = nameOf(a.employee_id);
     const isoDate = a.requested_date;
     if (!isoDate || !a.requested_start_time || !a.requested_end_time) continue;
@@ -334,7 +357,7 @@ export async function GET(request: Request) {
   }
 
   // Approved overtime requests
-  for (const o of overtimeRes.data ?? []) {
+  for (const o of otRows) {
     const name = nameOf(o.employee_id);
     if (!o.requested_date || !o.start_time || !o.end_time) continue;
     const isOvernight = o.end_time < o.start_time;
@@ -353,7 +376,7 @@ export async function GET(request: Request) {
   }
 
   // Approved holiday work
-  for (const h of holidayWorkRes.data ?? []) {
+  for (const h of hwRows) {
     const name = nameOf(h.employee_id);
     const holiday = Array.isArray(h.holiday) ? h.holiday[0] : h.holiday;
     const holidayName = holiday?.name ?? "Holiday";
@@ -377,7 +400,7 @@ export async function GET(request: Request) {
       : !requestedCountry
         ? subscriberCountry
         : null; // null = include all
-  for (const h of holidaysRes.data ?? []) {
+  for (const h of holidayRows) {
     if (filterCountry && h.country !== filterCountry) continue;
     events.push({
       uid: `holiday-${h.id}-${h.country}@ortushrtool`,
