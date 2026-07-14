@@ -100,14 +100,11 @@ export default function LeaveRequestPage() {
       setAvailableTypes(available);
       setForm((f) => ({ ...f, leave_type: available[0] ?? "" }));
 
+      // `used` is filled in below, once each leave type's cycle start is known,
+      // so we only count leaves taken within the current cycle — matching the
+      // ledger (leave-ledger.ts). Counting from a fixed prior-year floor here
+      // double-charged leaves that started in the previous cycle.
       const used: Record<string, number> = {};
-      for (const l of leavesThisYear ?? []) {
-        const days = l.leave_duration === "half_day"
-          ? 0.5
-          : countLeaveDays(l.start_date, l.end_date, localHolidays);
-        used[l.leave_type] = (used[l.leave_type] ?? 0) + days;
-      }
-      // (setUsedDays is called below, after folding in any negative credits.)
 
       const planIds = (assignedPlans ?? []).map((p) => p.plan_id);
       const now = new Date();
@@ -172,6 +169,17 @@ export default function LeaveRequestPage() {
         const cycleStart = cycleStartByType[c.leave_type] ?? yearStartStr;
         if (c.granted_at.slice(0, 10) < cycleStart) continue;
         allocMap[c.leave_type] = (allocMap[c.leave_type] ?? 0) + Number(c.days);
+      }
+
+      // Count only leaves whose start falls within the current cycle for their
+      // type (same rule as the ledger), so prior-cycle leaves don't deduct.
+      for (const l of leavesThisYear ?? []) {
+        const cycleStart = cycleStartByType[l.leave_type] ?? yearStartStr;
+        if (l.start_date < cycleStart) continue;
+        const days = l.leave_duration === "half_day"
+          ? 0.5
+          : countLeaveDays(l.start_date, l.end_date, localHolidays);
+        used[l.leave_type] = (used[l.leave_type] ?? 0) + days;
       }
       setUsedDays(used);
 
