@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Copy, RefreshCw, Trash2, Check } from "lucide-react";
+import { Calendar, Copy, RefreshCw, Trash2, Check, AlertTriangle } from "lucide-react";
 import { hasRole } from "@/lib/utils";
 import {
   HOLIDAY_COUNTRY_LABELS,
@@ -95,6 +95,18 @@ export function CalendarSyncForm({
   };
 
   const generate = async () => {
+    // When a token already exists this is a *regeneration*, which overwrites the
+    // single shared token — every calendar already subscribed with the current
+    // URL stops updating until re-added. Warn before doing that. (First-time
+    // generation, when there's no token yet, needs no confirmation.)
+    if (
+      token &&
+      !confirm(
+        "Regenerate your calendar token?\n\nThis replaces your current token, so every calendar you've already subscribed (Google, Apple, etc.) will STOP updating. You'll have to remove and re-add each one using the new URL."
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     setMessage(null);
     const res = await fetch("/api/calendar/token", { method: "POST" });
@@ -224,6 +236,16 @@ export function CalendarSyncForm({
               </button>
             </div>
           </div>
+
+          <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>
+              <strong>Regenerating or revoking your token breaks every calendar
+              you&apos;ve already subscribed.</strong> They all share this one
+              token, so any calendar added with the current URL will silently
+              stop updating until you remove it and re-add it with the new URL.
+            </span>
+          </p>
 
           <div className="space-y-3">
             {EVENT_TYPES.map((t) => (
