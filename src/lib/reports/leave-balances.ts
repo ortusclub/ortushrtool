@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import { getRenewalStart, prorateLeave } from "@/lib/leave-proration";
 import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
@@ -32,35 +33,57 @@ export async function computeLeaveBalances(
   const today = new Date().toISOString().slice(0, 10);
 
   const [
-    { data: employees },
-    { data: assignments },
+    employees,
+    assignments,
     { data: plans },
     { data: allocations },
-    { data: leaves },
-    { data: leaveCredits },
+    leaves,
+    leaveCredits,
   ] = await Promise.all([
-    admin
-      .from("users")
-      .select("id, full_name, email, department, hire_date, holiday_country")
-      .eq("is_active", true),
-    admin.from("employee_leave_plans").select("employee_id, plan_id"),
+    // Company-wide reads on growing tables — page past the 1000-row cap
+    // (fetchAllRows) or the report silently undercounts. leave_requests is
+    // already over 1000 total. Reference tables (plans/allocations) are small
+    // and admin-bounded, so a single read is fine.
+    fetchAllRows((from, to) =>
+      admin
+        .from("users")
+        .select("id, full_name, email, department, hire_date, holiday_country")
+        .eq("is_active", true)
+        .order("id")
+        .range(from, to)
+    ),
+    fetchAllRows((from, to) =>
+      admin
+        .from("employee_leave_plans")
+        .select("employee_id, plan_id")
+        .order("id")
+        .range(from, to)
+    ),
     admin
       .from("leave_plans")
       .select("id, name, grant_type, renewal_month, renewal_day"),
     admin
       .from("leave_plan_allocations")
       .select("plan_id, leave_type, days_per_year"),
-    admin
-      .from("leave_requests")
-      .select("employee_id, leave_type, start_date, end_date, leave_duration")
-      .eq("status", "approved"),
+    fetchAllRows((from, to) =>
+      admin
+        .from("leave_requests")
+        .select("employee_id, leave_type, start_date, end_date, leave_duration")
+        .eq("status", "approved")
+        .order("id")
+        .range(from, to)
+    ),
     // Active leave credits — covers both admin-issued and auto-granted
     // earned CTO from approved holiday work.
-    admin
-      .from("leave_credits")
-      .select("employee_id, leave_type, days, granted_at, expires_at")
-      .lte("granted_at", today)
-      .or(`expires_at.is.null,expires_at.gte.${today}`),
+    fetchAllRows((from, to) =>
+      admin
+        .from("leave_credits")
+        .select("employee_id, leave_type, days, granted_at, expires_at")
+        .lte("granted_at", today)
+        .or(`expires_at.is.null,expires_at.gte.${today}`)
+        .order("id")
+        .range(from, to)
+    ),
   ]);
 
   // All public holidays, grouped by country → set of YYYY-MM-DD covering

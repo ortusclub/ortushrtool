@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/paginate";
 import { hasRole, formatDate, formatTime, displayName, hasNightDifferentialHours } from "@/lib/utils";
 import { NightDiffNote } from "@/components/shared/night-diff-note";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
@@ -67,11 +68,22 @@ export default async function RequestsPage({
   if (myFrom) { myAdjQ = myAdjQ.gte("requested_date", myFrom); myLeaveQ = myLeaveQ.gte("start_date", myFrom); myHwQ = myHwQ.gte("holiday_date", myFrom); myOtQ = myOtQ.gte("requested_date", myFrom); }
   if (myTo)   { myAdjQ = myAdjQ.lte("requested_date", myTo);   myLeaveQ = myLeaveQ.lte("start_date", myTo);   myHwQ = myHwQ.lte("holiday_date", myTo);   myOtQ = myOtQ.lte("requested_date", myTo); }
 
-  // Team requests — only for reviewers, excludes current user
-  const teamAdjQ = isReviewer ? supabase.from("schedule_adjustments").select(adjSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
-  const teamLeaveQ = isReviewer ? supabase.from("leave_requests").select(leaveSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
-  const teamHwQ = isReviewer ? supabase.from("holiday_work_requests").select(hwSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
-  const teamOtQ = isReviewer ? supabase.from("overtime_requests").select(otSel).neq("employee_id", user.id).order("created_at", { ascending: false }) : null;
+  // Team requests — only for reviewers, excludes current user. These are
+  // company-wide reads, so page past PostgREST's 1000-row cap (fetchAllRows);
+  // otherwise team requests past row 1000 silently vanish — including pending
+  // approvals. Secondary order by id keeps the page windows stable on ties.
+  const teamAdjP = isReviewer
+    ? fetchAllRows((from, to) => supabase.from("schedule_adjustments").select(adjSel).neq("employee_id", user.id).order("created_at", { ascending: false }).order("id").range(from, to))
+    : Promise.resolve([]);
+  const teamLeaveP = isReviewer
+    ? fetchAllRows((from, to) => supabase.from("leave_requests").select(leaveSel).neq("employee_id", user.id).order("created_at", { ascending: false }).order("id").range(from, to))
+    : Promise.resolve([]);
+  const teamHwP = isReviewer
+    ? fetchAllRows((from, to) => supabase.from("holiday_work_requests").select(hwSel).neq("employee_id", user.id).order("created_at", { ascending: false }).order("id").range(from, to))
+    : Promise.resolve([]);
+  const teamOtP = isReviewer
+    ? fetchAllRows((from, to) => supabase.from("overtime_requests").select(otSel).neq("employee_id", user.id).order("created_at", { ascending: false }).order("id").range(from, to))
+    : Promise.resolve([]);
 
   // Team date filtering is per-section (pending vs history, per type) and done
   // in-memory below, so the team queries themselves aren't date-bounded here.
@@ -80,20 +92,19 @@ export default async function RequestsPage({
     ? supabase.from("users").select("id, full_name, preferred_name, first_name, last_name, email").eq("is_active", true).order("full_name")
     : null;
 
-  const none = Promise.resolve({ data: [] });
   const [
     { data: myAdj },
     { data: myLeave },
     { data: myHw },
     { data: myOt },
-    { data: teamAdj },
-    { data: teamLeave },
-    { data: teamHw },
-    { data: teamOt },
+    teamAdj,
+    teamLeave,
+    teamHw,
+    teamOt,
     allUsersResult,
   ] = await Promise.all([
     myAdjQ, myLeaveQ, myHwQ, myOtQ,
-    teamAdjQ ?? none, teamLeaveQ ?? none, teamHwQ ?? none, teamOtQ ?? none,
+    teamAdjP, teamLeaveP, teamHwP, teamOtP,
     allUsersPromise ?? Promise.resolve(null),
   ]);
 
