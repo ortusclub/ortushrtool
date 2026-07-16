@@ -315,31 +315,14 @@ export async function GET(request: Request) {
         date: l.start_date,
       });
     } else {
-      // For multi-day leaves, expand into one all-day event spanning the range
+      // One all-day event spanning start..end (DTEND handled in the builder).
+      // Previously this exploded into one event per day, bloating the feed ~2x.
       events.push({
         uid: `leave-${l.id}@ortushrtool`,
         summary: `${name} — ${label}`,
         date: l.start_date,
-        // For ranges we'd usually emit one event with DTEND = endDate+1, but
-        // our builder always treats `date` as a single-day event. To keep the
-        // builder simple, emit an entry per date in the range.
+        dateEnd: l.end_date ?? l.start_date,
       });
-      // Emit additional days if the range is longer than 1 day
-      if (l.end_date && l.end_date !== l.start_date) {
-        const start = new Date(l.start_date + "T00:00:00Z");
-        const end = new Date(l.end_date + "T00:00:00Z");
-        const cur = new Date(start);
-        cur.setUTCDate(cur.getUTCDate() + 1);
-        while (cur <= end) {
-          const dStr = cur.toISOString().slice(0, 10);
-          events.push({
-            uid: `leave-${l.id}-${dStr}@ortushrtool`,
-            summary: `${name} — ${label}`,
-            date: dStr,
-          });
-          cur.setUTCDate(cur.getUTCDate() + 1);
-        }
-      }
     }
   }
 

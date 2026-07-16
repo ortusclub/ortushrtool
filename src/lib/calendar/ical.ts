@@ -12,6 +12,10 @@ export type CalendarEvent = {
   location?: string;
   /** All-day event date (YYYY-MM-DD). Mutually exclusive with `start` / `end`. */
   date?: string;
+  /** Last day (inclusive, YYYY-MM-DD) for a multi-day all-day event. Defaults
+   * to `date` (single day). Lets one leave be ONE spanning event instead of
+   * one event per day. */
+  dateEnd?: string;
   /** Timed event start (ISO with timezone). Pair with `end`. */
   start?: string;
   end?: string;
@@ -73,12 +77,6 @@ export function buildICal({
     "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeText(calendarName)}`,
     "X-WR-TIMEZONE:Asia/Manila",
-    // Tell subscribers (Google/Apple/Outlook) to re-poll hourly. Without a
-    // hint, clients fall back to their own lazy default (often 24h+), so newly
-    // approved leaves — and dropped cancelled ones — can take days to appear.
-    // It's a hint, not a guarantee, but far better than emitting nothing.
-    "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
-    "X-PUBLISHED-TTL:PT1H",
   ];
 
   for (const e of events) {
@@ -89,11 +87,11 @@ export function buildICal({
     if (e.description) lines.push(`DESCRIPTION:${escapeText(e.description)}`);
     if (e.location) lines.push(`LOCATION:${escapeText(e.location)}`);
     if (e.date) {
-      const d = toICalDate(e.date);
-      lines.push(`DTSTART;VALUE=DATE:${d}`);
-      // For all-day events DTEND is the day AFTER the last day. We treat
-      // single-day all-day events as start = end+1, which is what Google expects.
-      const next = new Date(`${e.date}T00:00:00Z`);
+      lines.push(`DTSTART;VALUE=DATE:${toICalDate(e.date)}`);
+      // All-day DTEND is exclusive — the day AFTER the last day. For a single
+      // day that's start+1; for a range it's (dateEnd)+1. One spanning event
+      // per multi-day leave instead of one event per day.
+      const next = new Date(`${e.dateEnd ?? e.date}T00:00:00Z`);
       next.setUTCDate(next.getUTCDate() + 1);
       const endStr =
         next.getUTCFullYear() +
