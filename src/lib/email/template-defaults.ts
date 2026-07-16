@@ -408,4 +408,36 @@ export const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateDefault[] = [
     ].join("\n"),
     variables: "employee_name, request_type, details, app_url",
   },
+
+  // ── Permanent Schedule Changes ──
+  {
+    type: "schedule_weekly_change_submitted",
+    name: "Permanent Schedule Change — Notification (to Admins)",
+    subject: "Schedule change request for {{employee_name}}",
+    body: [
+      `<h2>Permanent Schedule Change Request</h2>`,
+      `<p><strong>{{requester_name}}</strong> submitted a permanent weekly schedule change for <strong>{{employee_name}}</strong>.</p>`,
+      `<p>Review and approve or reject it in the app.</p>`,
+      button("Review Request", "{{app_url}}/admin/pending-changes"),
+    ].join("\n"),
+    variables: "requester_name, employee_name, app_url",
+  },
+
+  // ── Holidays ──
+  {
+    type: "holiday_import_reminder",
+    name: "Holiday Import Reminder (yearly, to HR)",
+    subject: "Review {{year}} holidays — {{count}} pulled for approval",
+    body: [
+      `<p>Hi team,</p>`,
+      `<p>It's the start of December — I've pulled <strong>{{year}}</strong> public holidays from a public holiday source and staged <strong>{{count}}</strong> for your review. They are <strong>not live yet</strong> and won't affect leave balances, schedules, or calendar feeds until you approve them.</p>`,
+      `<p><strong>Auto-pulled (pending your approval)</strong></p>`,
+      `<ul>{{breakdown_html}}</ul>`,
+      `<p><strong>Not covered by the source — add manually</strong></p>`,
+      `<ul>{{manual_html}}</ul>`,
+      `<p>Open Manage Holidays to review the staged suggestions (Approve to make them live, or Dismiss), and to add any uncovered countries via CSV import (columns: name, date, country, recurring).</p>`,
+      button("Manage Holidays", "{{app_url}}/admin/holidays"),
+    ].join("\n"),
+    variables: "year, count, breakdown_html, manual_html, app_url",
+  },
 ];

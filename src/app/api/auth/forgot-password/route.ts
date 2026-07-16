@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
+import { resolveEffectiveRecipients } from "@/lib/email/recipients";
 import { loadAndRender } from "@/lib/email/render";
 import { getUniversalVars } from "@/lib/email/universal-vars";
 
@@ -27,19 +28,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true });
   }
 
-  // Get all super admins
-  const { data: superAdmins } = await admin
-    .from("users")
-    .select("email, full_name")
-    .eq("role", "super_admin")
-    .eq("is_active", true);
-
-  if (!superAdmins || superAdmins.length === 0) {
+  const recipients = await resolveEffectiveRecipients(
+    admin,
+    "forgot_password_alert"
+  );
+  if (recipients.length === 0) {
     return NextResponse.json({ success: true });
   }
 
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const adminEmails = superAdmins.map((a) => a.email);
 
   const { subject, html } = await loadAndRender("forgot_password_alert", {
     ...getUniversalVars(user, null, APP_URL),
@@ -48,13 +45,13 @@ export async function POST(request: Request) {
   });
 
   await sendEmail({
-    to: adminEmails,
+    to: recipients,
     subject,
     html,
   });
 
   // Log it
-  for (const adminEmail of adminEmails) {
+  for (const adminEmail of recipients) {
     await admin.from("notification_log").insert({
       type: "attendance_flag", // reuse existing type for now
       recipient_email: adminEmail,

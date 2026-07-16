@@ -3,20 +3,32 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Save, ChevronDown, RotateCcw, Eye, EyeOff, Send } from "lucide-react";
+import { Save, ChevronDown, RotateCcw, Eye, EyeOff, Send, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EmailTemplate } from "@/types/database";
 import { EMAIL_TEMPLATE_DEFAULTS } from "@/lib/email/template-defaults";
 import { UNIVERSAL_VARIABLES } from "@/lib/email/universal-vars";
 import { TEMPLATE_META } from "@/lib/email/template-meta";
+import {
+  RECIPIENT_CONFIGURABLE_TYPES,
+  notifyKey,
+} from "@/lib/email/recipients";
 import { RichTextEditor } from "./rich-text-editor";
+
+const RECIPIENT_TYPES = RECIPIENT_CONFIGURABLE_TYPES as readonly string[];
+
+type DirectoryEntry = { email: string; name: string; role: string };
 
 export function EmailTemplateEditor({
   templates,
   toggles: initialToggles,
+  effectiveRecipients,
+  directory,
 }: {
   templates: EmailTemplate[];
   toggles: Record<string, boolean>;
+  effectiveRecipients: Record<string, string[]>;
+  directory: DirectoryEntry[];
 }) {
   const router = useRouter();
   const [expandedType, setExpandedType] = useState<string | null>(null);
@@ -27,6 +39,68 @@ export function EmailTemplateEditor({
   const [sendingTest, setSendingTest] = useState<string | null>(null);
   const [toggles, setToggles] = useState<Record<string, boolean>>(initialToggles);
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
+
+  const byEmail = new Map(directory.map((d) => [d.email.toLowerCase(), d]));
+
+  // One editable list of addresses per email type, pre-filled with who it
+  // currently sends to. Add via the box, remove with the × on each row.
+  const [recipList, setRecipList] = useState<Record<string, string[]>>(() => {
+    const init: Record<string, string[]> = {};
+    for (const t of RECIPIENT_TYPES) init[t] = [...(effectiveRecipients[t] ?? [])];
+    return init;
+  });
+  const [addValue, setAddValue] = useState<Record<string, string>>({});
+  const [savingRecip, setSavingRecip] = useState<string | null>(null);
+
+  const addRecipient = (type: string) => {
+    const raw = (addValue[type] ?? "").trim();
+    if (!raw) return;
+    // Accept an email directly, or a name that matches an active user.
+    let email = raw;
+    if (!raw.includes("@")) {
+      const match = directory.find(
+        (d) => d.name.toLowerCase() === raw.toLowerCase()
+      );
+      if (!match) {
+        setMessage(`No active user named "${raw}" — type a full email instead.`);
+        return;
+      }
+      email = match.email;
+    }
+    setRecipList((prev) => {
+      const cur = prev[type] ?? [];
+      if (cur.some((e) => e.toLowerCase() === email.toLowerCase())) return prev;
+      return { ...prev, [type]: [...cur, email] };
+    });
+    setAddValue((prev) => ({ ...prev, [type]: "" }));
+  };
+
+  const removeRecipient = (type: string, email: string) => {
+    setRecipList((prev) => ({
+      ...prev,
+      [type]: (prev[type] ?? []).filter((e) => e !== email),
+    }));
+  };
+
+  const saveRecipients = async (type: string) => {
+    setSavingRecip(type);
+    const emails = recipList[type] ?? [];
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { error } = await supabase.from("system_settings").upsert({
+      key: notifyKey(type),
+      value: JSON.stringify({ emails }),
+      updated_by: user?.id,
+      updated_at: new Date().toISOString(),
+    });
+    setMessage(
+      error ? `Could not save recipients: ${error.message}` : "Recipients saved."
+    );
+    setSavingRecip(null);
+    if (!error) router.refresh();
+  };
 
   const handleToggle = async (key: string) => {
     const next = !toggles[key];
@@ -154,7 +228,12 @@ export function EmailTemplateEditor({
     },
     {
       label: "Schedule Adjustments",
-      types: ["adjustment_submitted", "adjustment_approved", "adjustment_rejected"],
+      types: [
+        "adjustment_submitted",
+        "adjustment_approved",
+        "adjustment_rejected",
+        "schedule_weekly_change_submitted",
+      ],
     },
     {
       label: "Holiday Work",
@@ -173,7 +252,11 @@ export function EmailTemplateEditor({
     },
     {
       label: "Attendance & Reminders",
-      types: ["attendance_flag", "reminder"],
+      types: ["attendance_flag", "reminder", "holiday_import_reminder"],
+    },
+    {
+      label: "Concerns & Peer Feedback",
+      types: ["incident_submitted", "p2p_feedback_submitted"],
     },
     {
       label: "Celebrations",
@@ -187,6 +270,14 @@ export function EmailTemplateEditor({
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
+      {/* Shared autocomplete source for the "add recipient" boxes. */}
+      <datalist id="recipient-directory">
+        {directory.map((d) => (
+          <option key={d.email} value={d.email}>
+            {d.name} — {d.role}
+          </option>
+        ))}
+      </datalist>
       {message && (
         <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
           {message}
@@ -279,6 +370,102 @@ export function EmailTemplateEditor({
                                 toggleEnabled ? "translate-x-5" : "translate-x-0"
                               )}
                             />
+                          </button>
+                        </div>
+                      )}
+
+                      {RECIPIENT_TYPES.includes(type) && (
+                        <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                            Recipients
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Exactly the people below get this email. Remove with
+                            ×, or add anyone by name or email — then Save.
+                          </p>
+                          {(recipList[type] ?? []).length === 0 ? (
+                            <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+                              No recipients — this email won&apos;t be sent to
+                              anyone.
+                            </p>
+                          ) : (
+                            <ul className="space-y-1">
+                              {(recipList[type] ?? []).map((email) => {
+                                const d = byEmail.get(email.toLowerCase());
+                                return (
+                                  <li
+                                    key={email}
+                                    className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm"
+                                  >
+                                    <span className="min-w-0 flex-1 truncate">
+                                      {d ? (
+                                        <>
+                                          <span className="font-medium text-gray-900">
+                                            {d.name}
+                                          </span>{" "}
+                                          <span className="text-gray-400">
+                                            {email}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <span className="text-gray-900">
+                                          {email}
+                                        </span>
+                                      )}
+                                    </span>
+                                    {d && (
+                                      <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                                        {d.role}
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => removeRecipient(type, email)}
+                                      aria-label={`Remove ${email}`}
+                                      className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              list="recipient-directory"
+                              value={addValue[type] ?? ""}
+                              onChange={(e) =>
+                                setAddValue((p) => ({
+                                  ...p,
+                                  [type]: e.target.value,
+                                }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  addRecipient(type);
+                                }
+                              }}
+                              placeholder="Add a name or email…"
+                              className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => addRecipient(type)}
+                              className="shrink-0 rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                              Add
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => saveRecipients(type)}
+                            disabled={savingRecip === type}
+                            className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {savingRecip === type ? "Saving..." : "Save recipients"}
                           </button>
                         </div>
                       )}

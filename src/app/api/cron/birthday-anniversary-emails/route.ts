@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
+import { resolveEffectiveRecipients } from "@/lib/email/recipients";
 import { getUniversalVars } from "@/lib/email/universal-vars";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -37,24 +38,26 @@ export async function GET(request: Request) {
   const todayDateStr = formatInTimeZone(now, MANILA_TZ, "yyyy-MM-dd");
 
   try {
-    const [{ data: settings }, { data: hrAdmins }, { data: users }] =
-      await Promise.all([
-        supabase
-          .from("system_settings")
-          .select("key, value")
-          .in("key", ["birthday_emails_enabled", "anniversary_emails_enabled"]),
-        supabase
-          .from("users")
-          .select("email")
-          .in("role", ["hr_admin", "super_admin"])
-          .eq("is_active", true),
-        supabase
-          .from("users")
-          .select(
-            "id, email, full_name, preferred_name, first_name, last_name, department, job_title, location, manager_id, birthday, hire_date, regularization_date, holiday_country"
-          )
-          .eq("is_active", true),
-      ]);
+    const [{ data: settings }, { data: users }] = await Promise.all([
+      supabase
+        .from("system_settings")
+        .select("key, value")
+        .in("key", ["birthday_emails_enabled", "anniversary_emails_enabled"]),
+      supabase
+        .from("users")
+        .select(
+          "id, email, full_name, preferred_name, first_name, last_name, department, job_title, location, manager_id, birthday, hire_date, regularization_date, holiday_country"
+        )
+        .eq("is_active", true),
+    ]);
+
+    // Configurable CC lists (fall back to HR + super admins). Resolved once —
+    // they don't depend on the celebrant. The celebrant's own manager is CC'd
+    // per-user below, on top of these.
+    const [birthdayCcBase, anniversaryCcBase] = await Promise.all([
+      resolveEffectiveRecipients(supabase, "birthday_greeting_regular"),
+      resolveEffectiveRecipients(supabase, "work_anniversary"),
+    ]);
 
     const settingMap = new Map(
       (settings ?? []).map((s) => [s.key, s.value === "true"])
@@ -62,8 +65,6 @@ export async function GET(request: Request) {
     const birthdayEnabled = settingMap.get("birthday_emails_enabled") ?? false;
     const anniversaryEnabled =
       settingMap.get("anniversary_emails_enabled") ?? false;
-
-    const hrEmails = (hrAdmins ?? []).map((a) => a.email);
 
     const managerIds = new Set(
       (users ?? [])
@@ -89,10 +90,16 @@ export async function GET(request: Request) {
 
     for (const user of (users ?? []) as CelebrantUser[]) {
       const manager = user.manager_id ? managerById.get(user.manager_id) : null;
-      const ccSet = new Set<string>(hrEmails);
-      if (manager?.email) ccSet.add(manager.email);
-      ccSet.delete(user.email);
-      const cc = Array.from(ccSet);
+      // CC = the configured list for that email type + the celebrant's own
+      // manager, minus the celebrant themselves.
+      const buildCc = (base: string[]) => {
+        const set = new Set<string>(base);
+        if (manager?.email) set.add(manager.email);
+        set.delete(user.email);
+        return Array.from(set);
+      };
+      const birthdayCc = buildCc(birthdayCcBase);
+      const anniversaryCc = buildCc(anniversaryCcBase);
 
       const universal = getUniversalVars(user, manager);
 
@@ -109,14 +116,14 @@ export async function GET(request: Request) {
         const result = await sendCelebrationEmail({
           type: birthdayType,
           to: user.email,
-          cc,
+          cc: birthdayCc,
           vars: universal,
         });
         await logNotification(supabase, {
           type: birthdayType,
           subject: result.subject,
           relatedId: user.id,
-          recipients: [user.email, ...cc],
+          recipients: [user.email, ...birthdayCc],
           success: result.success,
         });
         if (result.success) birthdaysSent++;
@@ -144,7 +151,7 @@ export async function GET(request: Request) {
           const result = await sendCelebrationEmail({
             type: "work_anniversary",
             to: user.email,
-            cc,
+            cc: anniversaryCc,
             vars: {
               ...universal,
               years_count: String(years),
@@ -155,7 +162,7 @@ export async function GET(request: Request) {
             type: "work_anniversary",
             subject: result.subject,
             relatedId: user.id,
-            recipients: [user.email, ...cc],
+            recipients: [user.email, ...anniversaryCc],
             success: result.success,
           });
           if (result.success) anniversariesSent++;
