@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
+import { resolveEffectiveRecipients } from "@/lib/email/recipients";
 import { loadAndRender } from "@/lib/email/render";
 import { getUniversalVars } from "@/lib/email/universal-vars";
 import { INCIDENT_TYPE_LABELS, type IncidentType } from "@/types/database";
@@ -41,13 +42,6 @@ export async function POST(request: Request) {
   // Fixed list of incident-report recipients. Edit here to change who is
   // notified — intentionally NOT role-based, so sensitive reports only reach
   // these specific people.
-  const hrEmails = [
-    "dfoz@ortusclub.com",
-    "jamie@ortusclub.com",
-    "damon@ortusclub.com",
-    "brad.u@ortusclub.com",
-  ];
-
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const reporterName = reporter?.full_name || reporter?.email || "An employee";
   const typeLabel =
@@ -78,7 +72,8 @@ export async function POST(request: Request) {
     incident_details_html: detailsHtml,
   });
 
-  const result = await sendEmail({ to: hrEmails, subject, html });
+  const recipients = await resolveEffectiveRecipients(admin, "incident_submitted");
+  const result = await sendEmail({ to: recipients, subject, html });
 
   return NextResponse.json({ success: result.success });
 }

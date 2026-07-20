@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
+import { resolveEffectiveRecipients } from "@/lib/email/recipients";
 import { loadAndRender } from "@/lib/email/render";
 import { getUniversalVars } from "@/lib/email/universal-vars";
 import { displayName } from "@/lib/utils";
@@ -46,13 +47,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Feedback not found" }, { status: 404 });
   }
 
-  // Fixed reviewer list — only these three are notified of new peer feedback.
-  const hrEmails = [
-    "brad.u@ortusclub.com",
-    "jamie@ortusclub.com",
-    "dfoz@ortusclub.com",
-  ];
-
   const author = Array.isArray(feedback.author)
     ? feedback.author[0]
     : feedback.author;
@@ -81,12 +75,16 @@ export async function POST(request: Request) {
     feedback_details_html: detailsHtml,
     feedback_message: escapeHtml(feedback.message).replace(/\n/g, "<br>"),
   });
+  const recipients = await resolveEffectiveRecipients(
+    admin,
+    "p2p_feedback_submitted"
+  );
   const result = await sendEmail({
-    to: hrEmails,
+    to: recipients,
     subject: mail.subject,
     html: mail.html,
   });
-  for (const email of hrEmails) {
+  for (const email of recipients) {
     await admin.from("notification_log").insert({
       type: "p2p_feedback",
       recipient_email: email,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
+import { resolveEffectiveRecipients } from "@/lib/email/recipients";
 import { loadAndRender } from "@/lib/email/render";
 import { getUniversalVars } from "@/lib/email/universal-vars";
 import {
@@ -55,14 +56,6 @@ export async function POST(request: Request) {
       location?: string | null;
     };
   };
-
-  // HR recipients
-  const { data: hrAdmins } = await admin
-    .from("users")
-    .select("email")
-    .in("role", ["hr_admin", "super_admin"])
-    .eq("is_active", true);
-  const hrEmails = (hrAdmins ?? []).map((a) => a.email);
 
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
@@ -124,8 +117,12 @@ export async function POST(request: Request) {
     status: employeeResult.success ? "sent" : "failed",
   });
 
-  // 2) Notification to HR
-  if (hrEmails.length > 0) {
+  // 2) Notification to HR (admin-configured recipients, else the default)
+  const hrRecipients = await resolveEffectiveRecipients(
+    admin,
+    "document_request_hr_notification"
+  );
+  if (hrRecipients.length > 0) {
     const hrMail = await loadAndRender("document_request_hr_notification", {
       ...universal,
       employee_name: r.employee.full_name || r.employee.email,
@@ -134,11 +131,11 @@ export async function POST(request: Request) {
       request_details_html: detailsHtml,
     });
     const hrResult = await sendEmail({
-      to: hrEmails,
+      to: hrRecipients,
       subject: hrMail.subject,
       html: hrMail.html,
     });
-    for (const email of hrEmails) {
+    for (const email of hrRecipients) {
       await admin.from("notification_log").insert({
         type: "document_request",
         recipient_email: email,

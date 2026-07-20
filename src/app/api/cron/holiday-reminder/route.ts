@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
+import { loadAndRender } from "@/lib/email/render";
+import { resolveEffectiveRecipients } from "@/lib/email/recipients";
 import { formatInTimeZone } from "date-fns-tz";
 
 const MANILA_TZ = "Asia/Manila";
-
-// HR who review and approve the staged holidays.
-const RECIPIENTS = ["dfoz@ortusclub.com", "brad.u@ortusclub.com"];
 
 // Countries Nager.Date can auto-fetch. Kosovo (XK) and the UAE (AE) are NOT in
 // Nager's coverage, so those still need manual entry — called out in the email.
@@ -93,11 +92,36 @@ export async function GET(request: Request) {
       inserted = data?.length ?? 0;
     }
 
-    const result = await sendEmail({
-      to: RECIPIENTS,
-      subject: `Review ${nextYear} holidays — ${inserted} pulled for approval`,
-      html: buildEmailHtml(nextYear, perCountry, inserted),
+    // Always point HR at the production tool. NEXT_PUBLIC_APP_URL is localhost
+    // in local/dev, so ignore that and use prod — otherwise a locally-triggered
+    // run emails real HR a localhost link.
+    const envUrl = process.env.NEXT_PUBLIC_APP_URL;
+    const appUrl =
+      envUrl && !envUrl.includes("localhost")
+        ? envUrl
+        : "https://ortushrtool.vercel.app";
+    const breakdown_html = perCountry
+      .map((c) =>
+        c.error
+          ? `<li><strong>${c.label}</strong>: couldn't fetch (${c.error}) — please add manually.</li>`
+          : `<li><strong>${c.label}</strong>: ${c.staged} new staged${c.skipped ? `, ${c.skipped} already on file` : ""}.</li>`
+      )
+      .join("");
+    const manual_html = UNFETCHABLE.map(
+      (c) => `<li><strong>${c.label}</strong></li>`
+    ).join("");
+    const { subject, html } = await loadAndRender("holiday_import_reminder", {
+      year: String(nextYear),
+      count: String(inserted),
+      breakdown_html,
+      manual_html,
+      app_url: appUrl,
     });
+    const recipients = await resolveEffectiveRecipients(
+      admin,
+      "holiday_import_reminder"
+    );
+    const result = await sendEmail({ to: recipients, subject, html });
 
     if (!result.success) {
       console.error("Holiday reminder email failed:", result.error);
@@ -115,54 +139,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-}
-
-function buildEmailHtml(
-  year: number,
-  perCountry: { code: string; label: string; staged: number; skipped: number; error?: string }[],
-  inserted: number
-): string {
-  // This email always points HR at the production tool. NEXT_PUBLIC_APP_URL is
-  // localhost in local/dev env, so ignore that and fall back to the prod URL —
-  // otherwise a locally-triggered run emails real HR a localhost link.
-  const envUrl = process.env.NEXT_PUBLIC_APP_URL;
-  const baseUrl =
-    envUrl && !envUrl.includes("localhost") ? envUrl : "https://ortushrtool.vercel.app";
-  const reviewUrl = `${baseUrl}/admin/holidays`;
-
-  const fetchedRows = perCountry
-    .map((c) => {
-      if (c.error) {
-        return `<li><strong>${c.label}</strong>: couldn't fetch (${c.error}) — please add manually.</li>`;
-      }
-      return `<li><strong>${c.label}</strong>: ${c.staged} new staged${c.skipped ? `, ${c.skipped} already on file` : ""}.</li>`;
-    })
-    .join("");
-
-  const manualRows = ["Kosovo", "United Arab Emirates"]
-    .map((label) => `<li><strong>${label}</strong></li>`)
-    .join("");
-
-  return `
-    <div style="font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; font-size: 14px; color: #1f2937; line-height: 1.6;">
-      <p>Hi team,</p>
-      <p>
-        It's the start of December — I've pulled <strong>${year}</strong> public holidays from a public
-        holiday source and staged <strong>${inserted}</strong> for your review. They are <strong>not live yet</strong>
-        and won't affect leave balances, schedules, or calendar feeds until you approve them.
-      </p>
-      <p style="margin: 16px 0 4px;"><strong>Auto-pulled (pending your approval)</strong></p>
-      <ul style="margin: 0 0 16px; padding-left: 20px;">${fetchedRows}</ul>
-      <p style="margin: 0 0 4px;"><strong>Not covered by the source — add manually</strong></p>
-      <ul style="margin: 0 0 16px; padding-left: 20px;">${manualRows}</ul>
-      <p style="margin: 0 0 16px;">
-        Open <a href="${reviewUrl}" style="color: #2563eb;">Manage Holidays</a> to review the staged
-        suggestions (Approve to make them live, or Dismiss), and to add Kosovo / UAE holidays via the
-        CSV import (columns: <code>name, date, country, recurring</code>).
-      </p>
-      <p style="color: #6b7280; font-size: 12px;">
-        Sent automatically by the Ortus Club HR Tool · yearly holiday review.
-      </p>
-    </div>
-  `;
 }

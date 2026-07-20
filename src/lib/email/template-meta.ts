@@ -129,6 +129,28 @@ export const TEMPLATE_META: Record<string, TemplateMeta> = {
     sentWhen:
       "Sent when an employee clicks 'Buzz Manager' on a pending request they've submitted. To: their manager.",
   },
+
+  // Permanent schedule changes
+  schedule_weekly_change_submitted: {
+    sentWhen:
+      "Sent when a manager or employee submits a PERMANENT weekly schedule change (which needs admin approval). To: all active HR admins + super-admins.",
+  },
+
+  // Holidays
+  holiday_import_reminder: {
+    sentWhen:
+      "Sent by the yearly holiday cron (early December) after staging next year's public holidays for approval. To: the holiday reviewers.",
+  },
+
+  // Workplace concerns & peer feedback
+  incident_submitted: {
+    sentWhen:
+      "Sent when an employee files a workplace concern / incident report. To: all active HR admins.",
+  },
+  p2p_feedback_submitted: {
+    sentWhen:
+      "Sent when someone submits peer feedback that needs HR review. To: all active HR admins.",
+  },
 };
 
 /** Setting keys controlled by template-level toggles. */
