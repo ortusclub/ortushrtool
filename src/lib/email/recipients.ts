@@ -71,6 +71,44 @@ export const DEFAULT_RECIPIENTS: Record<string, RecipientConfig> = {
   work_anniversary: { roles: ["hr_admin", "super_admin"], emails: [] },
 };
 
+/**
+ * Copy for the recipients box in the settings editor. Most types send only to
+ * the configured list, so the default wording is accurate. The celebration
+ * emails are the exception: the celebrant is always the To and their manager
+ * is always CC'd, neither of which appears in the list — so saying "exactly
+ * the people below get this email" (or that an empty list means nobody gets
+ * it) would be wrong and could lead an admin to think clearing the list stops
+ * the greeting.
+ */
+export type RecipientCopy = { heading: string; help: string; empty: string };
+
+export const DEFAULT_RECIPIENT_COPY: RecipientCopy = {
+  heading: "Recipients",
+  help: "Exactly the people below get this email.",
+  empty: "No recipients — this email won't be sent to anyone.",
+};
+
+const CELEBRATION_EMPTY =
+  "No one CC'd — the greeting still goes to the celebrant and their manager.";
+
+export const RECIPIENT_COPY: Record<string, RecipientCopy> = {
+  birthday_greeting_regular: {
+    heading: "CC",
+    help: "The celebrant and their manager always receive this and aren't listed here — the people below are CC'd. This list also applies to probationary birthday greetings.",
+    empty: CELEBRATION_EMPTY,
+  },
+  work_anniversary: {
+    heading: "CC",
+    help: "The celebrant and their manager always receive this and aren't listed here — the people below are CC'd.",
+    empty: CELEBRATION_EMPTY,
+  },
+};
+
+/** Copy for a type's recipients box, falling back to the default wording. */
+export function recipientCopy(type: string): RecipientCopy {
+  return RECIPIENT_COPY[type] ?? DEFAULT_RECIPIENT_COPY;
+}
+
 export function notifyKey(type: string): string {
   return `notify:${type}`;
 }

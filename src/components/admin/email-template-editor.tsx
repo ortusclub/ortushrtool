@@ -12,6 +12,7 @@ import { TEMPLATE_META } from "@/lib/email/template-meta";
 import {
   RECIPIENT_CONFIGURABLE_TYPES,
   notifyKey,
+  recipientCopy,
 } from "@/lib/email/recipients";
 import { RichTextEditor } from "./rich-text-editor";
 
@@ -377,16 +378,15 @@ export function EmailTemplateEditor({
                       {RECIPIENT_TYPES.includes(type) && (
                         <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-                            Recipients
+                            {recipientCopy(type).heading}
                           </p>
                           <p className="text-xs text-gray-500">
-                            Exactly the people below get this email. Remove with
-                            ×, or add anyone by name or email — then Save.
+                            {recipientCopy(type).help} Remove with ×, or add
+                            anyone by name or email — then Save.
                           </p>
                           {(recipList[type] ?? []).length === 0 ? (
                             <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
-                              No recipients — this email won&apos;t be sent to
-                              anyone.
+                              {recipientCopy(type).empty}
                             </p>
                           ) : (
                             <ul className="space-y-1">
