@@ -97,19 +97,19 @@ export const TEMPLATE_META: Record<string, TemplateMeta> = {
   // Celebrations
   birthday_greeting_regular: {
     sentWhen:
-      "Sent at 9:00 AM Manila on each REGULAR employee's birthday (someone whose Regularization Date is set and on or before today). To: the celebrant. CC: their manager and all HR users.",
+      "Sent at 9:00 AM Manila on each REGULAR employee's birthday (someone whose Regularization Date is set and on or before today). To: the celebrant. CC: their manager, plus the CC list configured below.",
     toggleKey: "birthday_emails_enabled",
     toggleLabel: "Send birthday emails",
   },
   birthday_greeting_probationary: {
     sentWhen:
-      "Sent at 9:00 AM Manila on each PROBATIONARY employee's birthday (someone with no Regularization Date, or one in the future). To: the celebrant. CC: their manager and all HR users.",
+      "Sent at 9:00 AM Manila on each PROBATIONARY employee's birthday (someone with no Regularization Date, or one in the future). To: the celebrant. CC: their manager, plus the CC list configured on the regular birthday template above.",
     toggleKey: "birthday_emails_enabled",
     toggleLabel: "Send birthday emails",
   },
   work_anniversary: {
     sentWhen:
-      "Sent at 9:00 AM Manila on each user's work anniversary (year 1 onwards — skips day-of-hire). To: the celebrant. CC: their manager and all HR users. The benefits section auto-fills from Anniversary Benefits when one is defined for the user's country + year count; otherwise the section is omitted.",
+      "Sent at 9:00 AM Manila on each user's work anniversary (year 1 onwards — skips day-of-hire). To: the celebrant. CC: their manager, plus the CC list configured below. The benefits section auto-fills from Anniversary Benefits when one is defined for the user's country + year count; otherwise the section is omitted.",
     toggleKey: "anniversary_emails_enabled",
     toggleLabel: "Send work anniversary emails",
   },
