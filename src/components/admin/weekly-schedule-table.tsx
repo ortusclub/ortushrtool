@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import { format, startOfWeek, addDays, eachDayOfInterval, isSameDay, parseISO, isWeekend } from "date-fns";
 import { Flag } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { displayName, formatTime, cn, hasNightDifferentialHours } from "@/lib/utils";
 import { UserNameLink } from "@/components/shared/user-name-link";
 import { HeaderFilter } from "@/components/shared/header-filter";
@@ -67,35 +66,33 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
     );
   }, [startDate, endDate]);
 
-  // Load leave requests and adjustments for the date range
+  // Load leaves, adjustments, and holiday-work for the date range. These are
+  // fetched from /api/team-calendar (admin client, auth-gated) rather than
+  // directly from Supabase, because the Team Calendar shows every employee's
+  // entries to everyone — a direct client-side query is RLS-scoped to the
+  // viewer's own rows + direct reports, which left the overlays blank for
+  // non-admins.
   const loadWeekData = async () => {
     if (weekDates.length === 0) return;
-    const supabase = createClient();
     const startStr = format(startDate, "yyyy-MM-dd");
     const endStr = format(endDate, "yyyy-MM-dd");
 
-    const [{ data: leaves }, { data: adjustments }, { data: holidayWork }] = await Promise.all([
-      supabase
-        .from("leave_requests")
-        .select("*")
-        .eq("status", "approved")
-        .lte("start_date", endStr)
-        .gte("end_date", startStr),
-      supabase
-        .from("schedule_adjustments")
-        .select("*")
-        .eq("status", "approved")
-        .gte("requested_date", startStr)
-        .lte("requested_date", endStr)
-        // Oldest first so the most recent approved adjustment wins per date.
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("holiday_work_requests")
-        .select("*")
-        .eq("status", "approved")
-        .gte("holiday_date", startStr)
-        .lte("holiday_date", endStr),
-    ]);
+    let leaves: LeaveRequest[] = [];
+    let adjustments: ScheduleAdjustment[] = [];
+    let holidayWork: HolidayWorkRequest[] = [];
+    try {
+      const res = await fetch(
+        `/api/team-calendar?start=${startStr}&end=${endStr}`
+      );
+      if (res.ok) {
+        const json = await res.json();
+        leaves = json.leaves ?? [];
+        adjustments = json.adjustments ?? [];
+        holidayWork = json.holidayWork ?? [];
+      }
+    } catch {
+      // Leave the overlays empty on failure; schedules still render.
+    }
 
     const lMap: Record<string, LeaveRequest[]> = {};
     for (const l of leaves ?? []) {
