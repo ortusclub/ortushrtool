@@ -44,7 +44,7 @@ export type CalendarLeave = {
 
 export function TimeOffCalendar({ leaves }: { leaves: CalendarLeave[] }) {
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
-  const [selected, setSelected] = useState<CalendarLeave | null>(null);
+  const [selected, setSelected] = useState<CalendarLeave[] | null>(null);
 
   const shift = (months: number) =>
     setCursor((prev) => addMonths(prev, months));
@@ -139,7 +139,9 @@ export function TimeOffCalendar({ leaves }: { leaves: CalendarLeave[] }) {
             <div key={`p${i}`} />
           ))}
           {days.map((d) => {
-            const match = leaves.find(
+            // All leaves overlapping this day — a person can have more than
+            // one (e.g. two half-days), so keep them all rather than the first.
+            const dayLeaves = leaves.filter(
               (l) =>
                 isWithinInterval(d, {
                   start: parseISO(l.start_date),
@@ -147,21 +149,49 @@ export function TimeOffCalendar({ leaves }: { leaves: CalendarLeave[] }) {
                 }) || isSameDay(d, parseISO(l.start_date))
             );
             const base =
-              "flex aspect-square items-center justify-center rounded text-xs";
-            return match ? (
+              "relative flex aspect-square items-center justify-center rounded text-xs";
+            if (dayLeaves.length === 0) {
+              return (
+                <div key={d.toISOString()} className={`${base} text-gray-700`}>
+                  {d.getDate()}
+                </div>
+              );
+            }
+            const primary = dayLeaves[0];
+            const anyHalfDay = dayLeaves.some(
+              (l) => l.leave_duration === "half_day"
+            );
+            const title = dayLeaves
+              .map(
+                (l) =>
+                  `${LEAVE_TYPE_LABELS[l.leave_type] ?? l.leave_type} (${l.status})${
+                    l.leave_duration === "half_day"
+                      ? ` · half day${l.half_day_period ? ` (${l.half_day_period.toUpperCase()})` : ""}`
+                      : ""
+                  }`
+              )
+              .join("\n");
+            return (
               <button
                 key={d.toISOString()}
                 type="button"
-                onClick={() => setSelected(match)}
-                className={`${base} ${colorFor(match.status)} hover:ring-2 hover:ring-blue-400`}
-                title={`${LEAVE_TYPE_LABELS[match.leave_type] ?? match.leave_type} (${match.status}) — click for details`}
+                onClick={() => setSelected(dayLeaves)}
+                className={`${base} ${colorFor(primary.status)} hover:ring-2 hover:ring-blue-400`}
+                title={`${title} — click for details`}
               >
                 {d.getDate()}
+                {dayLeaves.length > 1 ? (
+                  <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white ring-1 ring-white">
+                    {dayLeaves.length}
+                  </span>
+                ) : (
+                  anyHalfDay && (
+                    <span className="absolute bottom-0.5 right-0.5 text-[8px] font-bold leading-none opacity-80">
+                      ½
+                    </span>
+                  )
+                )}
               </button>
-            ) : (
-              <div key={d.toISOString()} className={`${base} text-gray-700`}>
-                {d.getDate()}
-              </div>
             );
           })}
         </div>
@@ -169,7 +199,7 @@ export function TimeOffCalendar({ leaves }: { leaves: CalendarLeave[] }) {
 
       {selected && (
         <LeaveDetailModal
-          leave={selected}
+          leaves={selected}
           onClose={() => setSelected(null)}
         />
       )}
@@ -178,20 +208,12 @@ export function TimeOffCalendar({ leaves }: { leaves: CalendarLeave[] }) {
 }
 
 function LeaveDetailModal({
-  leave,
+  leaves,
   onClose,
 }: {
-  leave: CalendarLeave;
+  leaves: CalendarLeave[];
   onClose: () => void;
 }) {
-  const statusStyles: Record<string, string> = {
-    approved: "bg-emerald-100 text-emerald-800",
-    pending: "bg-amber-100 text-amber-800",
-    rejected: "bg-gray-200 text-gray-700",
-  };
-  const reviewerName = leave.reviewer ? displayName(leave.reviewer) : null;
-  const sameDay = leave.start_date === leave.end_date;
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -201,19 +223,12 @@ function LeaveDetailModal({
         className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-gray-900">
-              {LEAVE_TYPE_LABELS[leave.leave_type] ?? leave.leave_type}
-            </p>
-            <p className="text-xs text-gray-500">
-              {sameDay
-                ? format(parseISO(leave.start_date), "MMM d, yyyy")
-                : `${format(parseISO(leave.start_date), "MMM d, yyyy")} – ${format(parseISO(leave.end_date), "MMM d, yyyy")}`}
-              {leave.leave_duration === "half_day" &&
-                ` · half day${leave.half_day_period ? ` (${leave.half_day_period.toUpperCase()})` : ""}`}
-            </p>
-          </div>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            {leaves.length > 1
+              ? `${leaves.length} leaves on this day`
+              : "Leave details"}
+          </p>
           <button
             type="button"
             onClick={onClose}
@@ -223,35 +238,73 @@ function LeaveDetailModal({
           </button>
         </div>
 
-        <span
-          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusStyles[leave.status]}`}
-        >
-          {leave.status}
-        </span>
-
-        <dl className="mt-3 space-y-2 text-xs">
-          <Row label="Filed">
-            {format(parseISO(leave.created_at), "MMM d, yyyy 'at' h:mm a")}
-          </Row>
-          {leave.reason && <Row label="Reason">{leave.reason}</Row>}
-          {leave.status !== "pending" && reviewerName && (
-            <Row label={leave.status === "approved" ? "Approved by" : "Rejected by"}>
-              {reviewerName}
-              {leave.reviewed_at && (
-                <span className="text-gray-400">
-                  {" "}· {format(parseISO(leave.reviewed_at), "MMM d, yyyy")}
-                </span>
-              )}
-            </Row>
-          )}
-          {leave.reviewer_notes && (
-            <Row label="Reviewer note">
-              <span className="italic">{leave.reviewer_notes}</span>
-            </Row>
-          )}
-        </dl>
+        <div className="space-y-4">
+          {leaves.map((leave, i) => (
+            <div
+              key={leave.id}
+              className={i > 0 ? "border-t border-gray-100 pt-4" : ""}
+            >
+              <LeaveDetailBlock leave={leave} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
+  );
+}
+
+function LeaveDetailBlock({ leave }: { leave: CalendarLeave }) {
+  const statusStyles: Record<string, string> = {
+    approved: "bg-emerald-100 text-emerald-800",
+    pending: "bg-amber-100 text-amber-800",
+    rejected: "bg-gray-200 text-gray-700",
+  };
+  const reviewerName = leave.reviewer ? displayName(leave.reviewer) : null;
+  const sameDay = leave.start_date === leave.end_date;
+
+  return (
+    <>
+      <div className="mb-2">
+        <p className="text-sm font-semibold text-gray-900">
+          {LEAVE_TYPE_LABELS[leave.leave_type] ?? leave.leave_type}
+        </p>
+        <p className="text-xs text-gray-500">
+          {sameDay
+            ? format(parseISO(leave.start_date), "MMM d, yyyy")
+            : `${format(parseISO(leave.start_date), "MMM d, yyyy")} – ${format(parseISO(leave.end_date), "MMM d, yyyy")}`}
+          {leave.leave_duration === "half_day" &&
+            ` · half day${leave.half_day_period ? ` (${leave.half_day_period.toUpperCase()})` : ""}`}
+        </p>
+      </div>
+
+      <span
+        className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusStyles[leave.status]}`}
+      >
+        {leave.status}
+      </span>
+
+      <dl className="mt-3 space-y-2 text-xs">
+        <Row label="Filed">
+          {format(parseISO(leave.created_at), "MMM d, yyyy 'at' h:mm a")}
+        </Row>
+        {leave.reason && <Row label="Reason">{leave.reason}</Row>}
+        {leave.status !== "pending" && reviewerName && (
+          <Row label={leave.status === "approved" ? "Approved by" : "Rejected by"}>
+            {reviewerName}
+            {leave.reviewed_at && (
+              <span className="text-gray-400">
+                {" "}· {format(parseISO(leave.reviewed_at), "MMM d, yyyy")}
+              </span>
+            )}
+          </Row>
+        )}
+        {leave.reviewer_notes && (
+          <Row label="Reviewer note">
+            <span className="italic">{leave.reviewer_notes}</span>
+          </Row>
+        )}
+      </dl>
+    </>
   );
 }
 

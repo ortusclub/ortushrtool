@@ -252,12 +252,26 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
       }
     }
 
-    // Check for approved leave
+    // Check for approved leave. A person can have more than one leave on the
+    // same day (e.g. two half-days — a half-day Trinity leave + a half-day
+    // Annual leave), so collect every overlapping leave, not just the first,
+    // and carry each one's half-day info so the cell can show it.
     const userLeaves = leaveMap[user.id] ?? [];
-    for (const l of userLeaves) {
-      if (dateStr >= l.start_date && dateStr <= l.end_date) {
-        return { type: "leave" as const, label: l.leave_type.charAt(0).toUpperCase() + l.leave_type.slice(1) + " Leave" };
-      }
+    const dayLeaves = userLeaves.filter(
+      (l) => dateStr >= l.start_date && dateStr <= l.end_date
+    );
+    if (dayLeaves.length > 0) {
+      return {
+        type: "leave" as const,
+        leaves: dayLeaves.map((l) => ({
+          label:
+            l.leave_type.charAt(0).toUpperCase() +
+            l.leave_type.slice(1) +
+            " Leave",
+          isHalfDay: l.leave_duration === "half_day",
+          period: l.half_day_period,
+        })),
+      };
     }
 
     // Check for schedule adjustment
@@ -551,9 +565,21 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                         </span>
                       )}
                       {cell.type === "leave" && (
-                        <span className="inline-block rounded bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
-                          {cell.label}
-                        </span>
+                        <div className="flex flex-col items-center gap-0.5">
+                          {cell.leaves.map((lv, i) => (
+                            <span
+                              key={i}
+                              className="inline-block rounded bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700"
+                            >
+                              {lv.label}
+                              {lv.isHalfDay && (
+                                <span className="ml-1 font-normal text-amber-600">
+                                  · ½ day{lv.period ? ` (${lv.period.toUpperCase()})` : ""}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
                       )}
                       {cell.type === "rest" && (
                         <span className="text-xs text-gray-400">Rest Day</span>
