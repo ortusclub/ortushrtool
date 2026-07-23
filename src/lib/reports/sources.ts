@@ -60,7 +60,9 @@ export type SourceDef = {
 
 /* ------------------------------ Helpers ------------------------------- */
 
-function emp(row: any): { full_name?: string; email?: string } | null {
+function emp(
+  row: any
+): { full_name?: string; email?: string; department?: string } | null {
   // For joined `employee:users(...)` the result is an object (or array when
   // ambiguous). Normalise either form.
   if (!row?.employee) return null;
@@ -70,6 +72,7 @@ function emp(row: any): { full_name?: string; email?: string } | null {
 const employeeColumns: ColumnDef[] = [
   { id: "employee_name", label: "Employee", value: (r) => emp(r)?.full_name ?? "" },
   { id: "employee_email", label: "Employee Email", value: (r) => emp(r)?.email ?? "" },
+  { id: "employee_department", label: "Department", value: (r) => emp(r)?.department ?? "" },
 ];
 
 /**
@@ -649,6 +652,61 @@ export const SOURCES: SourceDef[] = [
     },
   },
 ];
+
+/* ------------------------- Department filter ------------------------- */
+// Give every person-scoped source a "Department" filter so any report can be
+// scoped to a team. The value is the exact users.department string; the UI
+// (ReportBuilder) fills the dropdown options from the live department list, so
+// this registry doesn't have to hardcode (or drift from) the departments.
+//
+// - Query sources that embed the employee (employee:users!…): the embed is
+//   inner-joined and pulls `department` so the filter narrows the parent rows.
+// - The Users source filters its own `department` column directly.
+// - Computed sources (balances, night differential) already carry a
+//   `department` field per row and are filtered after computation in the
+//   export route — applyFilter is a no-op for them here.
+export const DEPARTMENT_FILTER_ID = "department";
+
+const departmentFilterDef: FilterDef = {
+  id: DEPARTMENT_FILTER_ID,
+  label: "Department",
+  type: "select",
+  // Placeholder — ReportBuilder swaps in the live department list. "any" stays
+  // the first/default option so the filter is a no-op unless a team is chosen.
+  options: [{ value: "any", label: "Any department" }],
+};
+
+for (const source of SOURCES) {
+  const hasEmployeeEmbed = source.select.includes("employee:users!");
+  const isUsers = source.table === "users";
+  const isComputedWithDept =
+    source.table === "__computed__" &&
+    source.columns.some((c) => c.id === "department");
+
+  if (!hasEmployeeEmbed && !isUsers && !isComputedWithDept) continue;
+
+  if (hasEmployeeEmbed) {
+    // Inner-join the employee embed and pull `department`. The employee is a
+    // required FK on every one of these tables, so !inner drops no real rows.
+    source.select = source.select.replace(
+      /(employee:users![A-Za-z0-9_]+)\(([^)]*)\)/,
+      (_m, head: string, cols: string) => `${head}!inner(${cols}, department)`
+    );
+  }
+
+  source.filters = [...source.filters, departmentFilterDef];
+
+  const prevApply = source.applyFilter;
+  source.applyFilter = (q, id, v) => {
+    if (id === DEPARTMENT_FILTER_ID && typeof v === "string" && v !== "any") {
+      // Computed sources bypass the query builder — their department filter is
+      // applied to the computed rows in the export route, not here.
+      if (source.table === "__computed__") return q;
+      return isUsers ? q.eq("department", v) : q.eq("employee.department", v);
+    }
+    return prevApply(q, id, v);
+  };
+}
 
 export function getSource(id: string): SourceDef | undefined {
   return SOURCES.find((s) => s.id === id);

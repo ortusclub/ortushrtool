@@ -26,8 +26,10 @@ const inputClass =
 
 export function ReportBuilder({
   initialTemplates,
+  departments,
 }: {
   initialTemplates: Template[];
+  departments: string[];
 }) {
   const router = useRouter();
   const [templates, setTemplates] = useState(initialTemplates);
@@ -199,7 +201,17 @@ export function ReportBuilder({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {source.filters.map((f) => {
               if (f.type === "select") {
-                const value = (filters[f.id] as string) ?? f.options[0].value;
+                // The Department filter's options are dynamic — fill them from
+                // the live department list rather than the placeholder in the
+                // source registry. "any" stays the default no-op option.
+                const options =
+                  f.id === "department"
+                    ? [
+                        { value: "any", label: "Any department" },
+                        ...departments.map((d) => ({ value: d, label: d })),
+                      ]
+                    : f.options;
+                const value = (filters[f.id] as string) ?? options[0].value;
                 return (
                   <div key={f.id}>
                     <label className="block text-[11px] font-medium text-gray-500">
@@ -210,7 +222,7 @@ export function ReportBuilder({
                       onChange={(e) => setFilter(f.id, e.target.value)}
                       className={`mt-1 ${inputClass}`}
                     >
-                      {f.options.map((o) => (
+                      {options.map((o) => (
                         <option key={o.value} value={o.value}>
                           {o.label}
                         </option>

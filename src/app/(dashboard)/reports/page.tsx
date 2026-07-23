@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { QuickExports } from "@/components/reports/quick-exports";
 import { ReportBuilder } from "@/components/reports/report-builder";
 import type { FilterValues } from "@/lib/reports/sources";
@@ -15,6 +16,22 @@ export default async function ReportsPage() {
       "id, name, source, columns, filters, created_at, creator:users!report_templates_created_by_fkey(full_name, preferred_name, first_name, last_name, email)"
     )
     .order("created_at", { ascending: false });
+
+  // Department list for the report builder's Department filter. Pull the full
+  // set (all active users, admin-side) so no team is missing from the dropdown.
+  const admin = createAdminClient();
+  const { data: deptRows } = await admin
+    .from("users")
+    .select("department")
+    .eq("is_active", true)
+    .not("department", "is", null);
+  const departments = Array.from(
+    new Set(
+      (deptRows ?? [])
+        .map((r) => (r.department as string | null)?.trim())
+        .filter((d): d is string => !!d)
+    )
+  ).sort((a, b) => a.localeCompare(b));
 
   type CreatorRef = {
     full_name?: string | null;
@@ -54,7 +71,7 @@ export default async function ReportsPage() {
         </p>
       </div>
       <QuickExports />
-      <ReportBuilder initialTemplates={normalised} />
+      <ReportBuilder initialTemplates={normalised} departments={departments} />
     </div>
   );
 }

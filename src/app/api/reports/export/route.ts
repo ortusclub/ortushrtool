@@ -74,6 +74,21 @@ export async function POST(request: Request) {
     data = rows ?? [];
   }
 
+  // Department filter for computed sources (balances / night differential):
+  // they bypass the query builder, so narrow their rows here. Each computed
+  // row carries a `department` field. Query-based sources already applied the
+  // department filter in-query via source.applyFilter.
+  const deptFilter = filters.department;
+  if (
+    source.table === "__computed__" &&
+    typeof deptFilter === "string" &&
+    deptFilter !== "any"
+  ) {
+    data = data.filter(
+      (row) => (row as { department?: string }).department === deptFilter
+    );
+  }
+
   const headers = chosen.map((c) => c.label);
   const rows = data.map((row) => chosen.map((c) => c.value(row)));
 
