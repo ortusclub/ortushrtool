@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { hasRole, formatDate, formatTime, displayName } from "@/lib/utils";
 import { HOLIDAY_COUNTRY_LABELS } from "@/types/database";
 import Link from "next/link";
@@ -28,6 +29,13 @@ import type { GrantType } from "@/types/database";
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   const supabase = await createClient();
+  // Service-role client for the company-wide "Who's Out" read only. RLS on
+  // leave_requests limits a user-scoped SELECT to their own rows (+ direct
+  // reports, + everything for HR/admins), so non-admins would otherwise see
+  // an almost-empty widget. The calendar feed already reads company leave
+  // this way; this keeps the homepage consistent. Only the display fields
+  // (name, dates, type, avatar) are serialized to the client below.
+  const admin = createAdminClient();
   const isReviewer = hasRole(user.role, "manager");
   const isAdmin = hasRole(user.role, "hr_admin");
 
@@ -153,8 +161,10 @@ export default async function DashboardPage() {
       .order("start_date", { ascending: true })
       .limit(5),
 
-    // Who's out this week (approved leaves overlapping this week)
-    supabase
+    // Who's out this week (approved leaves overlapping this week). Uses the
+    // admin client so RLS doesn't trim this company-wide widget to the
+    // viewer's own leaves — see the `admin` client note above.
+    admin
       .from("leave_requests")
       .select("employee_id, leave_type, start_date, end_date, leave_duration, half_day_period, half_day_start_time, half_day_end_time, employee:users!leave_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email, manager_id)")
       .eq("status", "approved")
