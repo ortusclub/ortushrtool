@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasRole } from "@/lib/utils";
-import { LEAVE_TYPE_LABELS, LEAVE_TYPES, UNIVERSAL_LEAVE_TYPES } from "@/lib/constants";
+import { LEAVE_TYPE_LABELS, UNIVERSAL_LEAVE_TYPES } from "@/lib/constants";
 import { getRenewalStart, prorateLeave } from "@/lib/leave-proration";
 import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
 import { buildLeaveLedger } from "@/lib/leave-ledger";
@@ -229,16 +229,17 @@ export default async function TeamMemberTimeOffTab({
       .eq("employee_id", userId),
   ]);
   const activatedTypes = (activated ?? []).map((a) => a.leave_type);
-  // HR admins filing on someone's behalf can pick any leave type (e.g.
-  // bereavement, an event-driven type that isn't pre-activated per employee).
-  // Managers and self-service stay limited to universal + activated types.
-  const selectableTypeKeys = isAdmin
-    ? Object.keys(LEAVE_TYPES)
-    : Array.from(new Set([...UNIVERSAL_LEAVE_TYPES, ...activatedTypes]));
-  const availableLeaveTypes = selectableTypeKeys.map((t) => ({
-    value: t,
-    label: LEAVE_TYPE_LABELS[t] ?? t,
-  }));
+  // Requestable types = universal + per-type activations + anything the
+  // employee has via an assigned leave plan (planBuckets). The last part is
+  // what surfaces plan-granted types like Bereavement, which are on the
+  // profile's balances but were previously missing from this dropdown.
+  const availableLeaveTypes = Array.from(
+    new Set([
+      ...UNIVERSAL_LEAVE_TYPES,
+      ...activatedTypes,
+      ...planBuckets.keys(),
+    ])
+  ).map((t) => ({ value: t, label: LEAVE_TYPE_LABELS[t] ?? t }));
 
   return (
     <div className="space-y-6">

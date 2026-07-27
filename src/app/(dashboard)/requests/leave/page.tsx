@@ -188,6 +188,20 @@ export default function LeaveRequestPage() {
       if (hasAnyBalance) setHasPlan(true);
       setPlanAllocations(allocMap);
 
+      // Widen the requestable types to include anything the employee actually
+      // has via an assigned plan or active credit (allocMap keys) — not just
+      // universal + per-type activations. Without this, plan-granted types like
+      // Bereavement showed a balance but couldn't be selected here.
+      const requestable = Array.from(
+        new Set([
+          ...UNIVERSAL_LEAVE_TYPES,
+          ...activatedTypes,
+          ...Object.keys(allocMap),
+        ])
+      );
+      setAvailableTypes(requestable);
+      setForm((f) => ({ ...f, leave_type: f.leave_type || requestable[0] || "" }));
+
       setLoadingTypes(false);
     }
     load();
