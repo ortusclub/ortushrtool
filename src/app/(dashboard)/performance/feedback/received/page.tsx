@@ -21,7 +21,7 @@ export default async function FeedbackReceivedPage() {
       `id, target_department, target_user_id, subject, message, hr_notes, reviewed_at,
        target:users!p2p_feedback_target_user_id_fkey(${userCols})`
     )
-    .eq("recipient_user_id", user.id)
+    .contains("recipient_user_ids", [user.id])
     .eq("status", "forwarded")
     .order("reviewed_at", { ascending: false });
 

@@ -551,7 +551,10 @@ export interface P2PFeedback {
   subject: string;
   message: string;
   status: P2PFeedbackStatus;
+  /** Kept in sync with recipient_user_ids[0] for backward compatibility. */
   recipient_user_id: string | null;
+  /** Source of truth: HR can forward to one or more recipients. */
+  recipient_user_ids: string[];
   hr_notes: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;

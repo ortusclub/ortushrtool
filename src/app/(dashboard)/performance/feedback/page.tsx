@@ -55,7 +55,7 @@ export default async function PerformanceFeedbackPage() {
   const { count: receivedCount } = await admin
     .from("p2p_feedback")
     .select("id", { count: "exact", head: true })
-    .eq("recipient_user_id", user.id)
+    .contains("recipient_user_ids", [user.id])
     .eq("status", "forwarded");
 
   const isHR = hasRole(user.role, "hr_admin");

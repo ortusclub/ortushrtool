@@ -27,7 +27,7 @@ export function FeedbackReviewActions({
 
   const act = async (action: "forward" | "dismiss") => {
     if (action === "forward" && recipientIds.length === 0) {
-      setError("Pick someone to forward this to.");
+      setError("Pick at least one person to forward this to.");
       return;
     }
     setBusy(true);
@@ -37,7 +37,7 @@ export function FeedbackReviewActions({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action,
-        recipient_user_id: action === "forward" ? recipientIds[0] : undefined,
+        recipient_user_ids: action === "forward" ? recipientIds : undefined,
         hr_notes: notes.trim() || undefined,
       }),
     });
@@ -59,23 +59,25 @@ export function FeedbackReviewActions({
       )}
       <div>
         <label className="text-xs font-medium text-gray-700 dark:text-gray-200">
-          Forward to (manager / department head)
+          Forward to (managers / department heads)
         </label>
         <div className="mt-1">
           <PeoplePicker
             candidates={candidates}
             selectedIds={recipientIds}
             onChange={setRecipientIds}
-            placeholder="Search a recipient…"
-            singleSelect
+            placeholder="Add a recipient…"
           />
         </div>
+        <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+          You can forward to more than one person.
+        </p>
       </div>
       <textarea
         rows={2}
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
-        placeholder="Optional note for the recipient…"
+        placeholder="Optional note for the recipient(s)…"
         className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
       />
       <div className="flex gap-2">

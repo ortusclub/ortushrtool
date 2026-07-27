@@ -28,10 +28,9 @@ export default async function FeedbackReviewPage() {
     admin
       .from("p2p_feedback")
       .select(
-        `id, author_id, target_department, target_user_id, subject, message, status, recipient_user_id, hr_notes, reviewed_at, created_at,
+        `id, author_id, target_department, target_user_id, subject, message, status, recipient_user_id, recipient_user_ids, hr_notes, reviewed_at, created_at,
          author:users!p2p_feedback_author_id_fkey(${userCols}),
-         target:users!p2p_feedback_target_user_id_fkey(${userCols}),
-         recipient:users!p2p_feedback_recipient_user_id_fkey(${userCols})`
+         target:users!p2p_feedback_target_user_id_fkey(${userCols})`
       )
       .order("created_at", { ascending: false }),
     admin
@@ -43,6 +42,17 @@ export default async function FeedbackReviewPage() {
 
   const feedback = (rows ?? []) as unknown as P2PFeedbackWithUsers[];
   const users = usersData ?? [];
+
+  // Resolve recipient names for the "forwarded to …" line. recipient_user_ids
+  // is an array column (no FK join), so look names up from the loaded users.
+  const usersById = new Map(users.map((u) => [u.id, u]));
+  const recipientNames = (f: P2PFeedbackWithUsers): string[] =>
+    (f.recipient_user_ids ?? [])
+      .map((rid) => {
+        const u = usersById.get(rid);
+        return u ? displayName(u) : null;
+      })
+      .filter((n): n is string => n !== null);
 
   const candidates: PickerUser[] = users.map((u) => ({
     id: u.id,
@@ -163,7 +173,7 @@ export default async function FeedbackReviewPage() {
             <ul className="divide-y divide-gray-100 dark:divide-gray-700">
               {actioned.map((f) => {
                 const author = one(f.author);
-                const recipient = one(f.recipient);
+                const recipients = recipientNames(f);
                 return (
                   <li key={f.id} className="space-y-1 px-5 py-4">
                     <div className="flex items-center justify-between gap-3">
@@ -181,8 +191,8 @@ export default async function FeedbackReviewPage() {
                     <p className="text-xs text-gray-500">
                       {f.target_department} · from{" "}
                       {author ? displayName(author) : "unknown"}
-                      {f.status === "forwarded" && recipient
-                        ? ` · forwarded to ${displayName(recipient)}`
+                      {f.status === "forwarded" && recipients.length > 0
+                        ? ` · forwarded to ${recipients.join(", ")}`
                         : ""}
                       {f.reviewed_at ? ` · ${formatDate(f.reviewed_at)}` : ""}
                     </p>

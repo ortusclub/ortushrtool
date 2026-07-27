@@ -5,8 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 /**
  * HR forwards or dismisses a P2P feedback submission.
  *
- * Forwarding sets the recipient and flips the status to "forwarded"; the
- * recipient then sees it on their own "feedback forwarded to me" page. No
+ * Forwarding sets one or more recipients and flips the status to "forwarded";
+ * each recipient then sees it on their own "feedback forwarded to me" page. No
  * email is sent — delivery is in-app.
  */
 export async function PATCH(
@@ -32,17 +32,27 @@ export async function PATCH(
   }
 
   const body = await request.json().catch(() => ({}));
-  const { action, recipient_user_id, hr_notes } = body as {
+  const { action, recipient_user_id, recipient_user_ids, hr_notes } = body as {
     action?: "forward" | "dismiss";
     recipient_user_id?: string;
+    recipient_user_ids?: string[];
     hr_notes?: string;
   };
   if (action !== "forward" && action !== "dismiss") {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
-  if (action === "forward" && !recipient_user_id) {
+
+  // Accept either the new array or the legacy single id; de-dupe and drop blanks.
+  const recipientIds = Array.from(
+    new Set(
+      [...(recipient_user_ids ?? []), recipient_user_id].filter(
+        (v): v is string => typeof v === "string" && v.length > 0
+      )
+    )
+  );
+  if (action === "forward" && recipientIds.length === 0) {
     return NextResponse.json(
-      { error: "recipient_user_id is required to forward" },
+      { error: "At least one recipient is required to forward" },
       { status: 400 }
     );
   }
@@ -68,7 +78,9 @@ export async function PATCH(
     .from("p2p_feedback")
     .update({
       status: action === "forward" ? "forwarded" : "dismissed",
-      recipient_user_id: action === "forward" ? recipient_user_id : null,
+      recipient_user_ids: action === "forward" ? recipientIds : [],
+      // Mirror the first recipient into the legacy single column.
+      recipient_user_id: action === "forward" ? recipientIds[0] : null,
       hr_notes: hr_notes?.trim() || null,
       reviewed_by: authUser.id,
       reviewed_at: new Date().toISOString(),
