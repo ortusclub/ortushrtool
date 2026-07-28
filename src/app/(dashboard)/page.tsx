@@ -338,6 +338,18 @@ export default async function DashboardPage() {
     creditPool[c.leave_type] = (creditPool[c.leave_type] ?? 0) + Number(c.days);
   }
 
+  // Types to show on the dashboard = universal + per-type activations + any
+  // type the employee has via an assigned plan or a leave credit. Without the
+  // plan/credit parts, plan-granted types like Solo Parent Leave had a balance
+  // computed but were never rendered.
+  const displayedLeaveTypes = Array.from(
+    new Set([
+      ...myLeaveTypes,
+      ...Object.keys(planAllocations),
+      ...Object.keys(creditPool),
+    ])
+  );
+
   // Count used days per type, respecting per-type renewal dates. Public
   // holidays in the viewer's country are not charged as leave even when
   // they fall inside an approved range.
@@ -361,7 +373,7 @@ export default async function DashboardPage() {
 
   // Available per type = plan base − used + net cycle credits.
   const leaveAvailable: Record<string, number> = {};
-  for (const key of myLeaveTypes) {
+  for (const key of displayedLeaveTypes) {
     const base = planAllocations[key] ?? 0;
     const used = leaveUsed[key] ?? 0;
     const credits = creditPool[key] ?? 0;
@@ -735,7 +747,7 @@ export default async function DashboardPage() {
               <p className="mb-3 text-xs text-amber-600">No leave plan assigned. Contact HR to set up your plan.</p>
             )}
             <div className="grid grid-cols-2 gap-3">
-              {myLeaveTypes.map((key) => {
+              {displayedLeaveTypes.map((key) => {
                 const label = leaveTypeLabels[key] ?? key;
                 const used = leaveUsed[key] ?? 0;
                 const available = leaveAvailable[key] ?? 0;
