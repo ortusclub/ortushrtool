@@ -22,16 +22,37 @@ export function AdminLeaveForm({ userId }: { userId: string }) {
   const [viewMonth, setViewMonth] = useState(() => new Date());
   const [availableTypes, setAvailableTypes] = useState<string[]>(UNIVERSAL_LEAVE_TYPES);
 
-  // Load the employee's activated leave types
+  // Load the leave types this employee can take: universal + per-type
+  // activations (employee_leave_types) + anything granted through an assigned
+  // leave plan (employee_leave_plans → leave_plan_allocations). The plan part
+  // is what surfaces plan-granted types like Bereavement, which otherwise had
+  // a balance on the profile but were missing from this dropdown.
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const { data } = await supabase
-        .from("employee_leave_types")
-        .select("leave_type")
-        .eq("employee_id", userId);
-      const activated = (data ?? []).map((d) => d.leave_type);
-      setAvailableTypes([...UNIVERSAL_LEAVE_TYPES, ...activated]);
+      const [{ data: activatedRows }, { data: planRows }] = await Promise.all([
+        supabase
+          .from("employee_leave_types")
+          .select("leave_type")
+          .eq("employee_id", userId),
+        supabase
+          .from("employee_leave_plans")
+          .select("plan_id")
+          .eq("employee_id", userId),
+      ]);
+      const activated = (activatedRows ?? []).map((d) => d.leave_type);
+      const planIds = (planRows ?? []).map((p) => p.plan_id);
+      let planTypes: string[] = [];
+      if (planIds.length > 0) {
+        const { data: allocRows } = await supabase
+          .from("leave_plan_allocations")
+          .select("leave_type")
+          .in("plan_id", planIds);
+        planTypes = (allocRows ?? []).map((a) => a.leave_type);
+      }
+      setAvailableTypes(
+        Array.from(new Set([...UNIVERSAL_LEAVE_TYPES, ...activated, ...planTypes]))
+      );
     }
     load();
   }, [userId]);
@@ -44,7 +65,7 @@ export function AdminLeaveForm({ userId }: { userId: string }) {
     const lastDay = new Date(year, month + 1, 0);
 
     // Start from Monday
-    let startOffset = (firstDay.getDay() + 6) % 7;
+    const startOffset = (firstDay.getDay() + 6) % 7;
     const days: { date: string; day: number; isCurrentMonth: boolean; isWeekend: boolean }[] = [];
 
     // Fill previous month days
