@@ -41,6 +41,7 @@ export function FileLeaveOnBehalf({ employees }: { employees: Employee[] }) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
+  const [autoApprove, setAutoApprove] = useState(false);
 
   const isHalfDay = leaveDuration === "half_day";
 
@@ -101,6 +102,7 @@ export function FileLeaveOnBehalf({ employees }: { employees: Employee[] }) {
         start_date: startDate,
         end_date: isHalfDay ? startDate : endDate || startDate,
         reason,
+        auto_approve: autoApprove,
       }),
     });
     setBusy(false);
@@ -118,6 +120,7 @@ export function FileLeaveOnBehalf({ employees }: { employees: Employee[] }) {
     setHalfDayStart("");
     setHalfDayEnd("");
     setReason("");
+    setAutoApprove(false);
     router.refresh();
   };
 
@@ -258,6 +261,19 @@ export function FileLeaveOnBehalf({ employees }: { employees: Employee[] }) {
             <label className="mb-1 block text-xs font-medium text-gray-600">Reason</label>
             <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} className={inputClass} />
           </div>
+
+          {/* Auto-approve */}
+          <label className="flex cursor-pointer items-start gap-2 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={autoApprove}
+              onChange={(e) => setAutoApprove(e.target.checked)}
+              className="mt-0.5 h-4 w-4 text-blue-600"
+            />
+            <span className="text-xs text-gray-700">
+              <span className="font-medium">Auto-approve</span> — file it as already approved, skipping the manager&apos;s approval step.
+            </span>
+          </label>
         </div>
       )}
 
@@ -267,7 +283,7 @@ export function FileLeaveOnBehalf({ employees }: { employees: Employee[] }) {
           disabled={busy || !employeeId}
           className="flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          <Save size={14} />{busy ? "Submitting…" : "Submit for Approval"}
+          <Save size={14} />{busy ? "Submitting…" : autoApprove ? "Add & Approve" : "Submit for Approval"}
         </button>
         <button onClick={() => setOpen(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
       </div>
