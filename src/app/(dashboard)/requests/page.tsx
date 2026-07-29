@@ -19,6 +19,7 @@ import { EditLeaveForm } from "@/components/admin/edit-leave-form";
 import { EditHolidayWorkForm } from "@/components/admin/edit-holiday-work-form";
 import { EditOvertimeForm } from "@/components/admin/edit-overtime-form";
 import { FileAdjustmentOnBehalf } from "@/components/admin/file-adjustment-on-behalf";
+import { FileLeaveOnBehalf } from "@/components/admin/file-leave-on-behalf";
 import { BulkAdjustmentsSection } from "@/components/requests/bulk-adjustments-section";
 import { BulkLeaveSection } from "@/components/requests/bulk-leave-section";
 import { BulkHolidayWorkSection } from "@/components/requests/bulk-holiday-work-section";
@@ -297,6 +298,7 @@ export default async function RequestsPage({
       {/* ── ADMIN CONSOLE ── */}
       {isAdmin && (
         <CollapsibleSection title="Admin Console" defaultOpen={false} accent="amber">
+          <FileLeaveOnBehalf employees={allUsers} />
           <FileAdjustmentOnBehalf employees={allUsers} />
           <LeaveCsvImport />
           <AdjustmentCsvImport />
