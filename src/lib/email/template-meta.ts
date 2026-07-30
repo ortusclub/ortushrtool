@@ -115,7 +115,13 @@ export const TEMPLATE_META: Record<string, TemplateMeta> = {
   },
   birthday_leave_reminder: {
     sentWhen:
-      "Sent at 9:00 AM Manila on the 25th of each month to every active employee whose birthday falls in the FOLLOWING month, letting them know their Birthday Leave opens on the 1st. Amount is a full day, or a half day for anyone still under 6 months' tenure during their birth month (matching the auto-grant rule). To: the celebrant only.",
+      "Sent at 9:00 AM Manila on the 25th of each month to every active NON-INTERN employee whose birthday falls in the FOLLOWING month, letting them know their Birthday Leave opens on the 1st. Amount is a full day, or a half day for anyone still under 6 months' tenure during their birth month (matching the auto-grant rule). To: the celebrant only.",
+    toggleKey: "birthday_leave_reminder_emails_enabled",
+    toggleLabel: "Send birthday-leave reminder emails",
+  },
+  birthday_leave_reminder_intern: {
+    sentWhen:
+      "The intern version of the 25th-of-month reminder above, sent to celebrants whose job title contains 'Intern'. Interns don't receive Birthday Leave, so this is just an early birthday greeting with no leave details. Controlled by the same on/off toggle as the reminder. To: the intern celebrant only.",
     toggleKey: "birthday_leave_reminder_emails_enabled",
     toggleLabel: "Send birthday-leave reminder emails",
   },

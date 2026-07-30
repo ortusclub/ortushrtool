@@ -108,20 +108,34 @@ export async function GET(request: Request) {
     const errors: string[] = [];
 
     for (const user of candidates) {
-      // Tenure rule — identical to grant-birthday-credits.
-      const sixMoMark = addMonths(parseISO(user.hire_date!), 6);
-      const days = sixMoMark <= lastDay ? 1 : 0.5;
-      const isHalf = days === 0.5;
+      // Interns don't receive Birthday Leave, so they get a plain early-
+      // birthday greeting with no leave details. Intern = job title contains
+      // the whole word "intern" (the only signal — employment_type is
+      // uniform). Word boundary avoids matching e.g. "International".
+      const isIntern = /\bintern\b/i.test(user.job_title ?? "");
 
-      const { subject, html } = await loadAndRender("birthday_leave_reminder", {
-        ...getUniversalVars(user, null),
-        birth_month: birthMonthName,
-        leave_amount: isHalf ? "a half day (½ day)" : "a full day",
-        available_from: availableFrom,
-        expires_on: expiresOn,
-        days_count: String(days),
-        is_half_day: isHalf ? "true" : "",
-      });
+      let subject: string;
+      let html: string;
+      if (isIntern) {
+        ({ subject, html } = await loadAndRender("birthday_leave_reminder_intern", {
+          ...getUniversalVars(user, null),
+          birth_month: birthMonthName,
+        }));
+      } else {
+        // Tenure rule — identical to grant-birthday-credits.
+        const sixMoMark = addMonths(parseISO(user.hire_date!), 6);
+        const days = sixMoMark <= lastDay ? 1 : 0.5;
+        const isHalf = days === 0.5;
+        ({ subject, html } = await loadAndRender("birthday_leave_reminder", {
+          ...getUniversalVars(user, null),
+          birth_month: birthMonthName,
+          leave_amount: isHalf ? "a half day (½ day)" : "a full day",
+          available_from: availableFrom,
+          expires_on: expiresOn,
+          days_count: String(days),
+          is_half_day: isHalf ? "true" : "",
+        }));
+      }
 
       const result = await sendEmail({ to: user.email, subject, html });
       if (result.success) sent++;

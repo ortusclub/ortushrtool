@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
   const { data: users, error: usersErr } = await supabase
     .from("users")
-    .select("id, email, full_name, birthday, hire_date")
+    .select("id, email, full_name, job_title, birthday, hire_date")
     .eq("is_active", true)
     .not("birthday", "is", null)
     .not("hire_date", "is", null);
@@ -50,8 +50,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: usersErr.message }, { status: 500 });
   }
 
-  // Only employees whose birth month is the current Manila month.
+  // Only employees whose birth month is the current Manila month, excluding
+  // interns — they don't receive Birthday Leave. Intern = job title contains
+  // the whole word "intern" (the only available signal; employment_type is
+  // uniform). Word boundary avoids matching e.g. "International".
   const candidates = (users ?? []).filter((u) => {
+    if (/\bintern\b/i.test(u.job_title ?? "")) return false;
     const m = parseInt(u.birthday!.slice(5, 7), 10);
     return m === todayMonth;
   });
