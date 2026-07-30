@@ -349,18 +349,6 @@ export const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateDefault[] = [
     ].join("\n"),
     variables: "birth_month, leave_amount, available_from, expires_on, days_count, is_half_day",
   },
-  {
-    type: "birthday_leave_reminder_intern",
-    name: "Birthday Greeting for Interns (month ahead)",
-    subject: "Happy Birthday Month, {{preferred_name}}! 🎂",
-    body: [
-      `<h2>Hi {{preferred_name}},</h2>`,
-      `<p>Your birthday is coming up in <strong>{{birth_month}}</strong> — an early happy birthday from the whole Ortus Club team!</p>`,
-      `<p>We hope you have a wonderful day and a great month ahead.</p>`,
-      `<p>— The Ortus Club Team</p>`,
-    ].join("\n"),
-    variables: "birth_month",
-  },
 
   // ── Document Requests ──
   {

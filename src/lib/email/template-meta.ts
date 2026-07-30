@@ -119,12 +119,6 @@ export const TEMPLATE_META: Record<string, TemplateMeta> = {
     toggleKey: "birthday_leave_reminder_emails_enabled",
     toggleLabel: "Send birthday-leave reminder emails",
   },
-  birthday_leave_reminder_intern: {
-    sentWhen:
-      "The intern version of the 25th-of-month reminder above, sent to celebrants whose job title contains 'Intern'. Interns don't receive Birthday Leave, so this is just an early birthday greeting with no leave details. Controlled by the same on/off toggle as the reminder. To: the intern celebrant only.",
-    toggleKey: "birthday_leave_reminder_emails_enabled",
-    toggleLabel: "Send birthday-leave reminder emails",
-  },
 
   // Document requests
   document_request_employee_copy: {

@@ -98,44 +98,33 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: usersErr.message }, { status: 500 });
     }
 
-    // Whose birth month is the target (next) month.
+    // Whose birth month is the target (next) month, excluding interns —
+    // interns don't get Birthday Leave, so they aren't emailed here at all.
+    // Intern = job title matching the whole word "intern" (word boundary
+    // avoids matching e.g. "International"); the only available signal.
     const candidates = (users ?? []).filter(
       (u: CelebrantUser) =>
-        parseInt(u.birthday!.slice(5, 7), 10) === targetMonth
+        parseInt(u.birthday!.slice(5, 7), 10) === targetMonth &&
+        !/\bintern\b/i.test(u.job_title ?? "")
     ) as CelebrantUser[];
 
     let sent = 0;
     const errors: string[] = [];
 
     for (const user of candidates) {
-      // Interns don't receive Birthday Leave, so they get a plain early-
-      // birthday greeting with no leave details. Intern = job title contains
-      // the whole word "intern" (the only signal — employment_type is
-      // uniform). Word boundary avoids matching e.g. "International".
-      const isIntern = /\bintern\b/i.test(user.job_title ?? "");
-
-      let subject: string;
-      let html: string;
-      if (isIntern) {
-        ({ subject, html } = await loadAndRender("birthday_leave_reminder_intern", {
-          ...getUniversalVars(user, null),
-          birth_month: birthMonthName,
-        }));
-      } else {
-        // Tenure rule — identical to grant-birthday-credits.
-        const sixMoMark = addMonths(parseISO(user.hire_date!), 6);
-        const days = sixMoMark <= lastDay ? 1 : 0.5;
-        const isHalf = days === 0.5;
-        ({ subject, html } = await loadAndRender("birthday_leave_reminder", {
-          ...getUniversalVars(user, null),
-          birth_month: birthMonthName,
-          leave_amount: isHalf ? "a half day (½ day)" : "a full day",
-          available_from: availableFrom,
-          expires_on: expiresOn,
-          days_count: String(days),
-          is_half_day: isHalf ? "true" : "",
-        }));
-      }
+      // Tenure rule — identical to grant-birthday-credits.
+      const sixMoMark = addMonths(parseISO(user.hire_date!), 6);
+      const days = sixMoMark <= lastDay ? 1 : 0.5;
+      const isHalf = days === 0.5;
+      const { subject, html } = await loadAndRender("birthday_leave_reminder", {
+        ...getUniversalVars(user, null),
+        birth_month: birthMonthName,
+        leave_amount: isHalf ? "a half day (½ day)" : "a full day",
+        available_from: availableFrom,
+        expires_on: expiresOn,
+        days_count: String(days),
+        is_half_day: isHalf ? "true" : "",
+      });
 
       const result = await sendEmail({ to: user.email, subject, html });
       if (result.success) sent++;
