@@ -113,6 +113,12 @@ export const TEMPLATE_META: Record<string, TemplateMeta> = {
     toggleKey: "anniversary_emails_enabled",
     toggleLabel: "Send work anniversary emails",
   },
+  birthday_leave_reminder: {
+    sentWhen:
+      "Sent at 9:00 AM Manila on the 25th of each month to every active employee whose birthday falls in the FOLLOWING month, letting them know their Birthday Leave opens on the 1st. Amount is a full day, or a half day for anyone still under 6 months' tenure during their birth month (matching the auto-grant rule). To: the celebrant only.",
+    toggleKey: "birthday_leave_reminder_emails_enabled",
+    toggleLabel: "Send birthday-leave reminder emails",
+  },
 
   // Document requests
   document_request_employee_copy: {

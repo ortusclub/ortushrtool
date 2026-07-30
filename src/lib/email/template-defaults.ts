@@ -335,6 +335,20 @@ export const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateDefault[] = [
     ].join("\n"),
     variables: "years_count, benefits_html",
   },
+  {
+    type: "birthday_leave_reminder",
+    name: "Birthday Leave Reminder (month ahead)",
+    subject: "Your Birthday Leave for {{birth_month}} 🎂",
+    body: [
+      `<h2>Hi {{preferred_name}},</h2>`,
+      `<p>Your birthday is coming up in <strong>{{birth_month}}</strong> — happy early birthday from the Ortus Club team!</p>`,
+      `<p>As a birthday treat, you'll have <strong>{{leave_amount}}</strong> of Birthday Leave to use any time during {{birth_month}}, available from <strong>{{available_from}}</strong> and expiring on <strong>{{expires_on}}</strong>.</p>`,
+      `{{#if is_half_day}}<p>Because you'll have been with us for less than 6 months during {{birth_month}}, your Birthday Leave this year is a half day (½ day). It becomes a full day once you pass your 6-month mark.</p>{{/if}}`,
+      `<p>To use it, just file a Birthday Leave request in the HR tool once it opens on the 1st. Enjoy your day!</p>`,
+      `<p>— The Ortus Club Team</p>`,
+    ].join("\n"),
+    variables: "birth_month, leave_amount, available_from, expires_on, days_count, is_half_day",
+  },
 
   // ── Document Requests ──
   {
