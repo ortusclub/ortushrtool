@@ -108,11 +108,17 @@ export async function GET(request: Request) {
         user.birthday &&
         user.birthday.slice(5) === todayMMDD
       ) {
+        // Interns get a dedicated greeting with no Birthday Leave content,
+        // since they aren't granted the leave. Intern = job title matching
+        // the whole word "intern" (word boundary avoids "International").
+        const isIntern = /\bintern\b/i.test(user.job_title ?? "");
         const isRegular =
           !!user.regularization_date && user.regularization_date <= todayDateStr;
-        const birthdayType = isRegular
-          ? "birthday_greeting_regular"
-          : "birthday_greeting_probationary";
+        const birthdayType = isIntern
+          ? "birthday_greeting_intern"
+          : isRegular
+            ? "birthday_greeting_regular"
+            : "birthday_greeting_probationary";
         const result = await sendCelebrationEmail({
           type: birthdayType,
           to: user.email,
@@ -203,6 +209,7 @@ async function sendCelebrationEmail({
   type:
     | "birthday_greeting_regular"
     | "birthday_greeting_probationary"
+    | "birthday_greeting_intern"
     | "work_anniversary";
   to: string;
   cc: string[];

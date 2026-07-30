@@ -264,6 +264,7 @@ export function EmailTemplateEditor({
       types: [
         "birthday_greeting_regular",
         "birthday_greeting_probationary",
+        "birthday_greeting_intern",
         "birthday_leave_reminder",
         "work_anniversary",
       ],

@@ -103,7 +103,13 @@ export const TEMPLATE_META: Record<string, TemplateMeta> = {
   },
   birthday_greeting_probationary: {
     sentWhen:
-      "Sent at 9:00 AM Manila on each PROBATIONARY employee's birthday (someone with no Regularization Date, or one in the future). To: the celebrant. CC: their manager, plus the CC list configured on the regular birthday template above.",
+      "Sent at 9:00 AM Manila on each PROBATIONARY employee's birthday (someone with no Regularization Date, or one in the future) who is NOT an intern. To: the celebrant. CC: their manager, plus the CC list configured on the regular birthday template above.",
+    toggleKey: "birthday_emails_enabled",
+    toggleLabel: "Send birthday emails",
+  },
+  birthday_greeting_intern: {
+    sentWhen:
+      "Sent at 9:00 AM Manila on the birthday of any employee whose job title contains 'Intern', in place of the regular/probationary greeting. Interns don't receive Birthday Leave, so this version omits the leave details. To: the celebrant. CC: their manager, plus the birthday CC list. Controlled by the same on/off toggle as the other birthday greetings.",
     toggleKey: "birthday_emails_enabled",
     toggleLabel: "Send birthday emails",
   },

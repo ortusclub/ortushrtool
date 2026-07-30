@@ -323,6 +323,19 @@ export const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateDefault[] = [
     variables: "",
   },
   {
+    type: "birthday_greeting_intern",
+    name: "Birthday Greeting (Intern)",
+    subject: "Happy Birthday, {{preferred_name}}!",
+    body: [
+      `<h2>Happy Birthday, {{preferred_name}}!</h2>`,
+      `<p>We know company birthday emails can sometimes feel a bit… automated. So even though this one technically is, the sentiment behind it isn't. We're really happy you're here, and today's a good excuse to say it out loud.</p>`,
+      `<p>📣 <strong>Share the moment if you'd like.</strong> A LinkedIn post, a quick note in our team channel, however you like to celebrate. We'd love to cheer you on! Tag us if you post, and we'll be the first to drop a 🎉.</p>`,
+      `<p>Wishing you a year ahead full of good things — the big wins, the small wins, and everything in between.</p>`,
+      `<p>Go enjoy yourself today! We're glad you're here.<br><br>Cheers,<br>The Ortus Club Team</p>`,
+    ].join("\n"),
+    variables: "",
+  },
+  {
     type: "work_anniversary",
     name: "Work Anniversary",
     subject: "Happy {{years_count}}-Year Work Anniversary, {{preferred_name}}!",
