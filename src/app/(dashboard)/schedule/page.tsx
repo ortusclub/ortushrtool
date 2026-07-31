@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { DAYS_OF_WEEK, LEAVE_TYPE_LABELS } from "@/lib/constants";
-import { formatTime, formatDate, cn, hasNightDifferentialHours } from "@/lib/utils";
+import { formatTime, formatDate, cn, hasNightDifferentialHours, formatAdjustmentChange } from "@/lib/utils";
 import { NightDiffNote } from "@/components/shared/night-diff-note";
 import type { Schedule } from "@/types/database";
 import { HOLIDAY_COUNTRY_LABELS } from "@/types/database";
@@ -395,8 +395,7 @@ export default async function SchedulePage() {
                         : formatDate(adj.requested_date)}
                     </p>
                     <p className="text-sm text-gray-600">
-                      {formatTime(adj.requested_start_time)} -{" "}
-                      {formatTime(adj.requested_end_time)}
+                      {formatAdjustmentChange(adj)}
                     </p>
                   </div>
                   <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">

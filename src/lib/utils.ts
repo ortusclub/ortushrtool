@@ -20,6 +20,42 @@ export function toManilaTime(date: Date): Date {
   return toZonedTime(date, MANILA_TIMEZONE);
 }
 
+/**
+ * One-line summary of what a schedule adjustment changes, respecting its type.
+ *
+ * A *location* adjustment should read as the location swap ("Office → Online"),
+ * NOT a time range — the times on a location-only request are just the
+ * unchanged schedule. There's no stored "original location", but with only two
+ * locations the origin is simply the opposite of the requested one. A *time*
+ * (or legacy untyped) adjustment shows the requested time range; *both* shows
+ * the time range plus the location swap.
+ */
+export function formatAdjustmentChange(adj: {
+  adjustment_type?: string | null;
+  requested_start_time?: string | null;
+  requested_end_time?: string | null;
+  requested_work_location?: string | null;
+}): string {
+  const timeRange = `${formatTime(adj.requested_start_time)} – ${formatTime(
+    adj.requested_end_time
+  )}`;
+  const loc = adj.requested_work_location;
+  const locSwap = loc
+    ? loc === "office"
+      ? "Online → Office"
+      : "Office → Online"
+    : null;
+
+  if (adj.adjustment_type === "location") {
+    return locSwap ?? "Location change";
+  }
+  if (adj.adjustment_type === "both") {
+    return locSwap ? `${timeRange} · ${locSwap}` : timeRange;
+  }
+  // "time" or legacy untyped rows: the time range is the change.
+  return timeRange;
+}
+
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
   return classes.filter(Boolean).join(" ");
 }

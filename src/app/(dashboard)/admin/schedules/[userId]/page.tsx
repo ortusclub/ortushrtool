@@ -5,7 +5,7 @@ import { AdminAdjustmentForm } from "@/components/admin/admin-adjustment-form";
 import { AdminLeaveForm } from "@/components/admin/admin-leave-form";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { formatDate, formatTime, displayName } from "@/lib/utils";
+import { formatDate, displayName, formatAdjustmentChange } from "@/lib/utils";
 import { getTzAbbrev } from "@/lib/constants";
 
 export default async function UserSchedulePage({
@@ -139,8 +139,7 @@ export default async function UserSchedulePage({
                       {formatDate(adj.requested_date)}
                     </p>
                     <p className="text-sm text-gray-600">
-                      {formatTime(adj.requested_start_time)} -{" "}
-                      {formatTime(adj.requested_end_time)}
+                      {formatAdjustmentChange(adj)}
                     </p>
                     {adj.reason && (
                       <p className="text-xs text-gray-500">{adj.reason}</p>

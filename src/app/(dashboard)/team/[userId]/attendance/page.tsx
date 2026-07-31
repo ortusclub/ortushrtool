@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { hasRole, formatTime, formatDate } from "@/lib/utils";
+import { hasRole, formatDate, formatAdjustmentChange } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { Flag, MapPin, CalendarCog } from "lucide-react";
 import { redirect } from "next/navigation";
@@ -97,10 +97,7 @@ export default async function TeamMemberAttendanceTab({
                     {formatDate(adj.requested_date)}
                   </p>
                   <p className="text-xs text-gray-600">
-                    {formatTime(adj.requested_start_time)} –{" "}
-                    {formatTime(adj.requested_end_time)}
-                    {adj.requested_work_location &&
-                      ` · ${adj.requested_work_location}`}
+                    {formatAdjustmentChange(adj)}
                   </p>
                   {adj.reason && (
                     <p className="text-xs italic text-gray-500">{adj.reason}</p>

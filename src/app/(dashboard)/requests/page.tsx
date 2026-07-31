@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/paginate";
-import { hasRole, formatDate, formatTime, displayName, hasNightDifferentialHours } from "@/lib/utils";
+import { hasRole, formatDate, formatTime, displayName, hasNightDifferentialHours, formatAdjustmentChange } from "@/lib/utils";
 import { NightDiffNote } from "@/components/shared/night-diff-note";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
 import { AdjustmentActions } from "@/components/adjustments/adjustment-actions";
@@ -345,7 +345,7 @@ export default async function RequestsPage({
                     <div key={adj.id} className="flex items-center justify-between p-6">
                       <div className="space-y-1">
                         <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Schedule Adjustment</span>
-                        <p className="text-sm text-gray-700">{formatDate(adj.requested_date)} &mdash; {formatTime(adj.requested_start_time)} – {formatTime(adj.requested_end_time)}</p>
+                        <p className="text-sm text-gray-700">{formatDate(adj.requested_date)} &mdash; {formatAdjustmentChange(adj)}</p>
                         {adj.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {adj.reviewer_notes}</p>}
                       </div>
                       <div className="flex items-center gap-3">
@@ -537,7 +537,7 @@ export default async function RequestsPage({
                         <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">Schedule Adjustment</span>
                         {adj.employee && <span className="text-sm font-medium text-gray-900"><UserNameLink userId={adj.employee_id} name={displayName(adj.employee)} /></span>}
                       </div>
-                      <p className="text-sm text-gray-700">{formatDate(adj.requested_date)} &mdash; {formatTime(adj.requested_start_time)} – {formatTime(adj.requested_end_time)}</p>
+                      <p className="text-sm text-gray-700">{formatDate(adj.requested_date)} &mdash; {formatAdjustmentChange(adj)}</p>
                       {adj.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {adj.reviewer_notes}</p>}
                     </div>
                     <div className="flex items-center gap-3">
