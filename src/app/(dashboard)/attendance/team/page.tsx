@@ -1,10 +1,12 @@
 import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
+import { getSubdepartmentMap } from "@/lib/subdepartment";
 import { AllAttendanceTable } from "@/components/attendance/all-attendance-table";
 
 export default async function TeamAttendancePage() {
   const user = await requireRole("manager");
   const supabase = await createClient();
+  const subdeptMap = await getSubdepartmentMap();
 
   const { data: rawReports } = await supabase
     .from("users")
@@ -16,7 +18,11 @@ export default async function TeamAttendancePage() {
 
   // All reports share this manager (the viewer); the Manager column is
   // hidden on this view anyway, so don't bother fetching a lookup.
-  const reports = (rawReports ?? []).map((u) => ({ ...u, manager: null }));
+  const reports = (rawReports ?? []).map((u) => ({
+    ...u,
+    manager: null,
+    subdepartment: subdeptMap.get(u.id) ?? null,
+  }));
 
   return (
     <div className="space-y-6">

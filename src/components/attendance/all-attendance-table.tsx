@@ -22,6 +22,7 @@ interface UserRow {
   holiday_country: HolidayCountry;
   desktime_url: string | null;
   job_title: string | null;
+  subdepartment: string | null;
   manager: {
     id: string;
     full_name: string;
@@ -84,7 +85,7 @@ function dowFromDate(dateStr: string): number {
 
 function eachDateInRange(from: string, to: string): string[] {
   const out: string[] = [];
-  let cur = new Date(from + "T12:00:00");
+  const cur = new Date(from + "T12:00:00");
   const end = new Date(to + "T12:00:00");
   while (cur <= end) {
     out.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`);
@@ -260,6 +261,7 @@ export function AllAttendanceTable({
   const [actualLocationFilter, setActualLocationFilter] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [tzFilter, setTzFilter] = useState<Set<string>>(new Set());
+  const [subdeptFilter, setSubdeptFilter] = useState<Set<string>>(new Set());
 
   type SortColumn =
     | "name"
@@ -470,6 +472,13 @@ export function AllAttendanceTable({
     { value: "online", label: "Online" },
   ];
 
+  const subdeptOptions = useMemo(() => {
+    const subs = new Set(
+      users.map((u) => u.subdepartment).filter((s): s is string => !!s)
+    );
+    return [...subs].sort().map((s) => ({ value: s, label: s }));
+  }, [users]);
+
   const userById = useMemo(() => {
     const map = new Map<string, UserRow>();
     for (const u of users) map.set(u.id, u);
@@ -613,6 +622,12 @@ export function AllAttendanceTable({
       );
     }
 
+    if (subdeptFilter.size > 0) {
+      result = result.filter(
+        (r) => r.user.subdepartment != null && subdeptFilter.has(r.user.subdepartment)
+      );
+    }
+
     if (statusFilter.size > 0) {
       result = result.filter((r) => {
         const ds = rowDisplayStatus(r);
@@ -666,12 +681,12 @@ export function AllAttendanceTable({
 
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, employeePicker, search, selectedEmployeeId, countryFilter, tzFilter, statusFilter, locationFilter, actualLocationFilter, biometricPresence, sort, onLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
+  }, [rawRows, employeePicker, search, selectedEmployeeId, countryFilter, tzFilter, subdeptFilter, statusFilter, locationFilter, actualLocationFilter, biometricPresence, sort, onLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
 
   // Reset to page 1 when filters / dates change
   useEffect(() => {
     setPageIndex(0);
-  }, [search, selectedEmployeeId, countryFilter, locationFilter, actualLocationFilter, statusFilter, tzFilter, fromDate, toDate]);
+  }, [search, selectedEmployeeId, countryFilter, locationFilter, actualLocationFilter, statusFilter, tzFilter, subdeptFilter, fromDate, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const safePageIndex = Math.min(pageIndex, totalPages - 1);
@@ -716,13 +731,15 @@ export function AllAttendanceTable({
     locationFilter.size > 0 ||
     actualLocationFilter.size > 0 ||
     statusFilter.size > 0 ||
-    tzFilter.size > 0;
+    tzFilter.size > 0 ||
+    subdeptFilter.size > 0;
 
   const exportCSV = () => {
     const headers = [
       "Employee",
       "Email",
       "Job Title",
+      "Subdepartment",
       ...(employeePicker !== "dropdown" ? ["Manager"] : []),
       ...(isSingleDate ? [] : ["Date"]),
       "Country",
@@ -758,6 +775,7 @@ export function AllAttendanceTable({
         user.full_name || user.email.split("@")[0],
         user.email,
         user.job_title ?? "",
+        user.subdepartment ?? "",
       ];
       if (employeePicker !== "dropdown") {
         cells.push(user.manager ? displayName(user.manager) : "");
@@ -850,7 +868,7 @@ export function AllAttendanceTable({
           {hasActiveFilters && (
             <button
               type="button"
-              onClick={() => { setCountryFilter(new Set()); setLocationFilter(new Set()); setActualLocationFilter(new Set()); setStatusFilter(new Set()); setTzFilter(new Set()); }}
+              onClick={() => { setCountryFilter(new Set()); setLocationFilter(new Set()); setActualLocationFilter(new Set()); setStatusFilter(new Set()); setTzFilter(new Set()); setSubdeptFilter(new Set()); }}
               className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100"
             >
               Clear filters
@@ -956,6 +974,10 @@ export function AllAttendanceTable({
                   <SortButton label="Preferred Name" active={sortDir("name")} onClick={() => toggleSort("name")} />
                 </th>
                 <th className="px-4 py-3 font-medium text-gray-600">Job Title</th>
+                <th className="px-4 py-3 font-medium text-gray-600">
+                  <span className="align-middle">Subdepartment</span>
+                  <HeaderFilter label="Subdepartment" options={subdeptOptions} selected={subdeptFilter} onChange={setSubdeptFilter} />
+                </th>
                 {employeePicker !== "dropdown" && (
                   <th className="px-4 py-3 font-medium text-gray-600">Manager</th>
                 )}
@@ -1044,6 +1066,9 @@ export function AllAttendanceTable({
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">
                       {user.job_title || <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">
+                      {user.subdepartment || <span className="text-gray-400">-</span>}
                     </td>
                     {employeePicker !== "dropdown" && (
                       <td className="px-4 py-3 text-gray-600 text-xs">

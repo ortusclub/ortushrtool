@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
+import { getSubdepartmentMap } from "@/lib/subdepartment";
 import { SyncDesktimeButton } from "@/components/admin/sync-desktime-button";
 import { AllAttendanceTable } from "@/components/attendance/all-attendance-table";
 import { BiometricUpload } from "@/components/admin/biometric-upload";
@@ -8,6 +9,7 @@ import { Fingerprint, ChevronDown } from "lucide-react";
 export default async function AllAttendancePage() {
   await requireRole("hr_admin");
   const supabase = await createClient();
+  const subdeptMap = await getSubdepartmentMap();
 
   const [{ data: rawUsers }, { data: allActive }] = await Promise.all([
     supabase
@@ -28,6 +30,7 @@ export default async function AllAttendancePage() {
   const users = (rawUsers ?? []).map((u) => ({
     ...u,
     manager: u.manager_id ? (managerById.get(u.manager_id) ?? null) : null,
+    subdepartment: subdeptMap.get(u.id) ?? null,
   }));
 
   return (
