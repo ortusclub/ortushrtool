@@ -10,6 +10,13 @@ import { HeaderFilter } from "@/components/shared/header-filter";
 import { SortButton, type SortDir } from "@/components/shared/sort-button";
 import { NightDiffNote } from "@/components/shared/night-diff-note";
 
+// Add `n` days to a YYYY-MM-DD string, returning YYYY-MM-DD.
+function addDays(dateStr: string, n: number): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 interface UserRow {
   id: string;
   full_name: string;
@@ -89,20 +96,28 @@ export function SchedulesTable({
     async function fetchForDate() {
       const supabase = createClient();
 
+      // The grid shows a full Mon–Fri week, so fetch adjustments/leaves that
+      // fall anywhere in that week — not just the selected day — so a multi-day
+      // leave paints on every day it covers, not only the day you picked.
+      const dow = (new Date(selectedDate + "T00:00:00").getDay() + 6) % 7;
+      const weekMon = addDays(selectedDate, -dow);
+      const weekSun = addDays(weekMon, 6);
+
       const [{ data: adj }, { data: lv }, { data: notes }] = await Promise.all([
         supabase
           .from("schedule_adjustments")
           .select("*")
-          .eq("requested_date", selectedDate)
+          .gte("requested_date", weekMon)
+          .lte("requested_date", weekSun)
           .eq("status", "approved")
-          // Oldest first so the most recent approved adjustment wins per employee.
+          // Oldest first so the most recent approved adjustment wins per employee/day.
           .order("created_at", { ascending: true }),
         supabase
           .from("leave_requests")
           .select("*")
           .eq("status", "approved")
-          .lte("start_date", selectedDate)
-          .gte("end_date", selectedDate),
+          .lte("start_date", weekSun)
+          .gte("end_date", weekMon),
         supabase
           .from("office_day_flag_notes")
           .select("employee_id, note"),
@@ -149,23 +164,32 @@ export function SchedulesTable({
     return map;
   }, [schedules]);
 
-  // Build adjustment lookup for selected date
-  const adjustmentMap = useMemo(() => {
+  // Adjustment lookup keyed by employee + date (adjustments are per-date).
+  // Iterating in fetch order (oldest first) means the latest approved wins.
+  const adjustmentByEmpDate = useMemo(() => {
     const map = new Map<string, Adjustment>();
     for (const a of adjustments) {
-      map.set(a.employee_id, a);
+      map.set(`${a.employee_id}|${a.requested_date}`, a);
     }
     return map;
   }, [adjustments]);
 
-  // Build leave lookup for selected date
-  const leaveMap = useMemo(() => {
-    const map = new Map<string, LeaveRow>();
+  // Leaves grouped by employee — a leave spans a range, so we match by date
+  // at render time (start_date <= date <= end_date).
+  const leavesByEmp = useMemo(() => {
+    const map = new Map<string, LeaveRow[]>();
     for (const l of leaves) {
-      map.set(l.employee_id, l);
+      const arr = map.get(l.employee_id) ?? [];
+      arr.push(l);
+      map.set(l.employee_id, arr);
     }
     return map;
   }, [leaves]);
+
+  const leaveForDate = (empId: string, date: string): LeaveRow | undefined =>
+    leavesByEmp
+      .get(empId)
+      ?.find((l) => l.start_date <= date && date <= l.end_date);
 
   // Filter + sort users
   const managerOptions = useMemo(() => {
@@ -216,6 +240,13 @@ export function SchedulesTable({
     const d = new Date(selectedDate + "T00:00:00");
     return (d.getDay() + 6) % 7; // Monday=0
   }, [selectedDate]);
+
+  // Actual calendar date for each Mon–Fri column of the selected week, so a
+  // leave/adjustment paints on the day it truly falls on.
+  const weekDates = useMemo(() => {
+    const weekMon = addDays(selectedDate, -selectedDayOfWeek);
+    return [0, 1, 2, 3, 4].map((i) => addDays(weekMon, i));
+  }, [selectedDate, selectedDayOfWeek]);
 
   const dayHeaders = DAYS_OF_WEEK.slice(0, 5);
 
@@ -305,8 +336,9 @@ export function SchedulesTable({
           <tbody className="divide-y divide-gray-100">
             {filteredUsers.map((user) => {
               const userSchedule = scheduleMap.get(user.id);
-              const adjustment = adjustmentMap.get(user.id);
-              const leave = leaveMap.get(user.id);
+              // Selected-date values drive the trailing summary column.
+              const adjustment = adjustmentByEmpDate.get(`${user.id}|${selectedDate}`);
+              const leave = leaveForDate(user.id, selectedDate);
 
               // Count office days from base schedule (Mon-Fri)
               let officeDays = 0;
@@ -406,34 +438,39 @@ export function SchedulesTable({
                   {[0, 1, 2, 3, 4].map((dayIdx) => {
                     const sched = userSchedule?.get(dayIdx);
                     const isSelectedDay = dayIdx === selectedDayOfWeek;
+                    const colDate = weekDates[dayIdx];
+                    // Per-day overrides — matched to this column's actual date,
+                    // so a multi-day leave shows on every day it covers.
+                    const dayAdjustment = adjustmentByEmpDate.get(`${user.id}|${colDate}`);
+                    const dayLeave = leaveForDate(user.id, colDate);
 
-                    // Show adjustment override if on selected day
-                    if (isSelectedDay && adjustment) {
+                    // Show adjustment override on the day it falls
+                    if (dayAdjustment) {
                       return (
                         <td
                           key={dayIdx}
-                          className="px-4 py-3 text-center bg-blue-50"
+                          className={`px-4 py-3 text-center ${isSelectedDay ? "bg-blue-50" : ""}`}
                         >
                           <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700">
                             Adjusted
                           </span>
                           <p className="mt-0.5 text-xs text-amber-700 font-medium">
-                            {adjustment.requested_start_time.slice(0, 5)} -{" "}
-                            {adjustment.requested_end_time.slice(0, 5)}
+                            {dayAdjustment.requested_start_time.slice(0, 5)} -{" "}
+                            {dayAdjustment.requested_end_time.slice(0, 5)}
                           </p>
                         </td>
                       );
                     }
 
-                    // Show leave if on selected day
-                    if (isSelectedDay && leave) {
+                    // Show leave on every day it covers
+                    if (dayLeave) {
                       return (
                         <td
                           key={dayIdx}
-                          className="px-4 py-3 text-center bg-purple-50"
+                          className={`px-4 py-3 text-center ${isSelectedDay ? "bg-purple-100" : "bg-purple-50"}`}
                         >
                           <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700">
-                            {leaveLabels[leave.leave_type] ?? "Leave"}
+                            {leaveLabels[dayLeave.leave_type] ?? "Leave"}
                           </span>
                         </td>
                       );
