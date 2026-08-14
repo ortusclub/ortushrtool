@@ -109,7 +109,9 @@ export default async function AdjustmentsPage() {
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    {isReviewer && <AdjustmentActions adjustmentId={adj.id} />}
+                    {isReviewer && adj.employee_id !== user.id && (
+                      <AdjustmentActions adjustmentId={adj.id} />
+                    )}
                     {(!isReviewer || isAdmin) && (
                       <CancelRequest requestId={adj.id} table="schedule_adjustments" />
                     )}
@@ -163,7 +165,7 @@ export default async function AdjustmentsPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  {isReviewer && (
+                  {isReviewer && adj.employee_id !== user.id && (
                     <AdjustmentActions adjustmentId={adj.id} currentStatus={adj.status as "approved" | "rejected"} />
                   )}
                   {isAdmin && (
