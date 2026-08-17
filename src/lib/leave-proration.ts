@@ -43,6 +43,23 @@ export function getRenewalStart(
 }
 
 /**
+ * The last day of the cycle that opens on `renewalStart` — one day short of
+ * the next renewal. Cycles run a year, so this is renewalStart + 1 year − 1
+ * day, paired with getRenewalStart to give a closed [start, end] window for
+ * charging leave days to the right cycle.
+ *
+ * Uses UTC component arithmetic rather than parseISO so a Feb-29 renewal
+ * start (possible for a leap-day hire under a hire_date plan) normalizes to
+ * Mar 1 → Feb 28 instead of throwing on an invalid date.
+ */
+export function getCycleEnd(renewalStart: string): string {
+  const [y, m, d] = renewalStart.split("-").map(Number);
+  const end = new Date(Date.UTC(y + 1, m - 1, d));
+  end.setUTCDate(end.getUTCDate() - 1);
+  return end.toISOString().slice(0, 10);
+}
+
+/**
  * Prorates leave entitlement for new hires.
  *
  * - "custom" / "hire_date": prorates based on remaining days in the cycle

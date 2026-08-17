@@ -22,8 +22,8 @@ import { RecentKudos } from "@/components/dashboard/recent-kudos";
 import type { KudosWithUsers } from "@/types/database";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { LEAVE_TYPE_LABELS, UNIVERSAL_LEAVE_TYPES, LEAVE_TYPES } from "@/lib/constants";
-import { prorateLeave, getRenewalStart } from "@/lib/leave-proration";
-import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
+import { prorateLeave, getRenewalStart, getCycleEnd } from "@/lib/leave-proration";
+import { buildHolidaySet, countLeaveDaysInCycle } from "@/lib/leave-days";
 import type { GrantType } from "@/types/database";
 
 export default async function DashboardPage() {
@@ -360,15 +360,18 @@ export default async function DashboardPage() {
     `${now.getFullYear() + 1}-12-31`
   );
 
+  // A leave straddling the cycle boundary is charged only for the days that
+  // fall inside the current cycle — the rest belongs to the next one.
   const leaveUsed: Record<string, number> = {};
   for (const l of myLeavesThisYear.data ?? []) {
     const renewalStart = leaveTypeRenewalStart[l.leave_type] ?? yearStart;
-    if (l.start_date >= renewalStart) {
-      const days = l.leave_duration === "half_day"
-        ? 0.5
-        : countLeaveDays(l.start_date, l.end_date, holidaySet);
-      leaveUsed[l.leave_type] = (leaveUsed[l.leave_type] ?? 0) + days;
-    }
+    const days = countLeaveDaysInCycle(
+      l,
+      holidaySet,
+      renewalStart,
+      getCycleEnd(renewalStart)
+    );
+    if (days > 0) leaveUsed[l.leave_type] = (leaveUsed[l.leave_type] ?? 0) + days;
   }
 
   // Available per type = plan base − used + net cycle credits.

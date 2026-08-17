@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllRows } from "@/lib/supabase/paginate";
-import { getRenewalStart, prorateLeave } from "@/lib/leave-proration";
-import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
+import { getCycleEnd, getRenewalStart, prorateLeave } from "@/lib/leave-proration";
+import { buildHolidaySet, countLeaveDaysInCycle } from "@/lib/leave-days";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
 import type { GrantType } from "@/types/database";
 
@@ -217,15 +217,16 @@ export async function computeLeaveBalances(
     const empHolidays = holidayByCountry.get(emp.holiday_country) ?? new Set<string>();
 
     for (const [leaveType, bucket] of buckets) {
+      // Leaves straddling the cycle boundary count only for their days inside
+      // this cycle; the rest is charged to the next one.
+      const cycleEnd = getCycleEnd(bucket.renewalStart);
       const usedLeaves = empLeaves
-        .filter(
-          (l) =>
-            l.leave_type === leaveType && l.start_date >= bucket.renewalStart
-        )
-        .reduce((sum, l) => {
-          if (l.leave_duration === "half_day") return sum + 0.5;
-          return sum + countLeaveDays(l.start_date, l.end_date, empHolidays);
-        }, 0);
+        .filter((l) => l.leave_type === leaveType)
+        .reduce(
+          (sum, l) =>
+            sum + countLeaveDaysInCycle(l, empHolidays, bucket.renewalStart, cycleEnd),
+          0
+        );
 
       const used = Math.round(usedLeaves * 100) / 100;
       const allocated = Math.round(bucket.allocated * 100) / 100;

@@ -2,7 +2,7 @@ import { getCurrentUser } from "@/lib/auth/helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasRole } from "@/lib/utils";
 import { LEAVE_TYPE_LABELS, UNIVERSAL_LEAVE_TYPES } from "@/lib/constants";
-import { getRenewalStart, prorateLeave } from "@/lib/leave-proration";
+import { getCycleEnd, getRenewalStart, prorateLeave } from "@/lib/leave-proration";
 import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
 import { buildLeaveLedger } from "@/lib/leave-ledger";
 import type { GrantType, LeaveRequest } from "@/types/database";
@@ -196,6 +196,7 @@ export default async function TeamMemberTimeOffTab({
       leaveType,
       planBase: pb?.planBase ?? 0,
       cycleStart,
+      cycleEnd: getCycleEnd(cycleStart),
       credits: (leaveCredits ?? []).filter((c) => c.leave_type === leaveType),
       leaves: allLeaves,
       holidays: holidaySet,

@@ -1,4 +1,4 @@
-import { countLeaveDays } from "@/lib/leave-days";
+import { countLeaveDays, countLeaveDaysInCycle, overlapsCycle } from "@/lib/leave-days";
 
 export type LedgerEntry = {
   date: string; // YYYY-MM-DD
@@ -40,22 +40,28 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  * (prorated) plan allocation, then every credit and every approved leave for
  * that cycle is an add/subtract line, running down to what's available now.
  *
- * Credits and leaves are both scoped to `cycleStart`, so a new cycle opens
- * fresh: prior-cycle credits and leaves drop off automatically (CTO and any
- * other credit are therefore use-it-or-lose-it within the cycle). Expired
- * credits stay in the ledger so a used credit nets to zero and the type stays
- * visible; only their unused remainder is forfeited.
+ * Credits and leaves are both scoped to the [cycleStart, cycleEnd] window, so
+ * a new cycle opens fresh: prior-cycle credits and leaves drop off
+ * automatically (CTO and any other credit are therefore use-it-or-lose-it
+ * within the cycle). Expired credits stay in the ledger so a used credit nets
+ * to zero and the type stays visible; only their unused remainder is
+ * forfeited.
+ *
+ * A leave that straddles the boundary (Dec 28 → Jan 4 on a calendar-year
+ * plan) is charged to each cycle only for its days inside that cycle, so it
+ * appears in both ledgers for its respective part.
  */
 export function buildLeaveLedger(args: {
   leaveType: string;
   planBase: number;
   cycleStart: string;
+  cycleEnd: string;
   credits: CreditRow[];
   leaves: LeaveRow[];
   holidays: Set<string>;
   today: string;
 }): LeaveBalance {
-  const { leaveType, planBase, cycleStart, credits, leaves, holidays, today } = args;
+  const { leaveType, planBase, cycleStart, cycleEnd, credits, leaves, holidays, today } = args;
 
   const entries: LedgerEntry[] = [];
 
@@ -111,27 +117,34 @@ export function buildLeaveLedger(args: {
     }
   }
 
-  // Approved leaves taken within this cycle.
+  // Approved leaves overlapping this cycle. A leave straddling the boundary
+  // is charged here only for its days inside the window; the rest lands on
+  // the neighbouring cycle's ledger.
   let usedDays = 0;
   let usedCount = 0;
   for (const l of leaves) {
     if (l.leave_type !== leaveType) continue;
     if ((l.status ?? "approved") !== "approved") continue;
-    if (l.start_date < cycleStart) continue;
-    const days =
+    if (!overlapsCycle(l, cycleStart, cycleEnd)) continue;
+    const days = countLeaveDaysInCycle(l, holidays, cycleStart, cycleEnd);
+    if (days === 0) continue;
+    const totalDays =
       l.leave_duration === "half_day"
         ? 0.5
         : countLeaveDays(l.start_date, l.end_date, holidays);
-    if (days === 0) continue;
     usedDays += days;
     usedCount += 1;
     const range =
       l.start_date === l.end_date || l.leave_duration === "half_day"
         ? l.start_date
         : `${l.start_date} → ${l.end_date}`;
+    const partial =
+      days < totalDays ? ` · ${r2(days)} of ${r2(totalDays)} days in this cycle` : "";
     entries.push({
-      date: l.start_date,
-      label: `Leave taken (${range})${l.leave_duration === "half_day" ? " · half day" : ""}`,
+      // Clamp to the cycle start so a leave carried in from the previous
+      // cycle sorts after the opening allocation instead of ahead of it.
+      date: l.start_date < cycleStart ? cycleStart : l.start_date,
+      label: `Leave taken (${range})${l.leave_duration === "half_day" ? " · half day" : ""}${partial}`,
       delta: r2(-days),
       running: 0,
       kind: "leave",

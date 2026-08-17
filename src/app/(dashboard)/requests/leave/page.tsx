@@ -6,15 +6,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { LEAVE_TYPES, UNIVERSAL_LEAVE_TYPES } from "@/lib/constants";
-import { prorateLeave, getRenewalStart } from "@/lib/leave-proration";
-import { buildHolidaySet, countLeaveDays } from "@/lib/leave-days";
+import { prorateLeave, getRenewalStart, getCycleEnd } from "@/lib/leave-proration";
+import { buildHolidaySet, countLeaveDays, countLeaveDaysInCycle } from "@/lib/leave-days";
 import type { GrantType } from "@/types/database";
 
 interface BalanceWarning {
   remaining: number;
   allocated: number;
   used: number;
-  requestDays: number;
+  requestDays: number; // days charged to the CURRENT cycle
+  spillDays: number; // days falling past the cycle end, charged to the next one
   newBalance: number;
 }
 
@@ -30,6 +31,11 @@ export default function LeaveRequestPage() {
   const [planAllocations, setPlanAllocations] = useState<Record<string, number>>({});
   const [usedDays, setUsedDays] = useState<Record<string, number>>({});
   const [holidaySet, setHolidaySet] = useState<Set<string>>(new Set());
+  // Current cycle window per leave type — a request straddling the end of it
+  // only draws this cycle's balance for the days before the boundary.
+  const [cycleWindow, setCycleWindow] = useState<
+    Record<string, { start: string; end: string }>
+  >({});
 
   const [form, setForm] = useState({
     leave_type: "",
@@ -171,15 +177,20 @@ export default function LeaveRequestPage() {
         allocMap[c.leave_type] = (allocMap[c.leave_type] ?? 0) + Number(c.days);
       }
 
-      // Count only leaves whose start falls within the current cycle for their
-      // type (same rule as the ledger), so prior-cycle leaves don't deduct.
+      // Count each leave only for the days falling inside the current cycle
+      // for its type (same rule as the ledger), so prior-cycle leaves don't
+      // deduct and a leave straddling either boundary is split.
+      const windows: Record<string, { start: string; end: string }> = {};
+      for (const [type, start] of Object.entries(cycleStartByType)) {
+        windows[type] = { start, end: getCycleEnd(start) };
+      }
+      const fallbackWindow = { start: yearStartStr, end: getCycleEnd(yearStartStr) };
+      setCycleWindow(windows);
+
       for (const l of leavesThisYear ?? []) {
-        const cycleStart = cycleStartByType[l.leave_type] ?? yearStartStr;
-        if (l.start_date < cycleStart) continue;
-        const days = l.leave_duration === "half_day"
-          ? 0.5
-          : countLeaveDays(l.start_date, l.end_date, localHolidays);
-        used[l.leave_type] = (used[l.leave_type] ?? 0) + days;
+        const win = windows[l.leave_type] ?? fallbackWindow;
+        const days = countLeaveDaysInCycle(l, localHolidays, win.start, win.end);
+        if (days > 0) used[l.leave_type] = (used[l.leave_type] ?? 0) + days;
       }
       setUsedDays(used);
 
@@ -213,7 +224,30 @@ export default function LeaveRequestPage() {
       return;
     }
 
-    const requestDays = getRequestDays();
+    const totalDays = getRequestDays();
+    if (totalDays === 0) {
+      setBalanceWarning(null);
+      return;
+    }
+
+    // Only the part of the request inside the current cycle draws down the
+    // balance shown here; days past the cycle end come out of next cycle's
+    // allocation, which isn't computed on this page.
+    const win = cycleWindow[form.leave_type];
+    const requestDays = win
+      ? countLeaveDaysInCycle(
+          {
+            start_date: form.start_date,
+            end_date: isHalfDay ? form.start_date : form.end_date,
+            leave_duration: form.leave_duration,
+          },
+          holidaySet,
+          win.start,
+          win.end
+        )
+      : totalDays;
+    const spillDays = Math.round((totalDays - requestDays) * 100) / 100;
+
     if (requestDays === 0) {
       setBalanceWarning(null);
       return;
@@ -225,11 +259,11 @@ export default function LeaveRequestPage() {
     const newBalance = remaining - requestDays;
 
     if (newBalance <= 0) {
-      setBalanceWarning({ remaining, allocated, used, requestDays, newBalance });
+      setBalanceWarning({ remaining, allocated, used, requestDays, spillDays, newBalance });
     } else {
       setBalanceWarning(null);
     }
-  }, [form.leave_type, form.start_date, form.end_date, form.leave_duration, hasPlan, planAllocations, usedDays, holidaySet]);
+  }, [form.leave_type, form.start_date, form.end_date, form.leave_duration, isHalfDay, hasPlan, planAllocations, usedDays, holidaySet, cycleWindow]);
 
   useEffect(() => {
     checkBalance();
@@ -313,6 +347,24 @@ export default function LeaveRequestPage() {
 
   const leaveLabel = LEAVE_TYPES[form.leave_type as keyof typeof LEAVE_TYPES]?.label ?? form.leave_type;
   const requestDays = getRequestDays();
+
+  // How the request splits across the cycle boundary, so a range like
+  // Dec 28 → Jan 4 tells the employee which part comes out of which cycle.
+  const cycleWin = cycleWindow[form.leave_type];
+  const daysThisCycle =
+    cycleWin && form.start_date && (isHalfDay || form.end_date)
+      ? countLeaveDaysInCycle(
+          {
+            start_date: form.start_date,
+            end_date: isHalfDay ? form.start_date : form.end_date,
+            leave_duration: form.leave_duration,
+          },
+          holidaySet,
+          cycleWin.start,
+          cycleWin.end
+        )
+      : requestDays;
+  const spillDays = Math.round((requestDays - daysThisCycle) * 100) / 100;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -506,6 +558,18 @@ export default function LeaveRequestPage() {
         {requestDays > 0 && (
           <p className="text-sm text-gray-500">
             This request counts as <span className="font-semibold text-gray-700">{requestDays}</span> day{requestDays !== 1 ? "s" : ""} of leave.
+            {spillDays > 0 && (
+              <>
+                {" "}
+                Your leave cycle renews after{" "}
+                <span className="font-semibold text-gray-700">{cycleWin?.end}</span>, so{" "}
+                <span className="font-semibold text-gray-700">{daysThisCycle}</span> day
+                {daysThisCycle !== 1 ? "s" : ""} come{daysThisCycle === 1 ? "s" : ""} out of
+                your current balance and{" "}
+                <span className="font-semibold text-gray-700">{spillDays}</span> day
+                {spillDays !== 1 ? "s" : ""} out of next cycle&apos;s.
+              </>
+            )}
           </p>
         )}
 
