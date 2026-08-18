@@ -436,6 +436,22 @@ export const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateDefault[] = [
     variables: "employee_name, request_type, details, app_url",
   },
 
+  {
+    type: "pending_request_reminder",
+    name: "Stale Pending Requests — Daily Digest (to Approver)",
+    subject:
+      "{{pending_count}} {{request_word}} waiting for your approval",
+    body: [
+      `<h2>Requests Waiting On You</h2>`,
+      `<p>Hi {{preferred_name}}, you have <strong>{{pending_count}}</strong> {{request_word}} from your team still waiting for a decision — the oldest has been pending <strong>{{oldest_days}} {{oldest_days_word}}</strong>.</p>`,
+      `{{requests_html}}`,
+      button("Review Requests", "{{app_url}}/requests"),
+      `<p class="muted">You'll get this once a day until each request is approved or rejected. Dismissing a reminder on your dashboard stops the email for that request.</p>`,
+    ].join("\n"),
+    variables:
+      "pending_count, request_word, oldest_days, oldest_days_word, requests_html, app_url",
+  },
+
   // ── Permanent Schedule Changes ──
   {
     type: "schedule_weekly_change_submitted",

@@ -24,6 +24,14 @@ import { UserAvatar } from "@/components/shared/user-avatar";
 import { LEAVE_TYPE_LABELS, UNIVERSAL_LEAVE_TYPES, LEAVE_TYPES } from "@/lib/constants";
 import { prorateLeave, getRenewalStart, getCycleEnd } from "@/lib/leave-proration";
 import { buildHolidaySet, countLeaveDaysInCycle } from "@/lib/leave-days";
+import {
+  REQUEST_KIND_LABELS,
+  type PendingRequestKind,
+} from "@/lib/requests/pending";
+import {
+  ReminderFlagsCard,
+  type ReminderFlag,
+} from "@/components/dashboard/reminder-flags-card";
 import type { GrantType } from "@/types/database";
 
 export default async function DashboardPage() {
@@ -253,7 +261,50 @@ export default async function DashboardPage() {
   const pendingHWTeam = pendingHWTeamResult.count ?? 0;
   const totalPendingTeam = pendingAdjTeam + pendingLeaveTeam + pendingHWTeam;
   const unflaggedTeam = unflaggedTeamResult.count ?? 0;
-  const hasAttention = totalPending > 0 || unflagged > 0;
+
+  // --- Reminder flags: requests this viewer is holding up ---
+  // Raised by the pending-request-reminders cron and cleared by it once the
+  // request is decided, so anything here is still genuinely waiting. Read
+  // through the user client — RLS scopes it to the viewer's own flags (HR
+  // sees all, which would be the whole org, so it's narrowed to their own
+  // here to keep the card personal).
+  const { data: myReminderFlags } = await supabase
+    .from("request_reminder_flags")
+    .select("id, request_type, employee_id, summary, days_pending")
+    .eq("manager_id", user.id)
+    .eq("acknowledged", false)
+    .order("days_pending", { ascending: false })
+    .limit(25);
+
+  const reminderEmployeeIds = Array.from(
+    new Set((myReminderFlags ?? []).map((f) => f.employee_id))
+  );
+  const { data: reminderEmployees } = reminderEmployeeIds.length
+    ? await supabase
+        .from("users")
+        .select("id, full_name, preferred_name, email")
+        .in("id", reminderEmployeeIds)
+    : { data: [] };
+  const reminderEmployeeById = new Map(
+    (reminderEmployees ?? []).map((e) => [e.id, e])
+  );
+
+  const reminderFlags: ReminderFlag[] = (myReminderFlags ?? []).map((f) => {
+    const emp = reminderEmployeeById.get(f.employee_id);
+    return {
+      id: f.id,
+      kindLabel:
+        REQUEST_KIND_LABELS[f.request_type as PendingRequestKind] ??
+        f.request_type,
+      employeeName:
+        emp?.full_name || emp?.preferred_name || emp?.email || "An employee",
+      summary: f.summary,
+      daysPending: f.days_pending,
+    };
+  });
+
+  const hasAttention =
+    totalPending > 0 || unflagged > 0 || reminderFlags.length > 0;
 
   // --- Leave Balance ---
   function countWeekdays(start: string, end: string): number {
@@ -599,6 +650,7 @@ export default async function DashboardPage() {
             Needs Attention
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <ReminderFlagsCard flags={reminderFlags} />
             {totalPending > 0 && (
               <Link
                 href="/requests"

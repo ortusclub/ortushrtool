@@ -253,7 +253,12 @@ export function EmailTemplateEditor({
     },
     {
       label: "Attendance & Reminders",
-      types: ["attendance_flag", "reminder", "holiday_import_reminder"],
+      types: [
+        "attendance_flag",
+        "reminder",
+        "pending_request_reminder",
+        "holiday_import_reminder",
+      ],
     },
     {
       label: "Concerns & Peer Feedback",

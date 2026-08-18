@@ -141,6 +141,12 @@ export const TEMPLATE_META: Record<string, TemplateMeta> = {
     sentWhen:
       "Sent when an employee clicks 'Buzz Manager' on a pending request they've submitted. To: their manager.",
   },
+  pending_request_reminder: {
+    sentWhen:
+      "Sent at 10:00 AM Manila daily to any manager with leave, schedule adjustment, overtime or holiday-work requests that have been pending longer than the staleness threshold (default 2 days, set via the 'pending_request_reminder_days' system setting). One digest per manager listing everything waiting on them, oldest first — not one email per request. To: the requester's direct manager only. Requests from an employee with no manager set are skipped and reported in the cron's response. A manager who dismisses a reminder on their dashboard drops that request from the digest until it's decided.",
+    toggleKey: "pending_request_reminder_emails_enabled",
+    toggleLabel: "Send pending-approval reminder emails",
+  },
 
   // Permanent schedule changes
   schedule_weekly_change_submitted: {
