@@ -22,8 +22,37 @@ export type IngestResult = {
   errors: IngestRowError[];
 };
 
+/** Fold accents and punctuation so "Inés" and "Ines" compare equal. */
 function normalizeName(s: string): string {
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Does the source's name plausibly belong to this profile?
+ *
+ * The scanner stores names in a fixed 14-byte field — 6 characters of UTF-16
+ * plus a terminator — so anything longer is silently cut: "Benedict" is
+ * exported as "Benedi", "Khristian" as "Khrist". An equality check therefore
+ * rejects most real rows, so a device name is accepted when it's a PREFIX of
+ * any name on the profile.
+ *
+ * This is a sanity check, not the identity: biometric_id is what actually
+ * resolves the person. Its job is to catch an enrolment number that has been
+ * reassigned to someone else, which prefix matching still does — a wholly
+ * different name won't prefix-match.
+ */
+function nameLooksRight(sourceName: string, candidates: (string | null)[]): boolean {
+  const n = normalizeName(sourceName);
+  if (!n) return true;
+  return candidates
+    .filter((c): c is string => Boolean(c))
+    .map(normalizeName)
+    .some((c) => c === n || c.startsWith(n));
 }
 
 export async function ingestPunches(
@@ -81,20 +110,22 @@ export async function ingestPunches(
       errors.push({ ...row, reason: "No user with this biometric_id" });
       continue;
     }
-    if (checkNames && row.name) {
-      const csvName = normalizeName(row.name);
-      // The source's name is treated as a preferred name; first/full name are
-      // accepted as fallbacks so a profile with only full_name isn't blocked.
-      const candidates = [matched.preferred_name, matched.first_name, matched.full_name]
-        .filter((s): s is string => Boolean(s))
-        .map(normalizeName);
-      if (!candidates.includes(csvName)) {
-        errors.push({
-          ...row,
-          reason: `Name mismatch (profile: ${matched.preferred_name ?? matched.full_name ?? "—"})`,
-        });
-        continue;
-      }
+    if (
+      checkNames &&
+      row.name &&
+      !nameLooksRight(row.name, [
+        matched.preferred_name,
+        matched.first_name,
+        matched.full_name,
+      ])
+    ) {
+      errors.push({
+        ...row,
+        reason: `Name mismatch — device says "${row.name}", profile is "${
+          matched.preferred_name ?? matched.full_name ?? "—"
+        }". The enrolment number may have been reassigned.`,
+      });
+      continue;
     }
     toInsert.push({
       employee_id: matched.id,
