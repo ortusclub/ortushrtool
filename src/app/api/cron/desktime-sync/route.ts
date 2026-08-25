@@ -92,23 +92,15 @@ export async function GET(request: Request) {
     // to the old whole-day "on leave" and check nothing, rather than invent a
     // boundary and flag someone against a shift nobody defined.
     //
-    // Only applied from HALF_DAY_PUNCTUALITY_FROM onwards. The sync accepts
-    // ?date= for manual backfills, and re-running an old date must not
-    // retroactively turn a quiet "on leave" row into a late flag.
-    const { data: halfDayFromSetting } = await supabase
-      .from("system_settings")
-      .select("value")
-      .eq("key", "half_day_punctuality_from")
-      .maybeSingle();
-    const HALF_DAY_PUNCTUALITY_FROM = halfDayFromSetting?.value ?? "2026-08-26";
-    const halfDayPunctualityApplies = syncDate >= HALF_DAY_PUNCTUALITY_FROM;
-
+    // Applies to whatever date is being synced, including manual ?date=
+    // backfills — so re-syncing an old date will recalculate its half-day
+    // rows and can turn a previous "on leave" into on-time, late or absent.
     const employeesOnLeave = new Set<string>();
     const halfDayWorkWindow = new Map<string, { start: string | null; end: string | null }>();
     for (const l of approvedLeaves ?? []) {
       const isHalf = l.leave_duration === "half_day";
       const hasTimes = Boolean(l.half_day_start_time && l.half_day_end_time);
-      if (!isHalf || !halfDayPunctualityApplies || !hasTimes) {
+      if (!isHalf || !hasTimes) {
         employeesOnLeave.add(l.employee_id);
         continue;
       }
