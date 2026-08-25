@@ -5,12 +5,18 @@
  * the gate is an allowlist of device serial numbers in
  * BIOMETRIC_DEVICE_SERIALS (comma-separated).
  *
- * When that variable is unset the endpoint runs in LEARN MODE: it accepts the
- * post and logs the serial so it can be pinned afterwards. This exists purely
- * so the very first scan can be traced without knowing the serial in advance —
- * set the variable as soon as you have it. Learn mode is still narrow: a punch
- * only lands if its PIN matches an existing users.biometric_id, so an
- * unknown caller cannot invent attendance for anyone.
+ * With nothing configured the endpoint is CLOSED: every request is rejected.
+ * That is the safe default for a route that has to be publicly reachable and
+ * cannot ask for credentials, in a public repository where the path is not
+ * secret.
+ *
+ * Bringing a device online is a chicken-and-egg problem — you need its serial
+ * to allowlist it, and the reliable way to learn the serial is to let it talk
+ * once. Set BIOMETRIC_LEARN_MODE=true to allow that: requests are accepted and
+ * the serial logged, so it can be pinned in BIOMETRIC_DEVICE_SERIALS and learn
+ * mode turned off again. Even then a punch only lands if its PIN matches an
+ * existing users.biometric_id, so an unknown caller cannot invent attendance
+ * for someone who is not enrolled.
  */
 
 export type SerialCheck =
@@ -23,10 +29,19 @@ export function checkDeviceSerial(sn: string | null): SerialCheck {
     .map((s) => s.trim())
     .filter(Boolean);
 
+  const learnMode = process.env.BIOMETRIC_LEARN_MODE === "true";
+
   if (configured.length === 0) {
+    if (!learnMode) {
+      console.warn(
+        `[iclock] CLOSED — no BIOMETRIC_DEVICE_SERIALS configured, rejecting SN="${sn ?? "(none)"}". ` +
+          `Set BIOMETRIC_LEARN_MODE=true to discover a device's serial.`
+      );
+      return { allowed: false, learnMode: false };
+    }
     console.warn(
-      `[iclock] LEARN MODE — BIOMETRIC_DEVICE_SERIALS is unset. Accepting SN="${sn ?? "(none)"}". ` +
-        `Set BIOMETRIC_DEVICE_SERIALS to this value to lock the endpoint down.`
+      `[iclock] LEARN MODE — accepting SN="${sn ?? "(none)"}". Add it to ` +
+        `BIOMETRIC_DEVICE_SERIALS and unset BIOMETRIC_LEARN_MODE to close the endpoint.`
     );
     return { allowed: true, learnMode: true };
   }
