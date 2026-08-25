@@ -272,6 +272,11 @@ export function AllAttendanceTable({
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [tzFilter, setTzFilter] = useState<Set<string>>(new Set());
   const [subdeptFilter, setSubdeptFilter] = useState<Set<string>>(new Set());
+  // Location exceptions: people who weren't where they were meant to be.
+  // Driven by clicking the office-attendance figures rather than a header
+  // filter, since the question is "who broke the plan", not "show me a value".
+  const [locationExceptionFilter, setLocationExceptionFilter] =
+    useState<"no_show" | "unplanned" | "any" | null>(null);
 
   type SortColumn =
     | "name"
@@ -637,6 +642,14 @@ export function AllAttendanceTable({
       });
     }
 
+    if (locationExceptionFilter) {
+      result = result.filter((r) => {
+        const ex = locationException(r);
+        if (!ex) return false;
+        return locationExceptionFilter === "any" ? true : ex === locationExceptionFilter;
+      });
+    }
+
     if (actualLocationFilter.size > 0) {
       result = result.filter((r) => {
         const actual =
@@ -673,12 +686,12 @@ export function AllAttendanceTable({
 
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, employeePicker, search, selectedEmployeeId, countryFilter, tzFilter, subdeptFilter, statusFilter, locationFilter, actualLocationFilter, biometricPresence, sort, onLeaveByEmpDate, halfDayLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
+  }, [rawRows, employeePicker, search, selectedEmployeeId, countryFilter, tzFilter, subdeptFilter, statusFilter, locationFilter, actualLocationFilter, locationExceptionFilter, biometricPresence, sort, onLeaveByEmpDate, halfDayLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
 
   // Reset to page 1 when filters / dates change
   useEffect(() => {
     setPageIndex(0);
-  }, [search, selectedEmployeeId, countryFilter, locationFilter, actualLocationFilter, statusFilter, tzFilter, subdeptFilter, fromDate, toDate]);
+  }, [search, selectedEmployeeId, countryFilter, locationFilter, actualLocationFilter, locationExceptionFilter, statusFilter, tzFilter, subdeptFilter, fromDate, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const safePageIndex = Math.min(pageIndex, totalPages - 1);
@@ -719,6 +732,25 @@ export function AllAttendanceTable({
   }, [filteredRows, onLeaveByEmpDate, halfDayLeaveByEmpDate]);
 
   /**
+   * How a row departs from its plan, if at all.
+   *   no_show   — due in the office, the scanner never saw them
+   *   unplanned — in the office on a day they weren't due there
+   *   wrong     — planned online but came in, or vice versa (any mismatch)
+   * Non-working days have no plan to break, so they return null.
+   */
+  function locationException(row: { user: UserRow; log: AttendanceLog | undefined; date: string }):
+    "no_show" | "unplanned" | "wrong" | null {
+    const ds = rowDisplayStatus(row);
+    if (NON_WORKING_STATUSES.includes(ds)) return null;
+    const planned = getLocation(row.user.id, row.date, ds);
+    const was = getActualLocation(row.user.id, row.date, ds, row.log);
+    if (planned === "office" && was !== "office") return "no_show";
+    if (was === "office" && planned !== "office") return "unplanned";
+    if (planned && was && planned !== was) return "wrong";
+    return null;
+  }
+
+  /**
    * Office attendance is deliberately NOT derived from filteredRows.
    *
    * "9 of 12 expected came in" only means something against a fixed
@@ -729,7 +761,7 @@ export function AllAttendanceTable({
    * filter this responds to.
    */
   const officeStats = useMemo(() => {
-    let expected = 0, actual = 0, noShow = 0, unplanned = 0;
+    let expected = 0, actual = 0, noShow = 0, unplanned = 0, wrong = 0;
     for (const r of rawRows) {
       if (countryFilter.size > 0 && !countryFilter.has(r.user.holiday_country)) continue;
       const ds = rowDisplayStatus(r);
@@ -739,12 +771,14 @@ export function AllAttendanceTable({
       if (was === "office") actual++;
       if (planned === "office" && was !== "office") noShow++;
       if (was === "office" && planned !== "office") unplanned++;
+      if (planned && was && planned !== was) wrong++;
     }
-    return { expected, actual, noShow, unplanned };
+    return { expected, actual, noShow, unplanned, wrong };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawRows, countryFilter, biometricPresence, onLeaveByEmpDate, halfDayLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
 
   const hasActiveFilters =
+    locationExceptionFilter !== null ||
     countryFilter.size > 0 ||
     locationFilter.size > 0 ||
     actualLocationFilter.size > 0 ||
@@ -978,47 +1012,75 @@ export function AllAttendanceTable({
         </div>
       </div>
 
-      {/* Office attendance: planned vs what the scanner actually saw. Driven
-          by the country filter alone — see the officeStats memo for why the
-          other filters must not move these numbers. */}
-      {countryFilter.size > 0 && (officeStats.expected > 0 || officeStats.actual > 0) && (
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3 text-sm">
-          <span className="font-medium text-indigo-900">Office attendance</span>
-          <span className="text-indigo-800">
-            <span className="font-semibold">{officeStats.expected}</span> expected
-          </span>
-          <span className="text-indigo-800">
-            <span className="font-semibold">{officeStats.actual}</span> actually in
-          </span>
-          {officeStats.expected > 0 && (
+      {/* Office attendance: planned vs what the scanner actually saw. Shown
+          on any single day, or when a country narrows the population — over a
+          wide range with everyone in view the figures are person-days, not
+          people, and read as a headcount they aren't. The counts are buttons:
+          clicking one filters the table to exactly those rows, which beats
+          hunting for the small red flag on each line. */}
+      {(isSingleDate || countryFilter.size > 0) &&
+        (officeStats.expected > 0 || officeStats.actual > 0) && (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3 text-sm">
+            <span className="font-medium text-indigo-900">Office attendance</span>
             <span className="text-indigo-800">
-              <span className="font-semibold">
-                {Math.round((officeStats.actual / officeStats.expected) * 100)}%
-              </span>{" "}
-              of expected
+              <span className="font-semibold">{officeStats.expected}</span> expected
             </span>
-          )}
-          {officeStats.noShow > 0 && (
-            <span
-              className="rounded-full bg-red-100 px-2.5 py-0.5 font-medium text-red-700"
-              title="Planned to be in the office but the scanner never saw them"
-            >
-              {officeStats.noShow} didn&apos;t come in
+            <span className="text-indigo-800">
+              <span className="font-semibold">{officeStats.actual}</span> actually in
             </span>
-          )}
-          {officeStats.unplanned > 0 && (
-            <span
-              className="rounded-full bg-amber-100 px-2.5 py-0.5 font-medium text-amber-800"
-              title="Came into the office on a day they were not planned to"
-            >
-              {officeStats.unplanned} came in unplanned
+            {officeStats.expected > 0 && (
+              <span className="text-indigo-800">
+                <span className="font-semibold">
+                  {Math.round((officeStats.actual / officeStats.expected) * 100)}%
+                </span>{" "}
+                of expected
+              </span>
+            )}
+
+            {([
+              { key: "no_show", count: officeStats.noShow, label: "didn't come in",
+                classes: "bg-red-100 text-red-700 hover:bg-red-200", ring: "ring-red-500",
+                title: "Due in the office — the scanner never saw them. Click to show only these." },
+              { key: "unplanned", count: officeStats.unplanned, label: "came in unplanned",
+                classes: "bg-amber-100 text-amber-800 hover:bg-amber-200", ring: "ring-amber-500",
+                title: "In the office on a day they weren't due there. Click to show only these." },
+              { key: "any", count: officeStats.noShow + officeStats.unplanned, label: "not where expected",
+                classes: "bg-purple-100 text-purple-700 hover:bg-purple-200", ring: "ring-purple-500",
+                title: "Everyone whose actual location didn't match the plan. Click to show only these." },
+            ] as const).map((c) => {
+              if (c.count === 0) return null;
+              const active = locationExceptionFilter === c.key;
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  title={c.title}
+                  onClick={() => setLocationExceptionFilter(active ? null : c.key)}
+                  className={`rounded-full px-2.5 py-0.5 font-medium transition-colors ${c.classes} ${
+                    active ? `ring-2 ${c.ring}` : ""
+                  }`}
+                >
+                  {c.count} {c.label}
+                </button>
+              );
+            })}
+
+            {locationExceptionFilter && (
+              <button
+                type="button"
+                onClick={() => setLocationExceptionFilter(null)}
+                className="text-xs font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
+              >
+                Clear
+              </button>
+            )}
+
+            <span className="text-xs text-indigo-700">
+              Leave, holidays and rest days are excluded.
+              {!isSingleDate && " Counts are person-days across the range, not people."}
             </span>
-          )}
-          <span className="text-xs text-indigo-700">
-            Leave, holidays and rest days are excluded from both figures.
-          </span>
-        </div>
-      )}
+          </div>
+        )}
 
       {/* Table */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-x-auto">
