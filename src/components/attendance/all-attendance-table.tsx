@@ -436,6 +436,28 @@ export function AllAttendanceTable({
     return sched && !sched.is_rest_day ? sched.work_location : null;
   }
 
+  /**
+   * Where someone actually was: "office" if the door scanner saw them,
+   * "online" if DeskTime recorded activity, otherwise null.
+   *
+   * Non-working days return null regardless of either signal. Someone on
+   * leave who answers a message, or who drops by the office to collect
+   * something, is still on leave — reporting them as Online/Office made the
+   * day look like attendance and put a spurious mismatch flag against a
+   * planned location that doesn't exist for that day.
+   */
+  function getActualLocation(
+    userId: string,
+    date: string,
+    status: string,
+    log: AttendanceLog | undefined
+  ): "office" | "online" | null {
+    if (["rest_day", "on_leave", "holiday"].includes(status)) return null;
+    if (biometricPresence.has(`${userId}|${date}`)) return "office";
+    if (log?.clock_in || log?.clock_out) return "online";
+    return null;
+  }
+
   function getScheduleTimes(userId: string, date: string): { start: string; end: string } | null {
     const sched = scheduleByEmpDow.get(`${userId}|${dowFromDate(date)}`);
     if (sched && !sched.is_rest_day && sched.start_time && sched.end_time) {
@@ -588,9 +610,8 @@ export function AllAttendanceTable({
 
     if (actualLocationFilter.size > 0) {
       result = result.filter((r) => {
-        const wasInOffice = biometricPresence.has(`${r.user.id}|${r.date}`);
-        const hadActivity = Boolean(r.log?.clock_in || r.log?.clock_out);
-        const actual = wasInOffice ? "office" : hadActivity ? "online" : "none";
+        const actual =
+          getActualLocation(r.user.id, r.date, rowDisplayStatus(r), r.log) ?? "none";
         return actualLocationFilter.has(actual);
       });
     }
@@ -650,8 +671,18 @@ export function AllAttendanceTable({
   const stats = useMemo(() => {
     let onTime = 0, late = 0, early = 0, absent = 0, noData = 0,
       onLeave = 0, holiday = 0, working = 0, notStarted = 0, inconclusive = 0;
+    // Office attendance: how many were PLANNED to be in the office versus how
+    // many the scanner actually saw. Both skip non-working days, so leave and
+    // rest days never inflate either side.
+    let officeExpected = 0, officeActual = 0, officeNoShow = 0, officeUnplanned = 0;
     for (const r of filteredRows) {
       const ds = rowDisplayStatus(r);
+      const planned = getLocation(r.user.id, r.date, ds);
+      const actual = getActualLocation(r.user.id, r.date, ds, r.log);
+      if (planned === "office") officeExpected++;
+      if (actual === "office") officeActual++;
+      if (planned === "office" && actual !== "office") officeNoShow++;
+      if (actual === "office" && planned !== "office") officeUnplanned++;
       if (ds === "on_time") onTime++;
       else if (ds === "late_arrival") late++;
       else if (ds === "early_departure") early++;
@@ -664,7 +695,8 @@ export function AllAttendanceTable({
       else if (ds === "inconclusive") inconclusive++;
       else noData++;
     }
-    return { onTime, late, early, absent, noData, onLeave, holiday, working, notStarted, inconclusive };
+    return { onTime, late, early, absent, noData, onLeave, holiday, working, notStarted, inconclusive,
+      officeExpected, officeActual, officeNoShow, officeUnplanned };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredRows, onLeaveByEmpDate]);
 
@@ -723,9 +755,8 @@ export function AllAttendanceTable({
         cells.push(user.manager ? displayName(user.manager) : "");
       }
       if (!isSingleDate) cells.push(date);
-      const wasInOffice = biometricPresence.has(`${user.id}|${date}`);
-      const hadActivity = Boolean(log?.clock_in || log?.clock_out);
-      const actualLocation = wasInOffice ? "Office" : hadActivity ? "Online" : "";
+      const actualLoc = getActualLocation(user.id, date, ds, log);
+      const actualLocation = actualLoc === "office" ? "Office" : actualLoc === "online" ? "Online" : "";
       cells.push(
         HOLIDAY_COUNTRY_LABELS[user.holiday_country] ?? user.holiday_country,
         location ?? "",
@@ -903,6 +934,49 @@ export function AllAttendanceTable({
         </div>
       </div>
 
+      {/* Office attendance: planned vs what the scanner actually saw. Shown
+          only once a filter narrows the view — across the whole company it's
+          a number without a question behind it, and it would sit above every
+          page load. */}
+      {hasActiveFilters && (stats.officeExpected > 0 || stats.officeActual > 0) && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3 text-sm">
+          <span className="font-medium text-indigo-900">Office attendance</span>
+          <span className="text-indigo-800">
+            <span className="font-semibold">{stats.officeExpected}</span> expected
+          </span>
+          <span className="text-indigo-800">
+            <span className="font-semibold">{stats.officeActual}</span> actually in
+          </span>
+          {stats.officeExpected > 0 && (
+            <span className="text-indigo-800">
+              <span className="font-semibold">
+                {Math.round((stats.officeActual / stats.officeExpected) * 100)}%
+              </span>{" "}
+              of expected
+            </span>
+          )}
+          {stats.officeNoShow > 0 && (
+            <span
+              className="rounded-full bg-red-100 px-2.5 py-0.5 font-medium text-red-700"
+              title="Planned to be in the office but the scanner never saw them"
+            >
+              {stats.officeNoShow} didn&apos;t come in
+            </span>
+          )}
+          {stats.officeUnplanned > 0 && (
+            <span
+              className="rounded-full bg-amber-100 px-2.5 py-0.5 font-medium text-amber-800"
+              title="Came into the office on a day they were not planned to"
+            >
+              {stats.officeUnplanned} came in unplanned
+            </span>
+          )}
+          <span className="text-xs text-indigo-700">
+            Leave, holidays and rest days are excluded from both figures.
+          </span>
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-x-auto">
         {loading ? (
@@ -1065,9 +1139,8 @@ export function AllAttendanceTable({
                     </td>
                     <td className="px-4 py-3">
                       {(() => {
-                        const wasInOffice = biometricPresence.has(`${user.id}|${date}`);
-                        const hadActivity = Boolean(log?.clock_in || log?.clock_out);
-                        if (wasInOffice) {
+                        const actualLoc = getActualLocation(user.id, date, ds, log);
+                        if (actualLoc === "office") {
                           const mismatch = location && location !== "office";
                           return (
                             <span
@@ -1083,7 +1156,7 @@ export function AllAttendanceTable({
                             </span>
                           );
                         }
-                        if (hadActivity) {
+                        if (actualLoc === "online") {
                           const mismatch = location === "office";
                           return (
                             <span
