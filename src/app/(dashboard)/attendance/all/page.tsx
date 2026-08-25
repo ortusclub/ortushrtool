@@ -31,7 +31,6 @@ export default async function AllAttendancePage() {
       .from("users")
       .select("id, full_name, preferred_name, first_name, last_name, email, timezone, holiday_country, desktime_url, job_title, manager_id")
       .eq("is_active", true)
-      .not("desktime_employee_id", "is", null)
       .order("full_name"),
     // Managers may not have a DeskTime ID, so fetch the full active set just
     // for the manager lookup.

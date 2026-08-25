@@ -28,7 +28,6 @@ export default async function TeamAttendancePage() {
     .select("id, full_name, preferred_name, first_name, last_name, email, timezone, holiday_country, desktime_url, job_title, manager_id")
     .eq("manager_id", user.id)
     .eq("is_active", true)
-    .not("desktime_employee_id", "is", null)
     .order("full_name");
 
   // All reports share this manager (the viewer); the Manager column is

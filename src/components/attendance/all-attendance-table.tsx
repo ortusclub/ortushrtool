@@ -495,13 +495,27 @@ export function AllAttendanceTable({
       if (!user) continue;
       out.push({ user, log, date: log.date });
     }
+    // Someone can be in the office with no DeskTime log at all — staff who
+    // have no DeskTime seat produce zero logs, so building rows from logs
+    // alone made them invisible despite badging in every day. Add a row for
+    // any day they were physically present; it carries no clock in/out
+    // (DeskTime owns those) but shows the Office location.
+    const seen = new Set(out.map((r) => `${r.user.id}|${r.date}`));
+    for (const key of biometricPresence) {
+      if (seen.has(key)) continue;
+      const [employeeId, date] = key.split("|");
+      if (date < fromDate || date > toDate) continue;
+      const user = userById.get(employeeId);
+      if (!user) continue;
+      out.push({ user, log: undefined, date });
+    }
     out.sort(
       (a, b) =>
         b.date.localeCompare(a.date) ||
         displayName(a.user).localeCompare(displayName(b.user))
     );
     return out;
-  }, [isSingleDate, users, userById, logMap, logs, fromDate]);
+  }, [isSingleDate, users, userById, logMap, logs, fromDate, toDate, biometricPresence]);
 
   function rowDisplayStatus(row: { user: UserRow; log: AttendanceLog | undefined; date: string }): string {
     const tz = row.user.timezone || "Asia/Manila";
