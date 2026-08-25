@@ -66,6 +66,8 @@ interface LeaveRow {
   employee_id: string;
   start_date: string;
   end_date: string;
+  leave_duration: string | null;
+  half_day_period: string | null;
 }
 
 function todayStr(): string {
@@ -154,6 +156,7 @@ const statusStyles: Record<string, string> = {
   not_started: "bg-slate-100 text-slate-600",
   no_schedule: "bg-gray-100 text-gray-500",
   inconclusive: "bg-amber-100 text-amber-700",
+  half_day_leave: "bg-sky-100 text-sky-700",
 };
 
 // Pills bundle related stored statuses (e.g. "Late" includes late_and_early).
@@ -162,6 +165,9 @@ function statusMatches(displayStatus: string, filter: string): boolean {
   if (filter === "early_any") return displayStatus === "early_departure" || displayStatus === "late_and_early";
   return displayStatus === filter;
 }
+
+/** Days nobody is due to work: no planned or actual location applies. */
+const NON_WORKING_STATUSES = ["rest_day", "on_leave", "holiday"];
 
 const statusLabels: Record<string, string> = {
   on_time: "On Time",
@@ -176,6 +182,7 @@ const statusLabels: Record<string, string> = {
   not_started: "Shift Yet to Start",
   no_schedule: "No Schedule",
   inconclusive: "Inconclusive",
+  half_day_leave: "Half Day Leave",
 };
 
 /**
@@ -349,7 +356,7 @@ export function AllAttendanceTable({
         fetchAllRows<LeaveRow>((from, to) =>
           supabase
             .from("leave_requests")
-            .select("employee_id, start_date, end_date")
+            .select("employee_id, start_date, end_date, leave_duration, half_day_period")
             .eq("status", "approved")
             .lte("start_date", toDate)
             .gte("end_date", fromDate)
@@ -416,20 +423,35 @@ export function AllAttendanceTable({
   }, [adjustments]);
 
   // expand each leave into its individual covered dates within the range
-  const onLeaveByEmpDate = useMemo(() => {
-    const set = new Set<string>();
+  /**
+   * Leave split by duration, because a half day is still a working day.
+   *
+   * Nearly a third of approved leave is half-day, and those people work the
+   * other half — often from the office. Treating the whole date as leave
+   * blanked their planned location and threw away the office presence the
+   * scanner had recorded.
+   *
+   * onLeaveByEmpDate holds FULL-day leave only. halfDayLeaveByEmpDate maps
+   * the date to the half taken (am/pm) so it can be shown alongside the
+   * location they still worked.
+   */
+  const { onLeaveByEmpDate, halfDayLeaveByEmpDate } = useMemo(() => {
+    const full = new Set<string>();
+    const half = new Map<string, string>();
     for (const lv of leaves) {
       const start = lv.start_date < fromDate ? fromDate : lv.start_date;
       const end = lv.end_date > toDate ? toDate : lv.end_date;
       for (const d of eachDateInRange(start, end)) {
-        set.add(`${lv.employee_id}|${d}`);
+        const key = `${lv.employee_id}|${d}`;
+        if (lv.leave_duration === "half_day") half.set(key, lv.half_day_period ?? "");
+        else full.add(key);
       }
     }
-    return set;
+    return { onLeaveByEmpDate: full, halfDayLeaveByEmpDate: half };
   }, [leaves, fromDate, toDate]);
 
   function getLocation(userId: string, date: string, status: string): string | null {
-    if (["rest_day", "on_leave", "holiday"].includes(status)) return null;
+    if (NON_WORKING_STATUSES.includes(status)) return null;
     const adjLocation = adjustmentByEmpDate.get(`${userId}|${date}`);
     if (adjLocation) return adjLocation;
     const sched = scheduleByEmpDow.get(`${userId}|${dowFromDate(date)}`);
@@ -452,7 +474,7 @@ export function AllAttendanceTable({
     status: string,
     log: AttendanceLog | undefined
   ): "office" | "online" | null {
-    if (["rest_day", "on_leave", "holiday"].includes(status)) return null;
+    if (NON_WORKING_STATUSES.includes(status)) return null;
     if (biometricPresence.has(`${userId}|${date}`)) return "office";
     if (log?.clock_in || log?.clock_out) return "online";
     return null;
@@ -542,8 +564,15 @@ export function AllAttendanceTable({
   function rowDisplayStatus(row: { user: UserRow; log: AttendanceLog | undefined; date: string }): string {
     const tz = row.user.timezone || "Asia/Manila";
     const raw = getDisplayStatus(row.log, tz, row.date === today);
+    const leaveKey = `${row.user.id}|${row.date}`;
+    // desktime-sync stores "on_leave" for the whole date regardless of
+    // duration, so a half day arrives here already labelled as a full one.
+    // Override it — otherwise the half they worked disappears.
+    if (halfDayLeaveByEmpDate.has(leaveKey)) {
+      return ["holiday", "rest_day"].includes(raw) ? raw : "half_day_leave";
+    }
     if (
-      onLeaveByEmpDate.has(`${row.user.id}|${row.date}`) &&
+      onLeaveByEmpDate.has(leaveKey) &&
       !["on_leave", "holiday", "rest_day"].includes(raw)
     ) {
       return "on_leave";
@@ -559,7 +588,7 @@ export function AllAttendanceTable({
       .sort()
       .map((s) => ({ value: s, label: statusLabels[s] ?? s }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, onLeaveByEmpDate]);
+  }, [rawRows, onLeaveByEmpDate, halfDayLeaveByEmpDate]);
 
   const filteredRows = useMemo(() => {
     let result = rawRows;
@@ -644,7 +673,7 @@ export function AllAttendanceTable({
 
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, employeePicker, search, selectedEmployeeId, countryFilter, tzFilter, subdeptFilter, statusFilter, locationFilter, actualLocationFilter, biometricPresence, sort, onLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
+  }, [rawRows, employeePicker, search, selectedEmployeeId, countryFilter, tzFilter, subdeptFilter, statusFilter, locationFilter, actualLocationFilter, biometricPresence, sort, onLeaveByEmpDate, halfDayLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
 
   // Reset to page 1 when filters / dates change
   useEffect(() => {
@@ -687,7 +716,7 @@ export function AllAttendanceTable({
     }
     return { onTime, late, early, absent, noData, onLeave, holiday, working, notStarted, inconclusive };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredRows, onLeaveByEmpDate]);
+  }, [filteredRows, onLeaveByEmpDate, halfDayLeaveByEmpDate]);
 
   /**
    * Office attendance is deliberately NOT derived from filteredRows.
@@ -713,7 +742,7 @@ export function AllAttendanceTable({
     }
     return { expected, actual, noShow, unplanned };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, countryFilter, biometricPresence, onLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
+  }, [rawRows, countryFilter, biometricPresence, onLeaveByEmpDate, halfDayLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
 
   const hasActiveFilters =
     countryFilter.size > 0 ||
@@ -774,7 +803,7 @@ export function AllAttendanceTable({
       const actualLocation = actualLoc === "office" ? "Office" : actualLoc === "online" ? "Online" : "";
       cells.push(
         HOLIDAY_COUNTRY_LABELS[user.holiday_country] ?? user.holiday_country,
-        location ?? "",
+        location ?? (NON_WORKING_STATUSES.includes(ds) ? (statusLabels[ds] ?? ds) : ""),
         actualLocation,
         schedule,
         getTzLabel(tz),
@@ -1138,14 +1167,42 @@ export function AllAttendanceTable({
                     </td>
                     <td className="px-4 py-3">
                       {location ? (
+                        <span className="inline-flex flex-wrap items-center gap-1">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                              location === "office"
+                                ? "bg-indigo-50 text-indigo-700"
+                                : "bg-teal-50 text-teal-700"
+                            }`}
+                          >
+                            {location === "office" ? "Office" : "Online"}
+                          </span>
+                          {(() => {
+                            // Half-day leave: they still worked the other
+                            // half, so the planned location stands. Note
+                            // which half is off so the row isn't read as a
+                            // full day in the office.
+                            const period = halfDayLeaveByEmpDate.get(`${user.id}|${date}`);
+                            if (period === undefined) return null;
+                            return (
+                              <span
+                                className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700"
+                                title={`Half-day leave${period ? ` (${period.toUpperCase()})` : ""} — worked the other half`}
+                              >
+                                ½{period ? ` ${period.toUpperCase()}` : ""}
+                              </span>
+                            );
+                          })()}
+                        </span>
+                      ) : NON_WORKING_STATUSES.includes(ds) ? (
+                        // Not a gap in the data — there is genuinely no
+                        // planned location on a day nobody was due to work.
+                        // Say which, rather than leaving a bare dash that
+                        // reads as missing information.
                         <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
-                            location === "office"
-                              ? "bg-indigo-50 text-indigo-700"
-                              : "bg-teal-50 text-teal-700"
-                          }`}
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusStyles[ds] ?? "bg-gray-100 text-gray-500"}`}
                         >
-                          {location === "office" ? "Office" : "Online"}
+                          {statusLabels[ds] ?? ds}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
