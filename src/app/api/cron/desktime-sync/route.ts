@@ -81,14 +81,48 @@ export async function GET(request: Request) {
     // Fetch approved leaves covering the sync date
     const { data: approvedLeaves } = await supabase
       .from("leave_requests")
-      .select("employee_id")
+      .select("employee_id, leave_duration, half_day_period, half_day_start_time, half_day_end_time")
       .eq("status", "approved")
       .lte("start_date", syncDate)
       .gte("end_date", syncDate);
 
-    const employeesOnLeave = new Set(
-      (approvedLeaves ?? []).map((l) => l.employee_id)
-    );
+    // A half day is still a working day, so it can't blank the whole date.
+    // When the employee filed explicit times we know exactly when the working
+    // half begins or ends, and can hold them to that; otherwise we fall back
+    // to the old whole-day "on leave" and check nothing, rather than invent a
+    // boundary and flag someone against a shift nobody defined.
+    //
+    // Only applied from HALF_DAY_PUNCTUALITY_FROM onwards. The sync accepts
+    // ?date= for manual backfills, and re-running an old date must not
+    // retroactively turn a quiet "on leave" row into a late flag.
+    const { data: halfDayFromSetting } = await supabase
+      .from("system_settings")
+      .select("value")
+      .eq("key", "half_day_punctuality_from")
+      .maybeSingle();
+    const HALF_DAY_PUNCTUALITY_FROM = halfDayFromSetting?.value ?? "2026-08-26";
+    const halfDayPunctualityApplies = syncDate >= HALF_DAY_PUNCTUALITY_FROM;
+
+    const employeesOnLeave = new Set<string>();
+    const halfDayWorkWindow = new Map<string, { start: string | null; end: string | null }>();
+    for (const l of approvedLeaves ?? []) {
+      const isHalf = l.leave_duration === "half_day";
+      const hasTimes = Boolean(l.half_day_start_time && l.half_day_end_time);
+      if (!isHalf || !halfDayPunctualityApplies || !hasTimes) {
+        employeesOnLeave.add(l.employee_id);
+        continue;
+      }
+      // AM leave ends when the working half starts; PM leave starts when the
+      // working half ends. Anything else (no period recorded) is ambiguous —
+      // treat it as a full day rather than guess which half they worked.
+      if (l.half_day_period === "am") {
+        halfDayWorkWindow.set(l.employee_id, { start: l.half_day_end_time, end: null });
+      } else if (l.half_day_period === "pm") {
+        halfDayWorkWindow.set(l.employee_id, { start: null, end: l.half_day_start_time });
+      } else {
+        employeesOnLeave.add(l.employee_id);
+      }
+    }
 
     // Fetch approved holiday work requests for the sync date
     const { data: holidayWorkApprovals } = await supabase
@@ -197,10 +231,21 @@ export async function GET(request: Request) {
         .limit(1)
         .maybeSingle();
 
-      const scheduledStart =
+      let scheduledStart =
         adjustment?.requested_start_time ?? schedule?.start_time ?? null;
-      const scheduledEnd =
+      let scheduledEnd =
         adjustment?.requested_end_time ?? schedule?.end_time ?? null;
+
+      // Half-day leave: hold them to the half they were due to work, using
+      // the boundary they filed. An AM leave ending 14:00 means the day
+      // starts at 14:00 for punctuality; a PM leave starting 14:00 means it
+      // ends there. Everything downstream (late, early, absent) then works
+      // unchanged against the narrowed window.
+      const halfWindow = halfDayWorkWindow.get(userId);
+      if (halfWindow) {
+        if (halfWindow.start) scheduledStart = halfWindow.start;
+        if (halfWindow.end) scheduledEnd = halfWindow.end;
+      }
       const hasSchedule = scheduledStart !== null && scheduledEnd !== null;
       const isRestDay = !adjustment && (schedule?.is_rest_day ?? false);
 
