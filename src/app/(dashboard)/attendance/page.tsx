@@ -2,7 +2,22 @@ import { getCurrentUser } from "@/lib/auth/helpers";
 import { createClient } from "@/lib/supabase/server";
 import { AttendanceTable } from "@/components/attendance/attendance-table";
 
+
+/** Shift cutoff shared with desktime-sync: punches before this hour belong to
+ *  the previous day's shift. */
+async function getShiftCutoffHour(): Promise<number> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "shift_cutoff_hour")
+    .maybeSingle();
+  const n = parseInt(data?.value ?? "5", 10);
+  return Number.isFinite(n) ? n : 5;
+}
+
 export default async function AttendancePage() {
+  const shiftCutoffHour = await getShiftCutoffHour();
   const user = await getCurrentUser();
   const supabase = await createClient();
 
@@ -41,7 +56,7 @@ export default async function AttendancePage() {
         <h1 className="text-2xl font-bold text-gray-900">My Attendance</h1>
         <p className="text-gray-600">Your attendance history from DeskTime</p>
       </div>
-      <AttendanceTable
+      <AttendanceTable shiftCutoffHour={shiftCutoffHour}
         initialLogs={logs ?? []}
         userId={user.id}
         schedules={schedules ?? []}

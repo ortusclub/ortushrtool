@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { attendanceDate } from "@/lib/biometric/parse";
 import { createClient } from "@/lib/supabase/client";
 import { Search, Flag } from "lucide-react";
 
@@ -43,17 +44,17 @@ interface Props {
   userId: string;
   schedules: ScheduleInfo[];
   initialPunches: PunchInfo[];
+  /** system_settings.shift_cutoff_hour — punches before it count as the
+   *  previous day's shift. Defaults to the same 5am desktime-sync uses. */
+  shiftCutoffHour?: number;
 }
 
-// Bucket each punch into its Asia/Manila local date (YYYY-MM-DD).
-function bucketPunchDates(punches: PunchInfo[]): Set<string> {
+// Bucket each punch into the working day it belongs to. Punches before the
+// shift cutoff (small hours) belong to the previous day's shift — see
+// attendanceDate in lib/biometric/parse.
+function bucketPunchDates(punches: PunchInfo[], cutoffHour: number): Set<string> {
   const set = new Set<string>();
-  for (const p of punches) {
-    const manilaDate = new Date(p.punch_time).toLocaleDateString("en-CA", {
-      timeZone: "Asia/Manila",
-    });
-    set.add(manilaDate);
-  }
+  for (const p of punches) set.add(attendanceDate(p.punch_time, cutoffHour));
   return set;
 }
 
@@ -76,11 +77,11 @@ function formatClockTime(iso: string | null): string {
   });
 }
 
-export function AttendanceTable({ initialLogs, userId, schedules, initialPunches }: Props) {
+export function AttendanceTable({ initialLogs, userId, schedules, initialPunches, shiftCutoffHour = 5 }: Props) {
   const [logs, setLogs] = useState(initialLogs);
   const [adjustments, setAdjustments] = useState<AdjustmentInfo[]>([]);
   const [biometricDates, setBiometricDates] = useState<Set<string>>(() =>
-    bucketPunchDates(initialPunches)
+    bucketPunchDates(initialPunches, shiftCutoffHour)
   );
   const [loading, setLoading] = useState(false);
   const [startDate, setStartDate] = useState("");
@@ -158,7 +159,7 @@ export function AttendanceTable({ initialLogs, userId, schedules, initialPunches
         .lte("punch_time", punchTo),
     ]);
     setAdjustments(adj ?? []);
-    setBiometricDates(bucketPunchDates(punches ?? []));
+    setBiometricDates(bucketPunchDates(punches ?? [], shiftCutoffHour));
   };
 
   // Re-fetch adjustments for the initial logs range. Biometric punches are

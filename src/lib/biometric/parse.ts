@@ -133,6 +133,39 @@ export function manilaDate(punchTime: string): string {
   });
 }
 
+/** The Asia/Manila hour (0-23) a punch falls in. */
+export function manilaHour(punchTime: string): number {
+  return parseInt(
+    new Date(punchTime).toLocaleString("en-GB", {
+      timeZone: "Asia/Manila",
+      hour: "2-digit",
+      hour12: false,
+    }),
+    10
+  );
+}
+
+/**
+ * The working day a punch should be counted against.
+ *
+ * The scanner is the office door, so a night shift produces exit taps in the
+ * small hours of the FOLLOWING calendar date. Bucketing on the raw date makes
+ * those look like attendance for a day the person never worked — and because
+ * All Attendance treats the earliest punch as the canonical clock-in, a 00:05
+ * exit was being read as an on-time arrival.
+ *
+ * So anything before `cutoffHour` is attributed to the previous day, matching
+ * what desktime-sync already does with `shift_cutoff_hour` (default 5am) so
+ * the two sources can't disagree about which day a shift belongs to.
+ */
+export function attendanceDate(punchTime: string, cutoffHour: number): string {
+  const date = manilaDate(punchTime);
+  if (manilaHour(punchTime) >= cutoffHour) return date;
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * Reduces a stream of punches to the FIRST one per employee per Manila day.
  *
@@ -145,11 +178,12 @@ export function manilaDate(punchTime: string): string {
  * Keyed `${employee_id}:${YYYY-MM-DD}`.
  */
 export function firstPunchPerDay<T extends { employee_id: string; punch_time: string }>(
-  punches: T[]
+  punches: T[],
+  cutoffHour = 5
 ): Map<string, T> {
   const first = new Map<string, T>();
   for (const p of punches) {
-    const key = `${p.employee_id}:${manilaDate(p.punch_time)}`;
+    const key = `${p.employee_id}:${attendanceDate(p.punch_time, cutoffHour)}`;
     const held = first.get(key);
     if (!held || p.punch_time < held.punch_time) first.set(key, p);
   }

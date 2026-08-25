@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { attendanceDate } from "@/lib/biometric/parse";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAllRows } from "@/lib/supabase/paginate";
 import { Search, ChevronLeft, ChevronRight, Download, ExternalLink, Flag } from "lucide-react";
@@ -229,6 +230,9 @@ const PAGE_SIZE = 50;
 
 interface AllAttendanceTableProps {
   users: UserRow[];
+  /** system_settings.shift_cutoff_hour — punches before it belong to the
+   *  previous day's shift, matching desktime-sync. */
+  shiftCutoffHour?: number;
   // "search" (default) shows a search-by-name/email input.
   // "dropdown" shows a single-member dropdown — better for small teams.
   employeePicker?: "search" | "dropdown";
@@ -237,6 +241,7 @@ interface AllAttendanceTableProps {
 export function AllAttendanceTable({
   users,
   employeePicker = "search",
+  shiftCutoffHour = 5,
 }: AllAttendanceTableProps) {
   const [search, setSearch] = useState("");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
@@ -246,13 +251,11 @@ export function AllAttendanceTable({
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [adjustments, setAdjustments] = useState<AdjustmentRow[]>([]);
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
-  // Set of `${employee_id}|YYYY-MM-DD` (Asia/Manila) for every biometric punch
-  // in the range. Used to derive Actual Location per row.
+  // Set of `${employee_id}|YYYY-MM-DD` for every biometric punch in the
+  // range, keyed by the WORKING day (shift_cutoff_hour applied). This drives
+  // the Actual Location column and nothing else: clock in/out, lateness and
+  // status all come from DeskTime, so the two sources stay independent.
   const [biometricPresence, setBiometricPresence] = useState<Set<string>>(new Set());
-  // Earliest biometric punch per (employee, Asia/Manila date). Used to
-  // override Clock In when an employee tagged in physically before starting
-  // DeskTime (the most common arrival-mismatch case).
-  const [biometricInByDay, setBiometricInByDay] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
 
   // Column filters
@@ -369,26 +372,17 @@ export function AllAttendanceTable({
     setAdjustments(adjustmentsData);
     setLeaves(leavesData);
 
-    // Bucket each punch into its Manila-local date so the row lookup is O(1).
-    // For each (employee, date), also remember the earliest punch_time so we
-    // can override Clock In.
+    // Bucket each punch into the WORKING day it belongs to, not its raw
+    // calendar date: the scanner is the office door, so a night shift leaves
+    // exit taps in the small hours of the next date, which would otherwise
+    // read as office attendance on a day the person never worked.
     const presence = new Set<string>();
-    const inByDay = new Map<string, string>();
     for (const p of punchesData) {
-      const manilaDate = new Date(p.punch_time).toLocaleDateString("en-CA", {
-        timeZone: "Asia/Manila",
-      });
-      const key = `${p.employee_id}|${manilaDate}`;
-      presence.add(key);
-      const current = inByDay.get(key);
-      if (!current || p.punch_time < current) {
-        inByDay.set(key, p.punch_time);
-      }
+      presence.add(`${p.employee_id}|${attendanceDate(p.punch_time, shiftCutoffHour)}`);
     }
     setBiometricPresence(presence);
-    setBiometricInByDay(inByDay);
     setLoading(false);
-  }, [fromDate, toDate]);
+  }, [fromDate, toDate, shiftCutoffHour]);
 
   useEffect(() => {
     fetchData();
@@ -509,75 +503,9 @@ export function AllAttendanceTable({
     return out;
   }, [isSingleDate, users, userById, logMap, logs, fromDate]);
 
-  /**
-   * Return a (possibly synthesized) AttendanceLog with biometric IN taking
-   * precedence over DeskTime's clock_in. Priority:
-   *   biometric punch  → use biometric as canonical IN, derive late + status
-   *   no biometric, DeskTime log  → return the DeskTime log unchanged
-   *   neither  → undefined (renders as no_data → absent on past dates)
-   *
-   * When biometric exists but DeskTime is missing OR inconclusive, we
-   * synthesize a log so the row still surfaces as present (on_time or
-   * late_arrival based on biometric vs scheduled_start).
-   */
-  function effectiveLog(row: { user: UserRow; log: AttendanceLog | undefined; date: string }): AttendanceLog | undefined {
-    const bioIn = biometricInByDay.get(`${row.user.id}|${row.date}`);
-    if (!bioIn) return row.log;
-
-    const tz = row.user.timezone || "Asia/Manila";
-    const schedTimes = getScheduleTimes(row.user.id, row.date);
-    const schedStart = row.log?.scheduled_start ?? schedTimes?.start ?? null;
-    const schedEnd = row.log?.scheduled_end ?? schedTimes?.end ?? null;
-
-    // Re-derive late from biometric IN vs scheduled_start.
-    let lateMinutes: number | null = row.log?.late_minutes ?? null;
-    if (schedStart) {
-      const hhmm = new Date(bioIn).toLocaleTimeString("en-GB", {
-        timeZone: tz,
-        hour12: false,
-      }).slice(0, 5);
-      const bioMinutes = timeToMinutes(hhmm);
-      const schedMinutes = timeToMinutes(schedStart.slice(0, 5));
-      lateMinutes = Math.max(0, bioMinutes - schedMinutes);
-    }
-
-    // Status: biometric data wins. Inconclusive/no_data get replaced by
-    // on_time or late_arrival; the early/late combo flips appropriately.
-    let nextStatus = row.log?.status ?? "on_time";
-    const punctuality: "on_time" | "late_arrival" =
-      (lateMinutes ?? 0) > 0 ? "late_arrival" : "on_time";
-    if (
-      !row.log ||
-      nextStatus === "inconclusive" ||
-      nextStatus === "no_data"
-    ) {
-      nextStatus = punctuality;
-    } else if (punctuality === "late_arrival") {
-      if (nextStatus === "on_time") nextStatus = "late_arrival";
-      else if (nextStatus === "early_departure") nextStatus = "late_and_early";
-    } else {
-      if (nextStatus === "late_arrival") nextStatus = "on_time";
-      else if (nextStatus === "late_and_early") nextStatus = "early_departure";
-    }
-
-    return {
-      id: row.log?.id ?? "",
-      employee_id: row.user.id,
-      date: row.date,
-      scheduled_start: schedStart,
-      scheduled_end: schedEnd,
-      clock_in: bioIn,
-      clock_out: row.log?.clock_out ?? null,
-      status: nextStatus,
-      late_minutes: lateMinutes,
-      early_departure_minutes: row.log?.early_departure_minutes ?? null,
-      raw_response: row.log?.raw_response ?? null,
-    };
-  }
-
   function rowDisplayStatus(row: { user: UserRow; log: AttendanceLog | undefined; date: string }): string {
     const tz = row.user.timezone || "Asia/Manila";
-    const raw = getDisplayStatus(effectiveLog(row), tz, row.date === today);
+    const raw = getDisplayStatus(row.log, tz, row.date === today);
     if (
       onLeaveByEmpDate.has(`${row.user.id}|${row.date}`) &&
       !["on_leave", "holiday", "rest_day"].includes(raw)
@@ -660,7 +588,7 @@ export function AllAttendanceTable({
         return 0;
       };
       const key = (r: typeof result[number]): number | string => {
-        const eff = effectiveLog(r);
+        const eff = r.log;
         switch (sort.column) {
           case "name":
             return displayName(r.user).toLowerCase();
@@ -757,7 +685,7 @@ export function AllAttendanceTable({
     ];
     const rows = filteredRows.map((r) => {
       const { user, date } = r;
-      const log = effectiveLog(r);
+      const log = r.log;
       const tz = user.timezone || "Asia/Manila";
       const raw = log?.raw_response as Record<string, unknown> | null;
       const desktimeSeconds = raw?.desktimeTime as number | undefined;
@@ -1044,9 +972,10 @@ export function AllAttendanceTable({
             <tbody className="divide-y divide-gray-100">
               {visibleRows.map((r) => {
                 const { user, date } = r;
-                // Use the biometric-overridden log everywhere we display
-                // clock_in, late_minutes, or status.
-                const log = effectiveLog(r);
+                // Clock in/out, lateness and status come from DeskTime only.
+                // Biometric punches feed the Actual Location column, never
+                // these — see biometricPresence below.
+                const log = r.log;
                 const tz = user.timezone || "Asia/Manila";
                 const raw = log?.raw_response as Record<string, unknown> | null;
                 const desktimeSeconds = raw?.desktimeTime as number | undefined;

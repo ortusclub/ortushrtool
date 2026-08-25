@@ -6,7 +6,22 @@ import { AllAttendanceTable } from "@/components/attendance/all-attendance-table
 import { BiometricUpload } from "@/components/admin/biometric-upload";
 import { Fingerprint, ChevronDown } from "lucide-react";
 
+
+/** Shift cutoff shared with desktime-sync: punches before this hour belong to
+ *  the previous day's shift. */
+async function getShiftCutoffHour(): Promise<number> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "shift_cutoff_hour")
+    .maybeSingle();
+  const n = parseInt(data?.value ?? "5", 10);
+  return Number.isFinite(n) ? n : 5;
+}
+
 export default async function AllAttendancePage() {
+  const shiftCutoffHour = await getShiftCutoffHour();
   await requireRole("hr_admin");
   const supabase = await createClient();
   const subdeptMap = await getSubdepartmentMap();
@@ -63,7 +78,7 @@ export default async function AllAttendancePage() {
         </div>
       </details>
 
-      <AllAttendanceTable users={users} />
+      <AllAttendanceTable shiftCutoffHour={shiftCutoffHour} users={users} />
     </div>
   );
 }

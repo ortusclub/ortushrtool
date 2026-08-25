@@ -3,7 +3,22 @@ import { createClient } from "@/lib/supabase/server";
 import { getSubdepartmentMap } from "@/lib/subdepartment";
 import { AllAttendanceTable } from "@/components/attendance/all-attendance-table";
 
+
+/** Shift cutoff shared with desktime-sync: punches before this hour belong to
+ *  the previous day's shift. */
+async function getShiftCutoffHour(): Promise<number> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("system_settings")
+    .select("value")
+    .eq("key", "shift_cutoff_hour")
+    .maybeSingle();
+  const n = parseInt(data?.value ?? "5", 10);
+  return Number.isFinite(n) ? n : 5;
+}
+
 export default async function TeamAttendancePage() {
+  const shiftCutoffHour = await getShiftCutoffHour();
   const user = await requireRole("manager");
   const supabase = await createClient();
   const subdeptMap = await getSubdepartmentMap();
@@ -33,7 +48,7 @@ export default async function TeamAttendancePage() {
           members)
         </p>
       </div>
-      <AllAttendanceTable users={reports} employeePicker="dropdown" />
+      <AllAttendanceTable shiftCutoffHour={shiftCutoffHour} users={reports} employeePicker="dropdown" />
     </div>
   );
 }
