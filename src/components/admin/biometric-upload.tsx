@@ -3,12 +3,9 @@
 import { useState } from "react";
 import { Upload, AlertTriangle, CheckCircle2 } from "lucide-react";
 
-interface ParsedRow {
-  biometric_id: number;
-  name: string;
-  punch_time: string; // ISO with +08:00
-  raw_datetime: string; // original CSV value, for display
-}
+import { parseBiometricExport, type ParsedPunch } from "@/lib/biometric/parse";
+
+type ParsedRow = ParsedPunch;
 
 interface UploadResult {
   ok: boolean;
@@ -17,66 +14,19 @@ interface UploadResult {
   skipped_duplicates: number;
   errors: {
     biometric_id: number;
-    name: string;
+    name: string | null;
     punch_time: string;
     reason: string;
   }[];
 }
 
 /**
- * Parses the biometric scanner export. Rows are whitespace/tab-delimited:
- *   No  Mchn  EnNo        Name           Mode  IOMd  DateTime
- *   1   1    0000000050   Japheth        033   001   2026/04/01  01:11:19
- *
- * EnNo is a zero-padded integer (the biometric_id). DateTime is in
- * Asia/Manila local time (+08:00) with no zone marker.
+ * The export format is parsed by the shared lib so this page, the scripted
+ * ingest endpoint and the live device feed all read the scanner identically.
  */
 function parseCsv(text: string): { rows: ParsedRow[]; parseErrors: string[] } {
-  const rows: ParsedRow[] = [];
-  const parseErrors: string[] = [];
-  const lines = text.split(/\r?\n/);
-
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
-    const line = raw.trim();
-    if (!line) continue;
-    // Skip header (case-insensitive match on "EnNo" + "DateTime")
-    if (/\bEnNo\b/i.test(line) && /\bDateTime\b/i.test(line)) continue;
-
-    // Split on tabs OR runs of 2+ spaces. Single spaces inside the DateTime
-    // value (between date and time) are handled separately below.
-    const parts = line.split(/\t+|\s{2,}/).map((s) => s.trim()).filter(Boolean);
-    if (parts.length < 7) {
-      parseErrors.push(`Line ${i + 1}: expected 7 columns, got ${parts.length}`);
-      continue;
-    }
-    const [, , enNo, name, , , dateTime] = parts;
-
-    const biometric_id = parseInt(enNo, 10);
-    if (!Number.isFinite(biometric_id)) {
-      parseErrors.push(`Line ${i + 1}: bad EnNo "${enNo}"`);
-      continue;
-    }
-
-    // DateTime is like "2026/04/01  01:11:19" — date and time may be separated
-    // by 1 or 2 spaces. Normalise to ISO + Manila offset.
-    const m = dateTime.match(/^(\d{4})[/-](\d{2})[/-](\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)/);
-    if (!m) {
-      parseErrors.push(`Line ${i + 1}: bad DateTime "${dateTime}"`);
-      continue;
-    }
-    const [, y, mo, d, t] = m;
-    const time = t.length === 5 ? `${t}:00` : t;
-    const punch_time = `${y}-${mo}-${d}T${time}+08:00`;
-
-    rows.push({
-      biometric_id,
-      name,
-      punch_time,
-      raw_datetime: dateTime,
-    });
-  }
-  return { rows, parseErrors };
+  const { rows, errors } = parseBiometricExport(text);
+  return { rows, parseErrors: errors };
 }
 
 export function BiometricUpload() {
