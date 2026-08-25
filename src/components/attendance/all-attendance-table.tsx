@@ -671,18 +671,8 @@ export function AllAttendanceTable({
   const stats = useMemo(() => {
     let onTime = 0, late = 0, early = 0, absent = 0, noData = 0,
       onLeave = 0, holiday = 0, working = 0, notStarted = 0, inconclusive = 0;
-    // Office attendance: how many were PLANNED to be in the office versus how
-    // many the scanner actually saw. Both skip non-working days, so leave and
-    // rest days never inflate either side.
-    let officeExpected = 0, officeActual = 0, officeNoShow = 0, officeUnplanned = 0;
     for (const r of filteredRows) {
       const ds = rowDisplayStatus(r);
-      const planned = getLocation(r.user.id, r.date, ds);
-      const actual = getActualLocation(r.user.id, r.date, ds, r.log);
-      if (planned === "office") officeExpected++;
-      if (actual === "office") officeActual++;
-      if (planned === "office" && actual !== "office") officeNoShow++;
-      if (actual === "office" && planned !== "office") officeUnplanned++;
       if (ds === "on_time") onTime++;
       else if (ds === "late_arrival") late++;
       else if (ds === "early_departure") early++;
@@ -695,10 +685,35 @@ export function AllAttendanceTable({
       else if (ds === "inconclusive") inconclusive++;
       else noData++;
     }
-    return { onTime, late, early, absent, noData, onLeave, holiday, working, notStarted, inconclusive,
-      officeExpected, officeActual, officeNoShow, officeUnplanned };
+    return { onTime, late, early, absent, noData, onLeave, holiday, working, notStarted, inconclusive };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredRows, onLeaveByEmpDate]);
+
+  /**
+   * Office attendance is deliberately NOT derived from filteredRows.
+   *
+   * "9 of 12 expected came in" only means something against a fixed
+   * population. If the status or subdepartment filters narrowed it too, the
+   * denominator would move with every click and the percentage would quietly
+   * describe a different group each time. Country is the one filter that
+   * defines a real population (the scanner is Manila-only), so it is the one
+   * filter this responds to.
+   */
+  const officeStats = useMemo(() => {
+    let expected = 0, actual = 0, noShow = 0, unplanned = 0;
+    for (const r of rawRows) {
+      if (countryFilter.size > 0 && !countryFilter.has(r.user.holiday_country)) continue;
+      const ds = rowDisplayStatus(r);
+      const planned = getLocation(r.user.id, r.date, ds);
+      const was = getActualLocation(r.user.id, r.date, ds, r.log);
+      if (planned === "office") expected++;
+      if (was === "office") actual++;
+      if (planned === "office" && was !== "office") noShow++;
+      if (was === "office" && planned !== "office") unplanned++;
+    }
+    return { expected, actual, noShow, unplanned };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawRows, countryFilter, biometricPresence, onLeaveByEmpDate, scheduleByEmpDow, adjustmentByEmpDate]);
 
   const hasActiveFilters =
     countryFilter.size > 0 ||
@@ -934,41 +949,40 @@ export function AllAttendanceTable({
         </div>
       </div>
 
-      {/* Office attendance: planned vs what the scanner actually saw. Shown
-          only once a filter narrows the view — across the whole company it's
-          a number without a question behind it, and it would sit above every
-          page load. */}
-      {hasActiveFilters && (stats.officeExpected > 0 || stats.officeActual > 0) && (
+      {/* Office attendance: planned vs what the scanner actually saw. Driven
+          by the country filter alone — see the officeStats memo for why the
+          other filters must not move these numbers. */}
+      {countryFilter.size > 0 && (officeStats.expected > 0 || officeStats.actual > 0) && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3 text-sm">
           <span className="font-medium text-indigo-900">Office attendance</span>
           <span className="text-indigo-800">
-            <span className="font-semibold">{stats.officeExpected}</span> expected
+            <span className="font-semibold">{officeStats.expected}</span> expected
           </span>
           <span className="text-indigo-800">
-            <span className="font-semibold">{stats.officeActual}</span> actually in
+            <span className="font-semibold">{officeStats.actual}</span> actually in
           </span>
-          {stats.officeExpected > 0 && (
+          {officeStats.expected > 0 && (
             <span className="text-indigo-800">
               <span className="font-semibold">
-                {Math.round((stats.officeActual / stats.officeExpected) * 100)}%
+                {Math.round((officeStats.actual / officeStats.expected) * 100)}%
               </span>{" "}
               of expected
             </span>
           )}
-          {stats.officeNoShow > 0 && (
+          {officeStats.noShow > 0 && (
             <span
               className="rounded-full bg-red-100 px-2.5 py-0.5 font-medium text-red-700"
               title="Planned to be in the office but the scanner never saw them"
             >
-              {stats.officeNoShow} didn&apos;t come in
+              {officeStats.noShow} didn&apos;t come in
             </span>
           )}
-          {stats.officeUnplanned > 0 && (
+          {officeStats.unplanned > 0 && (
             <span
               className="rounded-full bg-amber-100 px-2.5 py-0.5 font-medium text-amber-800"
               title="Came into the office on a day they were not planned to"
             >
-              {stats.officeUnplanned} came in unplanned
+              {officeStats.unplanned} came in unplanned
             </span>
           )}
           <span className="text-xs text-indigo-700">
