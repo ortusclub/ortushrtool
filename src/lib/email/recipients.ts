@@ -32,6 +32,7 @@ export const RECIPIENT_CONFIGURABLE_TYPES = [
   // probationary birthday email, so there's a single "birthday" recipients box.
   "birthday_greeting_regular",
   "work_anniversary",
+  "birthday_leave_reminder",
 ] as const;
 
 export type RecipientConfig = { roles: NotifyRole[]; emails: string[] };
@@ -69,6 +70,13 @@ export const DEFAULT_RECIPIENTS: Record<string, RecipientConfig> = {
   // Celebration CC (in addition to the celebrant's manager, always CC'd).
   birthday_greeting_regular: { roles: ["hr_admin", "super_admin"], emails: [] },
   work_anniversary: { roles: ["hr_admin", "super_admin"], emails: [] },
+  // Monthly, so this arrives as one batch of ~10-15 CCs rather than spread
+  // across the month like the greetings. Named people rather than the HR
+  // role, to keep that batch off everyone else's desk.
+  birthday_leave_reminder: {
+    roles: [],
+    emails: ["dfoz@ortusclub.com", "brad.u@ortusclub.com"],
+  },
 };
 
 /**
@@ -101,6 +109,12 @@ export const RECIPIENT_COPY: Record<string, RecipientCopy> = {
     heading: "CC",
     help: "The celebrant and their manager always receive this and aren't listed here — the people below are CC'd.",
     empty: CELEBRATION_EMPTY,
+  },
+  birthday_leave_reminder: {
+    heading: "CC",
+    help: "The celebrant always receives this and isn't listed here — the people below are CC'd. Unlike the birthday greeting, the celebrant's manager is NOT automatically included. Sent as one batch on the 25th, so expect ~10-15 at once.",
+    empty:
+      "No one CC'd — the reminder still goes to each celebrant.",
   },
 };
 

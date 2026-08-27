@@ -121,7 +121,7 @@ export const TEMPLATE_META: Record<string, TemplateMeta> = {
   },
   birthday_leave_reminder: {
     sentWhen:
-      "Sent at 9:00 AM Manila on the 25th of each month to every active NON-INTERN employee whose birthday falls in the FOLLOWING month, letting them know their Birthday Leave opens on the 1st. Amount is a full day, or a half day for anyone still under 6 months' tenure during their birth month (matching the auto-grant rule). To: the celebrant only.",
+      "Sent at 9:00 AM Manila on the 25th of each month to every active NON-INTERN employee whose birthday falls in the FOLLOWING month, letting them know their Birthday Leave opens on the 1st. Amount is a full day, or a half day for anyone still under 6 months' tenure during their birth month (matching the auto-grant rule). To: the celebrant. CC: the list configured below — note their manager is NOT automatically CC'd here, unlike the birthday greeting, because this sends as one monthly batch.",
     toggleKey: "birthday_leave_reminder_emails_enabled",
     toggleLabel: "Send birthday-leave reminder emails",
   },

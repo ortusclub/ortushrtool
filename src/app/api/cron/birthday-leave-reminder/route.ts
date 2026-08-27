@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
 import { getUniversalVars } from "@/lib/email/universal-vars";
+import { resolveEffectiveRecipients } from "@/lib/email/recipients";
 import { addMonths, endOfMonth, format, parseISO } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 
@@ -108,6 +109,15 @@ export async function GET(request: Request) {
         !/\bintern\b/i.test(u.job_title ?? "")
     ) as CelebrantUser[];
 
+    // CC list is admin-configurable at /admin/settings/emails and resolved
+    // once — it doesn't vary by celebrant. Unlike the birthday greeting, the
+    // celebrant's own manager is NOT added: this fires as a single monthly
+    // batch, so every manager with a report in it would be copied on the lot.
+    const ccBase = await resolveEffectiveRecipients(
+      supabase,
+      "birthday_leave_reminder"
+    );
+
     let sent = 0;
     const errors: string[] = [];
 
@@ -126,7 +136,9 @@ export async function GET(request: Request) {
         is_half_day: isHalf ? "true" : "",
       });
 
-      const result = await sendEmail({ to: user.email, subject, html });
+      // Never CC someone their own reminder.
+      const cc = ccBase.filter((e) => e !== user.email);
+      const result = await sendEmail({ to: user.email, cc, subject, html });
       if (result.success) sent++;
       else errors.push(`${user.email}: ${result.error}`);
     }
@@ -141,6 +153,7 @@ export async function GET(request: Request) {
       targetMonth: targetTag,
       candidates: candidates.length,
       sent,
+      cc: ccBase,
       errors,
     });
   } catch (error) {
