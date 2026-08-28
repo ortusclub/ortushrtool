@@ -119,6 +119,12 @@ export const TEMPLATE_META: Record<string, TemplateMeta> = {
     toggleKey: "anniversary_emails_enabled",
     toggleLabel: "Send work anniversary emails",
   },
+  anniversary_benefit_reminder: {
+    sentWhen:
+      "Sent at 9:00 AM Manila 20 days after someone's work anniversary — 10 days before the 30-day claim window closes. To: the employee. CC: the list configured below. Benefits are the same list shown in their anniversary email, taken from Anniversary Benefits for their country + year count; nobody is emailed if no benefit is defined for that milestone. There is no claim tracking, so this goes to everyone approaching the deadline whether or not they have already claimed — the copy says as much. Requires 'anniversary_claim_form_url' to be set in system_settings; without it the reminder does not send at all, since a claim reminder with no link is useless.",
+    toggleKey: "anniversary_benefit_reminder_emails_enabled",
+    toggleLabel: "Send anniversary benefit claim reminders",
+  },
   birthday_leave_reminder: {
     sentWhen:
       "Sent at 9:00 AM Manila on the 25th of each month to every active NON-INTERN employee whose birthday falls in the FOLLOWING month, letting them know their Birthday Leave opens on the 1st. Amount is a full day, or a half day for anyone still under 6 months' tenure during their birth month (matching the auto-grant rule). To: the celebrant. CC: the list configured below — note their manager is NOT automatically CC'd here, unlike the birthday greeting, because this sends as one monthly batch.",

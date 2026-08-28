@@ -363,6 +363,25 @@ export const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateDefault[] = [
     variables: "birth_month, leave_amount, available_from, expires_on, days_count, is_half_day",
   },
 
+  {
+    type: "anniversary_benefit_reminder",
+    name: "Anniversary Benefits — 10 Days Left to Claim",
+    subject: "10 days left to claim your {{years_count}}-year anniversary benefits",
+    body: [
+      `<h2>Hi {{preferred_name}},</h2>`,
+      `<p>A quick reminder that your <strong>{{years_count}}-year</strong> milestone benefits are still available to claim — the window closes on <strong>{{claim_deadline}}</strong>, which is <strong>10 days</strong> from today.</p>`,
+      `<p>Here's what you're entitled to for {{years_count}} years with us:</p>`,
+      `{{benefits_html}}`,
+      button("Claim your benefits", "{{claim_url}}"),
+      `<p>Anything unclaimed after <strong>{{claim_deadline}}</strong> expires, so please don't leave it late.</p>`,
+      `<p class="muted">This reminder is automated and goes to everyone approaching the deadline — please disregard it if you've already claimed.</p>`,
+      `<p>Congratulations again on {{years_count}} years with The Ortus Club!</p>`,
+      `<p>— The Ortus Club Team</p>`,
+    ].join("\n"),
+    variables:
+      "years_count, claim_deadline, benefits_html, claim_url, anniversary_date, app_url",
+  },
+
   // ── Document Requests ──
   {
     type: "document_request_employee_copy",

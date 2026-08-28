@@ -33,6 +33,7 @@ export const RECIPIENT_CONFIGURABLE_TYPES = [
   "birthday_greeting_regular",
   "work_anniversary",
   "birthday_leave_reminder",
+  "anniversary_benefit_reminder",
 ] as const;
 
 export type RecipientConfig = { roles: NotifyRole[]; emails: string[] };
@@ -77,6 +78,12 @@ export const DEFAULT_RECIPIENTS: Record<string, RecipientConfig> = {
     roles: [],
     emails: ["dfoz@ortusclub.com", "brad.u@ortusclub.com"],
   },
+  // HR needs sight of who is about to lose a benefit — at year 5 that is
+  // PHP 12,100 of allowances plus a bonus, so a missed claim is real money.
+  anniversary_benefit_reminder: {
+    roles: [],
+    emails: ["dfoz@ortusclub.com", "brad.u@ortusclub.com"],
+  },
 };
 
 /**
@@ -109,6 +116,11 @@ export const RECIPIENT_COPY: Record<string, RecipientCopy> = {
     heading: "CC",
     help: "The celebrant and their manager always receive this and aren't listed here — the people below are CC'd.",
     empty: CELEBRATION_EMPTY,
+  },
+  anniversary_benefit_reminder: {
+    heading: "CC",
+    help: "The employee always receives this and isn't listed here — the people below are CC'd. Sent individually as each person reaches 10 days before their claim deadline, so these arrive a few at a time rather than in one batch.",
+    empty: "No one CC'd — the reminder still goes to the employee.",
   },
   birthday_leave_reminder: {
     heading: "CC",
