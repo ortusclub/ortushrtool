@@ -18,6 +18,12 @@ interface UploadResult {
     punch_time: string;
     reason: string;
   }[];
+  auto_matched?: {
+    biometric_id: number;
+    device_name: string | null;
+    user_id: string;
+    full_name: string;
+  }[];
 }
 
 /**
@@ -233,6 +239,30 @@ export function BiometricUpload() {
               )}
             </p>
           </div>
+          {(result.auto_matched?.length ?? 0) > 0 && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <p className="mb-2 flex items-center gap-2 text-sm font-medium text-blue-900">
+                <CheckCircle2 size={14} />
+                {result.auto_matched!.length} enrolment number
+                {result.auto_matched!.length !== 1 ? "s" : ""} matched
+                automatically
+              </p>
+              <p className="mb-3 text-xs text-blue-800">
+                These numbers weren&apos;t on any profile, but the name on the
+                device matched exactly one person who didn&apos;t already have
+                one — so their punches were kept instead of discarded. Check
+                them: if any is wrong, clear the Biometric ID on that profile.
+              </p>
+              <ul className="space-y-0.5 text-xs text-blue-900">
+                {result.auto_matched!.map((m) => (
+                  <li key={m.biometric_id}>
+                    · <strong>#{m.biometric_id}</strong> &ldquo;{m.device_name}
+                    &rdquo; → {m.full_name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {result.errors.length > 0 && (
             <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
               <p className="mb-2 flex items-center gap-2 text-sm font-medium text-yellow-900">
@@ -241,8 +271,11 @@ export function BiometricUpload() {
               </p>
               <p className="mb-3 text-xs text-yellow-800">
                 Grouped by enrolment number — each of these is one person, not
-                one punch. Fix the number on their profile and re-upload this
-                same file; already-stored punches are skipped as duplicates.
+                one punch. These couldn&apos;t be matched automatically, either
+                because the device name matches nobody, or because it matches
+                more than one person who has no number yet. Set the Biometric
+                ID on the right profile and re-upload this same file;
+                already-stored punches are skipped as duplicates.
               </p>
               <table className="w-full text-xs">
                 <thead className="text-left">
