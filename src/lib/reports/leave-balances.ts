@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllRows } from "@/lib/supabase/paginate";
 import { getCycleEnd, getRenewalStart, prorateLeave } from "@/lib/leave-proration";
-import { buildHolidaySet, countLeaveDaysInCycle } from "@/lib/leave-days";
+import { buildHolidaySet } from "@/lib/leave-days";
+import { buildLeaveLedger, type CreditRow } from "@/lib/leave-ledger";
 import { LEAVE_TYPE_LABELS } from "@/lib/constants";
 import type { GrantType } from "@/types/database";
 
@@ -73,14 +74,16 @@ export async function computeLeaveBalances(
         .order("id")
         .range(from, to)
     ),
-    // Active leave credits — covers both admin-issued and auto-granted
-    // earned CTO from approved holiday work.
+    // ALL credits granted to date, expired ones included. Excluding expired
+    // credits here (as this once did) drops a credit that was granted, used,
+    // then expired while leaving the leave that consumed it — so a fully-used
+    // credit read as a negative balance. buildLeaveLedger keeps them and nets
+    // them to zero; see 45301fa, which fixed the same bug on the profile view.
     fetchAllRows((from, to) =>
       admin
         .from("leave_credits")
-        .select("employee_id, leave_type, days, granted_at, expires_at")
+        .select("employee_id, leave_type, days, granted_at, expires_at, notes, source")
         .lte("granted_at", today)
-        .or(`expires_at.is.null,expires_at.gte.${today}`)
         .order("id")
         .range(from, to)
     ),
@@ -105,16 +108,20 @@ export async function computeLeaveBalances(
     holidayByCountry.set(country, buildHolidaySet(rows, holidayRangeFrom, holidayRangeTo));
   }
 
-  // Keep raw active credits per (employee_id, leave_type) with grant dates, so
-  // they can be scoped to each leave_type's cycle below (a credit only counts
-  // in the cycle it was granted, so it resets on refresh — use-it-or-lose-it).
-  const creditsByEmp = new Map<string, Map<string, { days: number; granted: string }[]>>();
-  for (const c of (leaveCredits ?? []) as { employee_id: string; leave_type: string; days: number; granted_at: string }[]) {
-    const grantDate = c.granted_at.slice(0, 10);
+  // Keep raw credits per (employee_id, leave_type) in the shape buildLeaveLedger
+  // expects, so this report and the profile view compute from identical input.
+  const creditsByEmp = new Map<string, Map<string, CreditRow[]>>();
+  for (const c of (leaveCredits ?? []) as any[]) {
     if (!creditsByEmp.has(c.employee_id)) creditsByEmp.set(c.employee_id, new Map());
     const byType = creditsByEmp.get(c.employee_id)!;
     if (!byType.has(c.leave_type)) byType.set(c.leave_type, []);
-    byType.get(c.leave_type)!.push({ days: Number(c.days), granted: grantDate });
+    byType.get(c.leave_type)!.push({
+      days: Number(c.days),
+      granted_at: c.granted_at,
+      expires_at: c.expires_at ?? null,
+      notes: c.notes ?? null,
+      source: c.source ?? null,
+    });
   }
 
   const planById = new Map<string, any>(
@@ -189,27 +196,20 @@ export async function computeLeaveBalances(
       }
     }
 
-    // Net active leave credits into the allocation pool, scoped to each type's
-    // cycle (granted on/after the cycle start) so they reset on refresh. Both
-    // signs net in; there's no separate max, so remaining = available.
+    // Make sure a credit-only leave type still gets a row. The credits
+    // themselves are applied by buildLeaveLedger below, not netted in here —
+    // doing both would double-count them.
     if (empCredits) {
       const yearStart = `${today.slice(0, 4)}-01-01`;
-      for (const [leaveType, list] of empCredits) {
+      for (const leaveType of empCredits.keys()) {
         const existing = buckets.get(leaveType);
-        const cycleStart = existing?.renewalStart ?? yearStart;
-        const net = list
-          .filter((c) => c.granted >= cycleStart)
-          .reduce((s, c) => s + c.days, 0);
-        if (existing) {
-          existing.allocated += net;
-          existing.plans.add("Manual credit");
-        } else {
+        if (existing) existing.plans.add("Manual credit");
+        else
           buckets.set(leaveType, {
-            allocated: net,
+            allocated: 0,
             plans: new Set(["Manual credit"]),
             renewalStart: yearStart,
           });
-        }
       }
     }
 
@@ -217,23 +217,30 @@ export async function computeLeaveBalances(
     const empHolidays = holidayByCountry.get(emp.holiday_country) ?? new Set<string>();
 
     for (const [leaveType, bucket] of buckets) {
-      // Leaves straddling the cycle boundary count only for their days inside
-      // this cycle; the rest is charged to the next one.
-      const cycleEnd = getCycleEnd(bucket.renewalStart);
-      const usedLeaves = empLeaves
-        .filter((l) => l.leave_type === leaveType)
-        .reduce(
-          (sum, l) =>
-            sum + countLeaveDaysInCycle(l, empHolidays, bucket.renewalStart, cycleEnd),
-          0
-        );
+      // One ledger, shared with the profile time-off view, so the two can't
+      // disagree about the same person. It handles cycle scoping, leaves that
+      // straddle a renewal, and expired credits (kept and netted, with only
+      // the unused remainder forfeited).
+      const ledger = buildLeaveLedger({
+        leaveType,
+        planBase: bucket.allocated,
+        cycleStart: bucket.renewalStart,
+        cycleEnd: getCycleEnd(bucket.renewalStart),
+        credits: empCredits?.get(leaveType) ?? [],
+        leaves: empLeaves.filter((l) => l.leave_type === leaveType),
+        holidays: empHolidays,
+        today,
+      });
 
-      const used = Math.round(usedLeaves * 100) / 100;
-      const allocated = Math.round(bucket.allocated * 100) / 100;
+      const used = ledger.usedDays;
+      // "Allocated" stays the plan entitlement plus credits, so the column
+      // still reads as what they were given rather than what is left.
+      const allocated =
+        Math.round((ledger.available + ledger.usedDays) * 100) / 100;
       // CTO can go negative when an earned grant is revoked after the credit
       // has already been used. Other leave types stay clamped at zero — they
       // never auto-revoke and a negative there would only confuse readers.
-      const rawRemaining = Math.round((bucket.allocated - used) * 100) / 100;
+      const rawRemaining = ledger.available;
       const remaining =
         leaveType === "cto" ? rawRemaining : Math.max(0, rawRemaining);
 
