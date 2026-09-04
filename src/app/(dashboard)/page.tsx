@@ -23,7 +23,8 @@ import type { KudosWithUsers } from "@/types/database";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { LEAVE_TYPE_LABELS, UNIVERSAL_LEAVE_TYPES, LEAVE_TYPES } from "@/lib/constants";
 import { prorateLeave, getRenewalStart, getCycleEnd } from "@/lib/leave-proration";
-import { buildHolidaySet, countLeaveDaysInCycle } from "@/lib/leave-days";
+import { buildHolidaySet } from "@/lib/leave-days";
+import { buildLeaveLedger } from "@/lib/leave-ledger";
 import {
   REQUEST_KIND_LABELS,
   type PendingRequestKind,
@@ -210,10 +211,9 @@ export default async function DashboardPage() {
     // expired.
     supabase
       .from("leave_credits")
-      .select("leave_type, days, granted_at, expires_at")
+      .select("leave_type, days, granted_at, expires_at, notes, source")
       .eq("employee_id", user.id)
-      .lte("granted_at", today)
-      .or(`expires_at.is.null,expires_at.gte.${today}`),
+      .lte("granted_at", today),
   ]);
 
   // Fetch all users with date fields for upcoming events
@@ -377,17 +377,11 @@ export default async function DashboardPage() {
     }
   }
 
-  // Net leave credits into a separate pool, scoped to the current cycle. A
-  // credit only counts in the cycle it was granted (granted_at >= cycle start),
-  // so it refreshes with the allocation — CTO and any other credit are
-  // use-it-or-lose-it within the cycle. Positive and negative both just net
-  // into the available number; the plan allocation is never touched.
-  const creditPool: Record<string, number> = {};
-  for (const c of myLeaveCredits.data ?? []) {
-    const cycleStart = leaveTypeRenewalStart[c.leave_type] ?? yearStart;
-    if (c.granted_at.slice(0, 10) < cycleStart) continue;
-    creditPool[c.leave_type] = (creditPool[c.leave_type] ?? 0) + Number(c.days);
-  }
+  // Which leave types the viewer has via a credit. The credits themselves are
+  // applied by buildLeaveLedger below — this only decides what to render.
+  const creditedTypes = new Set(
+    (myLeaveCredits.data ?? []).map((c) => c.leave_type)
+  );
 
   // Types to show on the dashboard = universal + per-type activations + any
   // type the employee has via an assigned plan or a leave credit. Without the
@@ -397,7 +391,7 @@ export default async function DashboardPage() {
     new Set([
       ...myLeaveTypes,
       ...Object.keys(planAllocations),
-      ...Object.keys(creditPool),
+      ...creditedTypes,
     ])
   );
 
@@ -411,27 +405,27 @@ export default async function DashboardPage() {
     `${now.getFullYear() + 1}-12-31`
   );
 
-  // A leave straddling the cycle boundary is charged only for the days that
-  // fall inside the current cycle — the rest belongs to the next one.
+  // One ledger, shared with the profile view and the company report, so all
+  // three agree about the same person. Critically it keeps EXPIRED credits and
+  // nets them against the leave they paid for — dropping them (as this page
+  // used to) left the leave counted with nothing to cover it, so a credit that
+  // was granted, used, then expired showed as a negative balance.
   const leaveUsed: Record<string, number> = {};
-  for (const l of myLeavesThisYear.data ?? []) {
-    const renewalStart = leaveTypeRenewalStart[l.leave_type] ?? yearStart;
-    const days = countLeaveDaysInCycle(
-      l,
-      holidaySet,
-      renewalStart,
-      getCycleEnd(renewalStart)
-    );
-    if (days > 0) leaveUsed[l.leave_type] = (leaveUsed[l.leave_type] ?? 0) + days;
-  }
-
-  // Available per type = plan base − used + net cycle credits.
   const leaveAvailable: Record<string, number> = {};
   for (const key of displayedLeaveTypes) {
-    const base = planAllocations[key] ?? 0;
-    const used = leaveUsed[key] ?? 0;
-    const credits = creditPool[key] ?? 0;
-    leaveAvailable[key] = Math.round((base - used + credits) * 100) / 100;
+    const cycleStart = leaveTypeRenewalStart[key] ?? yearStart;
+    const ledger = buildLeaveLedger({
+      leaveType: key,
+      planBase: planAllocations[key] ?? 0,
+      cycleStart,
+      cycleEnd: getCycleEnd(cycleStart),
+      credits: (myLeaveCredits.data ?? []).filter((c) => c.leave_type === key),
+      leaves: myLeavesThisYear.data ?? [],
+      holidays: holidaySet,
+      today,
+    });
+    leaveUsed[key] = ledger.usedDays;
+    leaveAvailable[key] = ledger.available;
   }
 
   // --- Who's Out ---

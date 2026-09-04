@@ -8,6 +8,7 @@ import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { LEAVE_TYPES, UNIVERSAL_LEAVE_TYPES } from "@/lib/constants";
 import { prorateLeave, getRenewalStart, getCycleEnd } from "@/lib/leave-proration";
 import { buildHolidaySet, countLeaveDays, countLeaveDaysInCycle } from "@/lib/leave-days";
+import { buildLeaveLedger } from "@/lib/leave-ledger";
 import type { GrantType } from "@/types/database";
 
 interface BalanceWarning {
@@ -125,11 +126,14 @@ export default function LeaveRequestPage() {
           .eq("id", user.id)
           .maybeSingle(),
         supabase
+          // Expired credits are fetched too: buildLeaveLedger keeps them and
+          // nets them against the leave they paid for. Excluding them (as this
+          // once did) left the leave counted with nothing covering it, so a
+          // credit granted, used, then expired showed as a negative balance.
           .from("leave_credits")
-          .select("leave_type, days, granted_at, expires_at")
+          .select("leave_type, days, granted_at, expires_at, notes, source")
           .eq("employee_id", user.id)
-          .lte("granted_at", today)
-          .or(`expires_at.is.null,expires_at.gte.${today}`),
+          .lte("granted_at", today),
         planIds.length > 0
           ? Promise.all([
               supabase
@@ -166,31 +170,38 @@ export default function LeaveRequestPage() {
         }
       }
 
-      // Net active manual leave credits into the allocation pool, scoped to the
-      // current cycle (granted_at >= cycle start) so they reset on refresh. Both
-      // signs just net in; there's no separate max to protect, so the balance
-      // shown is simply "available" = plan base − used + net cycle credits.
       const yearStartStr = `${currentYear}-01-01`;
+      // Credits only widen the set of types shown here; buildLeaveLedger
+      // applies their days below, so adding them to allocMap would
+      // double-count.
       for (const c of activeCredits ?? []) {
-        const cycleStart = cycleStartByType[c.leave_type] ?? yearStartStr;
-        if (c.granted_at.slice(0, 10) < cycleStart) continue;
-        allocMap[c.leave_type] = (allocMap[c.leave_type] ?? 0) + Number(c.days);
+        if (!(c.leave_type in allocMap)) allocMap[c.leave_type] = 0;
       }
 
-      // Count each leave only for the days falling inside the current cycle
-      // for its type (same rule as the ledger), so prior-cycle leaves don't
-      // deduct and a leave straddling either boundary is split.
       const windows: Record<string, { start: string; end: string }> = {};
       for (const [type, start] of Object.entries(cycleStartByType)) {
         windows[type] = { start, end: getCycleEnd(start) };
       }
-      const fallbackWindow = { start: yearStartStr, end: getCycleEnd(yearStartStr) };
       setCycleWindow(windows);
 
-      for (const l of leavesThisYear ?? []) {
-        const win = windows[l.leave_type] ?? fallbackWindow;
-        const days = countLeaveDaysInCycle(l, localHolidays, win.start, win.end);
-        if (days > 0) used[l.leave_type] = (used[l.leave_type] ?? 0) + days;
+      // One ledger, shared with the dashboard, the profile view and the
+      // company report, so every surface agrees about the same person.
+      for (const type of Object.keys(allocMap)) {
+        const start = cycleStartByType[type] ?? yearStartStr;
+        const ledger = buildLeaveLedger({
+          leaveType: type,
+          planBase: allocMap[type] ?? 0,
+          cycleStart: start,
+          cycleEnd: getCycleEnd(start),
+          credits: (activeCredits ?? []).filter((c) => c.leave_type === type),
+          leaves: leavesThisYear ?? [],
+          holidays: localHolidays,
+          today,
+        });
+        used[type] = ledger.usedDays;
+        // planAllocations drives the "remaining = allocated − used" maths in
+        // checkBalance, so feed it the ledger's own total.
+        allocMap[type] = Math.round((ledger.available + ledger.usedDays) * 100) / 100;
       }
       setUsedDays(used);
 
