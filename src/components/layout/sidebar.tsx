@@ -114,11 +114,37 @@ const settingsSubItems: NavItem[] = [
   { label: "Feature Visibility", href: "/admin/settings/features", icon: <Eye size={18} />, minRole: "super_admin" },
 ];
 
+const BRAND_NAME = "Trinity Outsourcing Solutions";
+
+/**
+ * users.company holds the legal entity name, which is not always what people
+ * call it. Only the display differs — the stored value stays canonical, so
+ * reports and filters keep grouping on one string.
+ */
+const COMPANY_DISPLAY_NAMES: Record<string, string> = {
+  "Ortus Strategy Pte. Ltd.": "The Ortus Club",
+};
+
+/**
+ * The "Assigned to" line, or null when it should be omitted.
+ *
+ * Hidden when the viewer's company IS the operating entity — telling a
+ * Trinity employee they are assigned to Trinity is noise, and reads oddly
+ * next to the identical brand above it.
+ */
+function assignedCompanyLabel(company: string | null | undefined): string | null {
+  const raw = company?.trim();
+  if (!raw) return null;
+  if (/\btrinity\b/i.test(raw)) return null;
+  return COMPANY_DISPLAY_NAMES[raw] ?? raw;
+}
+
 export function Sidebar({
   userRole,
   comingSoonRoutes = [],
   sidebarOrder = {},
   badges = {},
+  company = null,
 }: {
   userRole: UserRole;
   comingSoonRoutes?: string[];
@@ -126,7 +152,10 @@ export function Sidebar({
   sidebarOrder?: Record<string, string[]>;
   /** Optional count badges per href, e.g. unread counts. */
   badges?: Record<string, number>;
+  /** The viewer's assigned company (users.company), shown under the brand. */
+  company?: string | null;
 }) {
+  const assignedTo = assignedCompanyLabel(company);
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const settingsOpen = pathname.startsWith("/admin/settings");
@@ -309,8 +338,17 @@ export function Sidebar({
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex h-16 items-center border-b border-gray-200 px-6">
-          <h1 className="text-lg font-bold text-gray-900">Ortus Club</h1>
+        {/* Brand is the operating entity; the line beneath is the company the
+            viewer is assigned to (users.company), which differs per person. */}
+        <div className="flex h-16 flex-col justify-center border-b border-gray-200 px-6">
+          <h1 className="text-sm font-bold leading-tight text-gray-900">
+            {BRAND_NAME}
+          </h1>
+          {assignedTo && (
+            <p className="truncate text-xs leading-tight text-gray-500" title={assignedTo}>
+              Working with {assignedTo}
+            </p>
+          )}
         </div>
         {navContent}
       </aside>

@@ -52,6 +52,7 @@ export default async function DashboardLayout({
         badges={{
           "/performance": pendingPeerCount ?? 0,
         }}
+        company={user.company}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header user={user} />
