@@ -114,7 +114,7 @@ const settingsSubItems: NavItem[] = [
   { label: "Feature Visibility", href: "/admin/settings/features", icon: <Eye size={18} />, minRole: "super_admin" },
 ];
 
-const BRAND_NAME = "Trinity Outsourcing Solutions";
+const BRAND_NAME = "Trinity Talent House";
 
 /**
  * users.company holds the legal entity name, which is not always what people
