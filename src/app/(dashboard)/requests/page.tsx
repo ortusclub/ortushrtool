@@ -54,6 +54,11 @@ export default async function RequestsPage({
   const supabase = await createClient();
   const isReviewer = hasRole(user.role, "manager");
   const isAdmin = hasRole(user.role, "hr_admin");
+  // hr_support watches the queue but never decides it: it can open the Team
+  // section read-only, so isReviewer (which gates every approve/reject/edit
+  // control) stays false. RLS withholds the writes regardless.
+  const canViewTeam = isReviewer || user.role === "hr_support";
+  const isWatcher = canViewTeam && !isReviewer;
 
   const adjSel = "*, employee:users!schedule_adjustments_employee_id_fkey(full_name, preferred_name, first_name, last_name, email, role)";
   const leaveSel = "*, employee:users!leave_requests_employee_id_fkey(full_name, preferred_name, first_name, last_name, email)";
@@ -73,16 +78,16 @@ export default async function RequestsPage({
   // company-wide reads, so page past PostgREST's 1000-row cap (fetchAllRows);
   // otherwise team requests past row 1000 silently vanish — including pending
   // approvals. Secondary order by id keeps the page windows stable on ties.
-  const teamAdjP = isReviewer
+  const teamAdjP = canViewTeam
     ? fetchAllRows((from, to) => supabase.from("schedule_adjustments").select(adjSel).neq("employee_id", user.id).order("created_at", { ascending: false }).order("id").range(from, to))
     : Promise.resolve([]);
-  const teamLeaveP = isReviewer
+  const teamLeaveP = canViewTeam
     ? fetchAllRows((from, to) => supabase.from("leave_requests").select(leaveSel).neq("employee_id", user.id).order("created_at", { ascending: false }).order("id").range(from, to))
     : Promise.resolve([]);
-  const teamHwP = isReviewer
+  const teamHwP = canViewTeam
     ? fetchAllRows((from, to) => supabase.from("holiday_work_requests").select(hwSel).neq("employee_id", user.id).order("created_at", { ascending: false }).order("id").range(from, to))
     : Promise.resolve([]);
-  const teamOtP = isReviewer
+  const teamOtP = canViewTeam
     ? fetchAllRows((from, to) => supabase.from("overtime_requests").select(otSel).neq("employee_id", user.id).order("created_at", { ascending: false }).order("id").range(from, to))
     : Promise.resolve([]);
 
@@ -461,7 +466,7 @@ export default async function RequestsPage({
       </CollapsibleSection>
 
       {/* ── TEAM REQUESTS ── */}
-      {isReviewer && (
+      {canViewTeam && (
         <CollapsibleSection title="Team Requests" accent="emerald">
           {pendingAdjAll.length > 0 && (
             <BulkAdjustmentsSection
@@ -470,6 +475,7 @@ export default async function RequestsPage({
               currentUserId={user.id}
               isReviewer={isReviewer}
               isAdmin={isAdmin}
+              readOnly={isWatcher}
               filters={<>
                 <RequestsDateFilter from={sp.adj_pf ?? ""} to={sp.adj_pt ?? ""} paramFrom="adj_pf" paramTo="adj_pt" />
                 <RequestsRequesterSearch param="req_adj" label="adjustments" initial={reqAdj ?? ""} />
@@ -482,6 +488,7 @@ export default async function RequestsPage({
               currentUserId={user.id}
               isReviewer={isReviewer}
               isAdmin={isAdmin}
+              readOnly={isWatcher}
               filters={<>
                 <RequestsDateFilter from={sp.leave_pf ?? ""} to={sp.leave_pt ?? ""} paramFrom="leave_pf" paramTo="leave_pt" />
                 <RequestsRequesterSearch param="req_leave" label="leave" initial={reqLeave ?? ""} />
@@ -494,6 +501,7 @@ export default async function RequestsPage({
               currentUserId={user.id}
               isReviewer={isReviewer}
               isAdmin={isAdmin}
+              readOnly={isWatcher}
               filters={<>
                 <RequestsDateFilter from={sp.hw_pf ?? ""} to={sp.hw_pt ?? ""} paramFrom="hw_pf" paramTo="hw_pt" />
                 <RequestsRequesterSearch param="req_hw" label="holiday work" initial={reqHw ?? ""} />
@@ -506,6 +514,7 @@ export default async function RequestsPage({
               currentUserId={user.id}
               isReviewer={isReviewer}
               isAdmin={isAdmin}
+              readOnly={isWatcher}
               filters={<>
                 <RequestsDateFilter from={sp.ot_pf ?? ""} to={sp.ot_pt ?? ""} paramFrom="ot_pf" paramTo="ot_pt" />
                 <RequestsRequesterSearch param="req_ot" label="overtime" initial={reqOt ?? ""} />
@@ -541,7 +550,7 @@ export default async function RequestsPage({
                       {adj.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {adj.reviewer_notes}</p>}
                     </div>
                     <div className="flex items-center gap-3">
-                      <AdjustmentActions adjustmentId={adj.id} currentStatus={adj.status} />
+                      {!isWatcher && <AdjustmentActions adjustmentId={adj.id} currentStatus={adj.status} />}
                       {isAdmin && <CancelRequest requestId={adj.id} table="schedule_adjustments" />}
                       {isAdmin && <EditAdjustmentForm id={adj.id} requestedDate={adj.requested_date} adjustmentType={adj.adjustment_type} requestedStartTime={adj.requested_start_time} requestedEndTime={adj.requested_end_time} requestedWorkLocation={adj.requested_work_location} reason={adj.reason} />}
                       <StatusBadge status={adj.status} />
@@ -578,8 +587,8 @@ export default async function RequestsPage({
                       {leave.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {leave.reviewer_notes}</p>}
                     </div>
                     <div className="flex items-center gap-3">
-                      <LeaveActions leaveId={leave.id} currentStatus={leave.status} />
-                      <CancelApprovedLeave leaveId={leave.id} startDate={leave.start_date} currentStatus={leave.status} />
+                      {!isWatcher && <LeaveActions leaveId={leave.id} currentStatus={leave.status} />}
+                      {!isWatcher && <CancelApprovedLeave leaveId={leave.id} startDate={leave.start_date} currentStatus={leave.status} />}
                       {isAdmin && <CancelRequest requestId={leave.id} table="leave_requests" />}
                       {isAdmin && <EditLeaveForm id={leave.id} leaveType={leave.leave_type} leaveDuration={leave.leave_duration} halfDayPeriod={leave.half_day_period} startDate={leave.start_date} endDate={leave.end_date} reason={leave.reason} />}
                       <StatusBadge status={leave.status} />
@@ -617,7 +626,7 @@ export default async function RequestsPage({
                       {hw.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {hw.reviewer_notes}</p>}
                     </div>
                     <div className="flex items-center gap-3">
-                      <HolidayWorkActions requestId={hw.id} currentStatus={hw.status} />
+                      {!isWatcher && <HolidayWorkActions requestId={hw.id} currentStatus={hw.status} />}
                       {isAdmin && <CancelRequest requestId={hw.id} table="holiday_work_requests" />}
                       {isAdmin && <EditHolidayWorkForm id={hw.id} duration={hw.duration} startTime={hw.start_time} endTime={hw.end_time} workLocation={hw.work_location} compensation={hw.compensation} reason={hw.reason} />}
                       <StatusBadge status={hw.status} />
@@ -655,7 +664,7 @@ export default async function RequestsPage({
                       {ot.reviewer_notes && <p className="text-sm text-gray-500 italic">Note: {ot.reviewer_notes}</p>}
                     </div>
                     <div className="flex items-center gap-3">
-                      <OvertimeActions overtimeId={ot.id} currentStatus={ot.status} />
+                      {!isWatcher && <OvertimeActions overtimeId={ot.id} currentStatus={ot.status} />}
                       {isAdmin && <CancelRequest requestId={ot.id} table="overtime_requests" />}
                       {isAdmin && <EditOvertimeForm id={ot.id} requestedDate={ot.requested_date} startTime={ot.start_time} endTime={ot.end_time} reason={ot.reason} />}
                       <StatusBadge status={ot.status} />

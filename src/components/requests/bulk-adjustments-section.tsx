@@ -35,6 +35,7 @@ export function BulkAdjustmentsSection({
   currentUserId,
   isReviewer,
   isAdmin,
+  readOnly = false,
   filters,
 }: {
   adjustments: Adj[];
@@ -42,8 +43,16 @@ export function BulkAdjustmentsSection({
   currentUserId: string;
   isReviewer: boolean;
   isAdmin: boolean;
+  /**
+   * Watcher view: other people's requests, but no controls at all. Distinct
+   * from isReviewer=false, which means "these are my own requests" and so
+   * still offers Buzz/Cancel — wrong for someone browsing the whole queue.
+   */
+  readOnly?: boolean;
   filters?: ReactNode;
 }) {
+  // Approve/reject/select are reviewer-only AND never available to watchers.
+  const canDecide = isReviewer && !readOnly;
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -93,7 +102,7 @@ export function BulkAdjustmentsSection({
         )}
         <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          {isReviewer && approvableIds.length > 0 && (
+          {canDecide && approvableIds.length > 0 && (
             <button onClick={toggleAll} className="text-gray-400 hover:text-gray-600">
               {allSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
             </button>
@@ -139,7 +148,7 @@ export function BulkAdjustmentsSection({
         {adjustments.map((adj) => {
           const warning = officeWarnings[adj.id];
           const isOwn = adj.employee_id === currentUserId;
-          const isSelectable = isReviewer && !isOwn;
+          const isSelectable = canDecide && !isOwn;
           return (
             <div key={adj.id} className={`p-6 ${selected.has(adj.id) ? "bg-blue-50/40" : ""}`}>
               <div className="flex items-start justify-between gap-4">
@@ -154,7 +163,7 @@ export function BulkAdjustmentsSection({
                     <div className="w-[18px] shrink-0" />
                   )}
                   <div className="space-y-1">
-                    {isReviewer && adj.employee && (
+                    {(isReviewer || readOnly) && adj.employee && (
                       <p className="font-medium text-gray-900">
                         <UserNameLink userId={adj.employee_id} name={displayName(adj.employee)} />
                       </p>
@@ -190,14 +199,14 @@ export function BulkAdjustmentsSection({
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
-                  {isReviewer && !isOwn && <AdjustmentActions adjustmentId={adj.id} />}
-                  {(!isReviewer || isOwn) && (
+                  {canDecide && !isOwn && <AdjustmentActions adjustmentId={adj.id} />}
+                  {((!isReviewer && !readOnly) || isOwn) && (
                     <>
                       <BuzzManager requestId={adj.id} requestType="schedule_adjustment" />
                       <CancelRequest requestId={adj.id} table="schedule_adjustments" />
                     </>
                   )}
-                  {isAdmin && !isOwn && <CancelRequest requestId={adj.id} table="schedule_adjustments" />}
+                  {isAdmin && !readOnly && !isOwn && <CancelRequest requestId={adj.id} table="schedule_adjustments" />}
                   {/* Owners can edit their own pending request (RLS
                       adjustments_update_own_pending backs it). */}
                   {(isAdmin || isOwn) && (

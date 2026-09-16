@@ -31,14 +31,23 @@ export function BulkHolidayWorkSection({
   currentUserId,
   isReviewer,
   isAdmin,
+  readOnly = false,
   filters,
 }: {
   requests: HW[];
   currentUserId: string;
   isReviewer: boolean;
   isAdmin: boolean;
+  /**
+   * Watcher view: other people's requests, but no controls at all. Distinct
+   * from isReviewer=false, which means "these are my own requests" and so
+   * still offers Buzz/Cancel — wrong for someone browsing the whole queue.
+   */
+  readOnly?: boolean;
   filters?: ReactNode;
 }) {
+  // Approve/reject/select are reviewer-only AND never available to watchers.
+  const canDecide = isReviewer && !readOnly;
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -80,7 +89,7 @@ export function BulkHolidayWorkSection({
         )}
         <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          {isReviewer && approvableIds.length > 0 && (
+          {canDecide && approvableIds.length > 0 && (
             <button onClick={toggleAll} className="text-gray-400 hover:text-gray-600">
               {allSelected ? <CheckSquare size={18} className="text-teal-600" /> : <Square size={18} />}
             </button>
@@ -119,13 +128,13 @@ export function BulkHolidayWorkSection({
             <div key={hw.id} className={`p-6 ${selected.has(hw.id) ? "bg-teal-50/40" : ""}`}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  {isReviewer && !isOwn ? (
+                  {canDecide && !isOwn ? (
                     <button onClick={() => toggle(hw.id)} className="mt-0.5 shrink-0 text-gray-400 hover:text-teal-600">
                       {selected.has(hw.id) ? <CheckSquare size={18} className="text-teal-600" /> : <Square size={18} />}
                     </button>
                   ) : <div className="w-[18px] shrink-0" />}
                   <div className="space-y-1">
-                    {isReviewer && hw.employee && (
+                    {(isReviewer || readOnly) && hw.employee && (
                       <p className="font-medium text-gray-900">
                         <UserNameLink userId={hw.employee_id} name={displayName(hw.employee)} />
                       </p>
@@ -158,17 +167,17 @@ export function BulkHolidayWorkSection({
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
-                  {isReviewer && !isOwn && <HolidayWorkActions requestId={hw.id} />}
-                  {(!isReviewer || isOwn) && (
+                  {canDecide && !isOwn && <HolidayWorkActions requestId={hw.id} />}
+                  {((!isReviewer && !readOnly) || isOwn) && (
                     <>
                       <BuzzManager requestId={hw.id} requestType="holiday_work" />
                       <CancelRequest requestId={hw.id} table="holiday_work_requests" />
                     </>
                   )}
-                  {isAdmin && !isOwn && <CancelRequest requestId={hw.id} table="holiday_work_requests" />}
+                  {isAdmin && !readOnly && !isOwn && <CancelRequest requestId={hw.id} table="holiday_work_requests" />}
                   {/* Owners can edit their own pending request (RLS
                       holiday_work_update_own_pending backs it). */}
-                  {(isAdmin || isOwn) && (
+                  {((isAdmin && !readOnly) || isOwn) && (
                     <EditHolidayWorkForm
                       id={hw.id}
                       duration={hw.duration}

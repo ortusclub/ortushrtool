@@ -33,14 +33,23 @@ export function BulkLeaveSection({
   currentUserId,
   isReviewer,
   isAdmin,
+  readOnly = false,
   filters,
 }: {
   leaves: Leave[];
   currentUserId: string;
   isReviewer: boolean;
   isAdmin: boolean;
+  /**
+   * Watcher view: other people's requests, but no controls at all. Distinct
+   * from isReviewer=false, which means "these are my own requests" and so
+   * still offers Buzz/Cancel — wrong for someone browsing the whole queue.
+   */
+  readOnly?: boolean;
   filters?: ReactNode;
 }) {
+  // Approve/reject/select are reviewer-only AND never available to watchers.
+  const canDecide = isReviewer && !readOnly;
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -84,7 +93,7 @@ export function BulkLeaveSection({
         )}
         <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          {isReviewer && approvableIds.length > 0 && (
+          {canDecide && approvableIds.length > 0 && (
             <button onClick={toggleAll} className="text-gray-400 hover:text-gray-600">
               {allSelected ? <CheckSquare size={18} className="text-purple-600" /> : <Square size={18} />}
             </button>
@@ -125,13 +134,13 @@ export function BulkLeaveSection({
             <div key={leave.id} className={`p-6 ${selected.has(leave.id) ? "bg-purple-50/40" : ""}`}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  {isReviewer && !isOwn ? (
+                  {canDecide && !isOwn ? (
                     <button onClick={() => toggle(leave.id)} className="mt-0.5 shrink-0 text-gray-400 hover:text-purple-600">
                       {selected.has(leave.id) ? <CheckSquare size={18} className="text-purple-600" /> : <Square size={18} />}
                     </button>
                   ) : <div className="w-[18px] shrink-0" />}
                   <div className="space-y-1">
-                    {isReviewer && leave.employee && (
+                    {(isReviewer || readOnly) && leave.employee && (
                       <p className="font-medium text-gray-900">
                         <UserNameLink userId={leave.employee_id} name={displayName(leave.employee)} />
                       </p>
@@ -160,17 +169,17 @@ export function BulkLeaveSection({
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
-                  {isReviewer && !isOwn && <LeaveActions leaveId={leave.id} />}
-                  {(!isReviewer || isOwn) && (
+                  {canDecide && !isOwn && <LeaveActions leaveId={leave.id} />}
+                  {((!isReviewer && !readOnly) || isOwn) && (
                     <>
                       <BuzzManager requestId={leave.id} requestType="leave" />
                       <CancelRequest requestId={leave.id} table="leave_requests" />
                     </>
                   )}
-                  {isAdmin && !isOwn && <CancelRequest requestId={leave.id} table="leave_requests" />}
+                  {isAdmin && !readOnly && !isOwn && <CancelRequest requestId={leave.id} table="leave_requests" />}
                   {/* Owners can edit their own request here (these are all
                       pending); RLS leave_update_own_pending backs it. */}
-                  {(isAdmin || isOwn) && (
+                  {((isAdmin && !readOnly) || isOwn) && (
                     <EditLeaveForm
                       id={leave.id}
                       leaveType={leave.leave_type}
