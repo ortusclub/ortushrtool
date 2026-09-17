@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { OddDateWarning } from "@/components/shared/odd-date-warning";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Plus, Save, X } from "lucide-react";
@@ -255,6 +256,10 @@ export function FileLeaveOnBehalf({ employees }: { employees: Employee[] }) {
               </div>
             </>
           )}
+
+          <div className="sm:col-span-2">
+            <OddDateWarning dates={isHalfDay ? [startDate] : [startDate, endDate]} kind="leave" />
+          </div>
 
           {/* Reason */}
           <div className="sm:col-span-2">

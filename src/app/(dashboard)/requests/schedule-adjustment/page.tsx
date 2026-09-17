@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { OddDateWarning } from "@/components/shared/odd-date-warning";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -562,6 +563,7 @@ export default function ScheduleAdjustmentPage() {
                 )}
               </div>
             )}
+          <OddDateWarning dates={dateMode === "individual" ? dates : [rangeStart, rangeEnd]} />
           {/* Day-location filter — only relevant when adjusting more than one day */}
           {schedulesLoaded && currentSchedules.length > 0 && validDates.length > 1 && (
             <div className="rounded-lg border border-gray-200 p-4">

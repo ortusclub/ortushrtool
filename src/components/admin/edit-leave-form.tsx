@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { OddDateWarning } from "@/components/shared/odd-date-warning";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Pencil, Save, X } from "lucide-react";
@@ -110,6 +111,7 @@ export function EditLeaveForm(props: Props) {
             </div>
           </>
         )}
+        <div className="sm:col-span-2"><OddDateWarning dates={[form.start_date, form.end_date]} kind="leave" /></div>
         <div className="sm:col-span-2">
           <label className="mb-1 block text-xs font-medium text-gray-600">Reason</label>
           <textarea rows={2} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} className={inputClass} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { OddDateWarning } from "@/components/shared/odd-date-warning";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -564,6 +565,8 @@ export default function LeaveRequestPage() {
             </div>
           </div>
         )}
+
+        <OddDateWarning dates={[form.start_date, form.end_date]} kind="leave" />
 
         {/* Days count */}
         {requestDays > 0 && (
