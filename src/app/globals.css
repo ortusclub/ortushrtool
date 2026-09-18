@@ -263,6 +263,27 @@
 /* Semi-transparent light surfaces — opacity utilities the rules above don't
    match (escaped slash in the class name). These were the leftover white
    patches (e.g. table subheaders, sticky bars). */
+/* ── Opacity variants ──
+   Tailwind treats `bg-blue-50/50` as its own class, so the `.dark .bg-blue-50`
+   rule above does NOT cover it. Any tint written with a slash needs its own
+   entry here or it stays light in dark mode — which is what made the Team
+   Calendar's today-column a white wash over dark cells.
+
+   Percentages are folded into the colour rather than kept as alpha: these sit
+   on varying surfaces (cards, striped rows), and a translucent light tint
+   would lighten whatever is beneath it. */
+.dark .bg-blue-50\/50 { background-color: #1e1b33; }   /* today column, Team Calendar */
+.dark .bg-blue-50\/40 { background-color: #1c1a2e; }   /* selected rows */
+.dark .bg-blue-50\/30 { background-color: #1a1829; }
+.dark .bg-indigo-50\/60 { background-color: #1f1c35; }
+.dark .bg-teal-50\/40 { background-color: #17272a; }
+.dark .bg-teal-50\/30 { background-color: #152326; }
+.dark .bg-purple-50\/40 { background-color: #221f31; }
+.dark .bg-purple-50\/30 { background-color: #1f1c2c; }
+.dark .bg-orange-50\/40 { background-color: #2a1f17; }
+.dark .bg-orange-50\/30 { background-color: #251c15; }
+.dark .bg-white\/70 { background-color: #201d1a; }
+
 .dark .bg-white\/95 { background-color: #1c1917; }
 .dark .bg-gray-50\/60 { background-color: #191614; }
 .dark .bg-gray-50\/50 { background-color: #191614; }
