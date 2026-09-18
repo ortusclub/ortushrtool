@@ -169,7 +169,7 @@ export default function HolidayWorkRequestPage() {
           <ArrowLeft size={16} />
           Back to Requests
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Work on Holiday</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Work on Holiday</h1>
         <p className="text-gray-600">
           Request to work on a holiday. Your manager will review the request.
         </p>

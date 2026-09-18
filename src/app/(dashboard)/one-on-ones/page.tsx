@@ -113,7 +113,7 @@ export default async function OneOnOnesIndexPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">1-on-1s</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">1-on-1s</h1>
         <p className="text-gray-600">
           {isAdmin
             ? "All 1-on-1s across the org. Filter by subject, host, department, country, or date — then export to CSV."

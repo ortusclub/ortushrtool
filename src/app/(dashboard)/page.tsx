@@ -34,6 +34,8 @@ import {
   type ReminderFlag,
 } from "@/components/dashboard/reminder-flags-card";
 import type { GrantType } from "@/types/database";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Highlight } from "@/components/brand/highlight";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -621,8 +623,8 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Welcome, {displayName(user)}
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">
+          <Highlight>Welcome, {displayName(user)}</Highlight>
         </h1>
         <p className="text-gray-600">
           Here&apos;s your overview for today.
@@ -639,7 +641,7 @@ export default async function DashboardPage() {
       {/* ===== Needs Attention ===== */}
       {hasAttention && (
         <div>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-3 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
             <AlertTriangle size={16} />
             Needs Attention
           </h2>
@@ -652,9 +654,9 @@ export default async function DashboardPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-amber-800">
+                    <h3 className="text-sm font-semibold text-amber-800">
                       {isReviewer ? "Pending Approvals" : "My Pending Requests"}
-                    </p>
+                    </h3>
                     {showAdminTeamBreakdown ? (
                       <div className="mt-1 space-y-1">
                         <ScopeCount label="Org-wide" value={totalPending} accent="amber" />
@@ -684,9 +686,9 @@ export default async function DashboardPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-red-800">
+                    <h3 className="text-sm font-semibold text-red-800">
                       {isReviewer ? "Unacknowledged Flags" : "My Unacknowledged Flags"}
-                    </p>
+                    </h3>
                     {showAdminTeamBreakdown ? (
                       <div className="mt-1 space-y-1">
                         <ScopeCount label="Org-wide" value={unflagged} accent="red" />
@@ -711,7 +713,7 @@ export default async function DashboardPage() {
       {/* ===== Upcoming Events ===== */}
       {upcomingEvents.length > 0 && (
         <div>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-3 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
             <CalendarHeart size={16} />
             Upcoming Events
           </h2>
@@ -782,7 +784,7 @@ export default async function DashboardPage() {
 
       {/* ===== Time-Off ===== */}
       <div>
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-3 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
           <Palmtree size={16} />
           Time-Off
         </h2>
@@ -835,7 +837,7 @@ export default async function DashboardPage() {
               My Leaves
             </h3>
             {(myUpcomingLeaves.data?.length ?? 0) === 0 && (myPendingLeaves.data?.length ?? 0) === 0 ? (
-              <p className="text-sm text-gray-400">No upcoming or pending leaves.</p>
+              <EmptyState tone="none-yet" title="No upcoming leave" description="Book time off and it will show up here." className="py-6" />
             ) : (
               <div className="space-y-2">
                 {(myPendingLeaves.data ?? []).map((l, i) => (

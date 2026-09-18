@@ -27,7 +27,7 @@ export default async function BulkAssignPage() {
           <ArrowLeft size={16} />
           Back to Leave Plans
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Bulk Assign Plans</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Bulk Assign Plans</h1>
         <p className="text-gray-600">
           Assign one or more leave plans to many employees at once.
         </p>

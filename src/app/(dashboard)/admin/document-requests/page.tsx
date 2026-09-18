@@ -19,7 +19,7 @@ export default async function HRDocumentRequestsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Document Requests</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Document Requests</h1>
         <p className="text-gray-600">
           Employee-submitted document requests. Mark as processed once you&apos;ve
           sent the document — the employee can see the status on their side.

@@ -23,7 +23,7 @@ export default async function LeavePlansPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Leave Plans</h1>
+          <h1 className="font-display text-[26px] leading-tight text-gray-900">Leave Plans</h1>
           <p className="text-gray-600">
             Create and manage leave plans with allocations per leave type
           </p>

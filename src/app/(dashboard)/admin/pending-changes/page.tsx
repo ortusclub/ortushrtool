@@ -59,7 +59,7 @@ export default async function PendingChangesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Pending Changes</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Pending Changes</h1>
         <p className="text-gray-600">
           Review changes submitted by HR support. Approving applies them to the
           database; rejecting discards them. Decisions are logged.

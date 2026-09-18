@@ -40,7 +40,7 @@ export function CollapsibleSection({
             <ChevronRight size={22} className="text-gray-400" />
           )}
           <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${DOT[accent]}`} />
-          <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+          <h2 className="font-display text-[20px] text-gray-900">{title}</h2>
         </button>
         {open && actions}
       </div>

@@ -45,7 +45,7 @@ const QUICK_EXPORTS: {
 export function QuickExports() {
   return (
     <section>
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+      <h2 className="mb-3 font-display text-sm uppercase tracking-wider text-gray-500">
         Quick Exports
       </h2>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

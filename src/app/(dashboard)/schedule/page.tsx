@@ -183,7 +183,7 @@ export default async function SchedulePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Schedule</h1>
+          <h1 className="font-display text-[26px] leading-tight text-gray-900">My Schedule</h1>
           <p className="text-gray-600">Your current weekly schedule</p>
         </div>
         <Link
@@ -196,7 +196,7 @@ export default async function SchedulePage() {
 
       {/* Base schedule */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-gray-500">
           Base Schedule
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
@@ -249,7 +249,7 @@ export default async function SchedulePage() {
 
       {/* This week's schedule */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-gray-500">
           This Week&apos;s Schedule
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -319,7 +319,7 @@ export default async function SchedulePage() {
                       {"startTime" in info && hasNightDifferentialHours(info.startTime, info.endTime) && (
                         <NightDiffNote size="xs" />
                       )}
-                      <span className="inline-block rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] font-medium text-cyan-700">
+                      <span className="inline-block rounded bg-cyan-200 px-1.5 py-0.5 text-[10px] font-medium text-cyan-800">
                         Adjusted
                       </span>
                     </div>
@@ -350,7 +350,7 @@ export default async function SchedulePage() {
                   )}
 
                   {info.type === "holiday" && (
-                    <span className="inline-block rounded bg-purple-100 px-2 py-1 text-xs font-medium text-purple-700">
+                    <span className="inline-block rounded bg-orange-200 px-2 py-1 text-xs font-medium text-orange-900">
                       {"label" in info && info.label}
                     </span>
                   )}
@@ -378,7 +378,7 @@ export default async function SchedulePage() {
       {/* Upcoming adjustments */}
       {adjustments && adjustments.length > 0 && (
         <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-gray-500">
             Upcoming Adjustments
           </h2>
           <div className="rounded-xl border border-blue-200 bg-white shadow-sm">
@@ -411,7 +411,7 @@ export default async function SchedulePage() {
       {/* Upcoming leave */}
       {leaves && leaves.length > 0 && (
         <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-gray-500">
             Upcoming Leave
           </h2>
           <div className="rounded-xl border border-purple-200 bg-white shadow-sm">

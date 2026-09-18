@@ -151,7 +151,7 @@ const statusStyles: Record<string, string> = {
   absent: "bg-red-100 text-red-700",
   rest_day: "bg-gray-100 text-gray-500",
   on_leave: "bg-blue-100 text-blue-700",
-  holiday: "bg-purple-100 text-purple-700",
+  holiday: "bg-orange-200 text-orange-900",
   working: "bg-green-50 text-green-600",
   not_started: "bg-slate-100 text-slate-600",
   no_schedule: "bg-gray-100 text-gray-500",
@@ -981,7 +981,7 @@ export function AllAttendanceTable({
 
       {/* Date display & stats */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-gray-900">
+        <h2 className="font-display text-[20px] text-gray-900">
           {isSingleDate
             ? formatDisplayDate(fromDate)
             : `${formatDisplayDate(fromDate)} → ${formatDisplayDate(toDate)}`}
@@ -995,7 +995,7 @@ export function AllAttendanceTable({
             { key: "working", label: "Working", count: stats.working, classes: "bg-green-50 text-green-600", ringClass: "ring-green-300", alwaysShow: false },
             { key: "not_started", label: "Shift Yet to Start", count: stats.notStarted, classes: "bg-slate-100 text-slate-600", ringClass: "ring-slate-400", alwaysShow: false },
             { key: "on_leave", label: "On Leave", count: stats.onLeave, classes: "bg-blue-100 text-blue-700", ringClass: "ring-blue-400", alwaysShow: false },
-            { key: "holiday", label: "Holiday", count: stats.holiday, classes: "bg-purple-100 text-purple-700", ringClass: "ring-purple-400", alwaysShow: false },
+            { key: "holiday", label: "Holiday", count: stats.holiday, classes: "bg-orange-200 text-orange-900", ringClass: "ring-orange-400", alwaysShow: false },
             { key: "inconclusive", label: "Inconclusive", count: stats.inconclusive, classes: "bg-amber-100 text-amber-700", ringClass: "ring-amber-400", alwaysShow: false },
             { key: "no_data", label: "No Data", count: stats.noData, classes: "bg-gray-100 text-gray-500", ringClass: "ring-gray-400", alwaysShow: false },
           ] as const).map((p) => {

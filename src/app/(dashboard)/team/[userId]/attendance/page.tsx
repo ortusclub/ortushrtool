@@ -6,6 +6,7 @@ import { Flag, MapPin, CalendarCog } from "lucide-react";
 import { redirect } from "next/navigation";
 import { WeeklyScheduleEditor } from "@/components/profile/weekly-schedule-editor";
 import { OneOffAdjustmentForm } from "@/components/profile/one-off-adjustment-form";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export default async function TeamMemberAttendanceTab({
   params,
@@ -59,7 +60,7 @@ export default async function TeamMemberAttendanceTab({
     <div className="space-y-6">
       {/* Default Weekly Schedule */}
       <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-4 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
           <MapPin size={14} />
           Default Weekly Schedule
         </h2>
@@ -80,7 +81,7 @@ export default async function TeamMemberAttendanceTab({
 
       {/* One-off adjustment */}
       <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-4 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
           <CalendarCog size={14} />
           One-Off Adjustments
         </h2>
@@ -122,12 +123,12 @@ export default async function TeamMemberAttendanceTab({
 
       {/* Attendance Flag History */}
       <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-4 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
           <Flag size={14} />
           Attendance Flag History
         </h2>
         {(flagHistory ?? []).length === 0 ? (
-          <p className="text-sm text-gray-500">No flags on record.</p>
+          <EmptyState tone="all-clear" title="No flags on record" />
         ) : (
           <div className="divide-y divide-gray-100">
             {(flagHistory ?? []).map((f) => (

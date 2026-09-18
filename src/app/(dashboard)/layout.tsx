@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { ComingSoonGate } from "@/components/layout/coming-soon-gate";
+import { BrandBackdrop } from "@/components/brand/brand-backdrop";
 
 export default async function DashboardLayout({
   children,
@@ -52,9 +53,11 @@ export default async function DashboardLayout({
         badges={{
           "/performance": pendingPeerCount ?? 0,
         }}
-        company={user.company}
       />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      {/* isolate: gives BrandBackdrop a stacking context to sit inside,
+          so its -z-10 lands above the page background, not behind it. */}
+      <div className="relative isolate flex flex-1 flex-col overflow-hidden">
+        <BrandBackdrop />
         <Header user={user} />
         <main className="flex-1 overflow-y-auto p-6">
           <ComingSoonGate userRole={user.role} comingSoonRoutes={comingSoonRoutes}>

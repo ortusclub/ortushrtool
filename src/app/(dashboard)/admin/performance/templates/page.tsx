@@ -21,7 +21,7 @@ export default async function ReviewTemplatesPage() {
         >
           <ArrowLeft size={16} /> Back to Performance
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Review Form Templates</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Review Form Templates</h1>
         <p className="text-gray-600">
           Build reusable question sets. Each question can be answered by any
           combination of self, manager, and peer.

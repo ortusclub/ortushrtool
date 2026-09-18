@@ -246,7 +246,7 @@ export default async function TeamMemberTimeOffTab({
     <div className="space-y-6">
       {/* Plans */}
       <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-3 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
           <Palmtree size={14} />
           Leave Plans
         </h2>
@@ -265,7 +265,7 @@ export default async function TeamMemberTimeOffTab({
       {/* Balances */}
       {canSeeBalances && (
         <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-3 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
             <Plane size={14} />
             Current Balances
           </h2>
@@ -291,7 +291,7 @@ export default async function TeamMemberTimeOffTab({
       {/* Calendar + Upcoming side-by-side */}
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-3 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
             <CalendarDays size={14} />
             Calendar
           </h2>
@@ -317,7 +317,7 @@ export default async function TeamMemberTimeOffTab({
 
         <div className="rounded-xl border border-gray-200 bg-white p-6">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+            <h2 className="font-display text-sm uppercase tracking-wide text-gray-500">
               Upcoming &amp; Pending
             </h2>
             {canRequest && (
@@ -342,7 +342,7 @@ export default async function TeamMemberTimeOffTab({
       {/* Past approved */}
       {past.length > 0 && (
         <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-gray-500">
             Recent History
           </h2>
           <div className="divide-y divide-gray-100">

@@ -27,7 +27,7 @@ export default async function IncidentReportPage() {
           <ArrowLeft size={16} />
           Back to Workplace Concerns
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Report an Incident</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Report an Incident</h1>
         <p className="text-gray-600">
           Your name is attached so HR can follow up with you.
         </p>

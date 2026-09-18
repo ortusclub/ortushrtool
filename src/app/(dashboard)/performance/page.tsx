@@ -191,7 +191,7 @@ function SummaryCard({
       href={href}
       className="rounded-xl border border-gray-200 bg-white p-5 transition-colors hover:bg-gray-50"
     >
-      <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <h2 className="mb-1 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
         {icon} {title}
       </h2>
       {children}

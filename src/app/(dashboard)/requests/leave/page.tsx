@@ -388,7 +388,7 @@ export default function LeaveRequestPage() {
           <ArrowLeft size={16} />
           Back to Requests
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Request Leave</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Request Leave</h1>
         <p className="text-gray-600">
           Submit a leave request for approval by your manager.
         </p>

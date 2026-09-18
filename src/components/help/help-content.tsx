@@ -98,7 +98,7 @@ export function HelpContent({
           key={section.title}
           className="rounded-xl border border-gray-200 bg-white p-6"
         >
-          <h2 className="mb-2 text-lg font-semibold text-gray-900">
+          <h2 className="mb-2 font-display text-[20px] text-gray-900">
             {section.title}
           </h2>
           {section.role && (

@@ -78,7 +78,7 @@ export function AdjustmentCsvImport() {
     <div className="rounded-xl border border-gray-200 bg-white p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-semibold text-gray-900">Bulk Schedule Adjustment</h3>
+          <h3 className="text-base font-semibold text-gray-900">Bulk Schedule Adjustment</h3>
           <p className="text-sm text-gray-600">
             Upload a CSV to create schedule adjustments for multiple employees.
           </p>

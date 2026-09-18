@@ -37,6 +37,7 @@ import { startOfWeek, addDays, format } from "date-fns";
 import { LeaveCsvImport } from "@/components/admin/leave-csv-import";
 import { AdjustmentCsvImport } from "@/components/admin/adjustment-csv-import";
 import { UserNameLink } from "@/components/shared/user-name-link";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export default async function RequestsPage({
   searchParams,
@@ -298,7 +299,7 @@ export default async function RequestsPage({
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900">Requests</h1>
+      <h1 className="font-display text-[26px] leading-tight text-gray-900">Requests</h1>
 
       {/* ── ADMIN CONSOLE ── */}
       {isAdmin && (
@@ -522,7 +523,7 @@ export default async function RequestsPage({
             />
           )}
           {pendingAdjAll.length === 0 && pendingLeaveAll.length === 0 && pendingHwAll.length === 0 && pendingOtAll.length === 0 && (
-            <p className="text-sm text-gray-500">No pending team requests.</p>
+            <EmptyState tone="all-clear" title="No pending team requests" description="Your team has nothing awaiting approval." />
           )}
 
           {/* History is split per request type — each its own collapsible. */}

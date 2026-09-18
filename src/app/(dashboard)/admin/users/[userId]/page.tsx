@@ -50,7 +50,7 @@ export default async function AdminUserProfilePage({
           <ArrowLeft size={16} />
           Back to Users
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">
           {displayName(user)}
         </h1>
         <p className="text-gray-600">{user.email}</p>

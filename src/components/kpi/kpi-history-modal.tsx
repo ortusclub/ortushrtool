@@ -64,7 +64,7 @@ export function KpiHistoryModal({ assignment, onClose }: Props) {
       <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="font-display text-[20px] text-gray-900">
               Update History
             </h2>
             <p className="text-sm text-gray-500">{def?.name || "KPI"}</p>

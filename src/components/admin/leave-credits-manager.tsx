@@ -159,7 +159,7 @@ export function LeaveCreditsManager({ initialCredits, users }: Props) {
           onSubmit={handleSubmit}
           className="space-y-4 rounded-xl border border-blue-200 bg-white p-6 shadow-sm"
         >
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 className="text-base font-semibold text-gray-900">
             {form.kind === "debit" ? "Add Debit" : "Add Credit"}
           </h3>
           <div className="inline-flex rounded-lg border border-gray-300 bg-gray-50 p-0.5 text-xs">

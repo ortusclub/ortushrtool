@@ -62,7 +62,7 @@ export default async function PerformancePeerRequestsPage() {
   return (
     <div className="space-y-4">
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-2 font-display text-sm uppercase tracking-wide text-gray-500">
           Pending ({pending.length})
         </h2>
         {pending.length === 0 ? (
@@ -100,7 +100,7 @@ export default async function PerformancePeerRequestsPage() {
 
       {completed.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-2 font-display text-sm uppercase tracking-wide text-gray-500">
             Past requests
           </h2>
           <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">

@@ -1,10 +1,10 @@
-import { Construction } from "lucide-react";
+import { BrandArches } from "@/components/brand/brand-shapes";
 
 export function ComingSoon() {
   return (
     <div className="flex flex-col items-center justify-center py-32 text-center">
-      <Construction size={48} className="mb-4 text-yellow-500" />
-      <h2 className="text-2xl font-bold text-gray-900">
+      <BrandArches className="mb-5 h-16 w-16" />
+      <h2 className="font-display text-[26px] leading-tight text-gray-900">
         We&apos;re working on this feature!
       </h2>
       <p className="mt-2 text-gray-500">

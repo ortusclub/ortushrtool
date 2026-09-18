@@ -36,6 +36,7 @@ import {
 import { useState } from "react";
 import type { UserRole } from "@/types/database";
 import { cn, hasRole } from "@/lib/utils";
+import { TrinityLogo } from "@/components/brand/trinity-logo";
 
 interface NavItem {
   label: string;
@@ -114,37 +115,11 @@ const settingsSubItems: NavItem[] = [
   { label: "Feature Visibility", href: "/admin/settings/features", icon: <Eye size={18} />, minRole: "super_admin" },
 ];
 
-const BRAND_NAME = "Trinity Talent House";
-
-/**
- * users.company holds the legal entity name, which is not always what people
- * call it. Only the display differs — the stored value stays canonical, so
- * reports and filters keep grouping on one string.
- */
-const COMPANY_DISPLAY_NAMES: Record<string, string> = {
-  "Ortus Strategy Pte. Ltd.": "The Ortus Club",
-};
-
-/**
- * The "Assigned to" line, or null when it should be omitted.
- *
- * Hidden when the viewer's company IS the operating entity — telling a
- * Trinity employee they are assigned to Trinity is noise, and reads oddly
- * next to the identical brand above it.
- */
-function assignedCompanyLabel(company: string | null | undefined): string | null {
-  const raw = company?.trim();
-  if (!raw) return null;
-  if (/\btrinity\b/i.test(raw)) return null;
-  return COMPANY_DISPLAY_NAMES[raw] ?? raw;
-}
-
 export function Sidebar({
   userRole,
   comingSoonRoutes = [],
   sidebarOrder = {},
   badges = {},
-  company = null,
 }: {
   userRole: UserRole;
   comingSoonRoutes?: string[];
@@ -152,10 +127,7 @@ export function Sidebar({
   sidebarOrder?: Record<string, string[]>;
   /** Optional count badges per href, e.g. unread counts. */
   badges?: Record<string, number>;
-  /** The viewer's assigned company (users.company), shown under the brand. */
-  company?: string | null;
 }) {
-  const assignedTo = assignedCompanyLabel(company);
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const settingsOpen = pathname.startsWith("/admin/settings");
@@ -219,7 +191,7 @@ export function Sidebar({
         return (
           <div key={section.title || "top"}>
             {section.title && (
-              <p className="mb-1 mt-4 px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              <p className="mb-1 mt-4 px-3 font-display text-[11px] uppercase tracking-wider text-gray-500">
                 {section.title}
               </p>
             )}
@@ -235,7 +207,7 @@ export function Sidebar({
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    "flex items-center gap-3 rounded-lg px-3 py-2 font-display text-[15px] font-normal transition-colors",
                     isActive
                       ? "bg-blue-50 text-blue-700"
                       : "text-gray-700 hover:bg-gray-100"
@@ -244,12 +216,12 @@ export function Sidebar({
                   {item.icon}
                   {item.label}
                   {(badges[item.href] ?? 0) > 0 && (
-                    <span className="ml-auto rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                    <span className="ml-auto rounded-full bg-blue-600 px-1.5 py-0.5 font-sans text-[10px] font-medium text-white">
                       {badges[item.href]}
                     </span>
                   )}
                   {comingSoonRoutes.some((r) => item.href === r || item.href.startsWith(r + "/")) && userRole !== "super_admin" && (
-                    <span className="ml-auto rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-700">
+                    <span className="ml-auto rounded bg-yellow-100 px-1.5 py-0.5 font-sans text-[10px] font-medium text-yellow-700">
                       Soon
                     </span>
                   )}
@@ -263,13 +235,13 @@ export function Sidebar({
       {/* Settings dropdown */}
       {hasRole(userRole, "super_admin") && (
         <div>
-          <p className="mb-1 mt-4 px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+          <p className="mb-1 mt-4 px-3 font-display text-[11px] uppercase tracking-wider text-gray-500">
             Settings
           </p>
           <button
             onClick={() => setSettingsExpanded(!settingsExpanded)}
             className={cn(
-              "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2 font-display text-[15px] font-normal transition-colors",
               settingsOpen
                 ? "bg-blue-50 text-blue-700"
                 : "text-gray-700 hover:bg-gray-100"
@@ -295,7 +267,7 @@ export function Sidebar({
                     href={item.href}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                      "flex items-center gap-3 rounded-lg px-3 py-2 font-display text-[15px] font-normal transition-colors",
                       isActive
                         ? "bg-blue-50 text-blue-700"
                         : "text-gray-700 hover:bg-gray-100"
@@ -334,23 +306,25 @@ export function Sidebar({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform lg:translate-x-0 lg:static",
+          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-white transform transition-transform lg:translate-x-0 lg:static",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Brand is the operating entity; the line beneath is the company the
-            viewer is assigned to (users.company), which differs per person. */}
-        <div className="flex h-16 flex-col justify-center border-b border-gray-200 px-6">
-          <h1 className="text-sm font-bold leading-tight text-gray-900">
-            {BRAND_NAME}
-          </h1>
-          {assignedTo && (
-            <p className="truncate text-xs leading-tight text-gray-500" title={assignedTo}>
-              Working with {assignedTo}
-            </p>
-          )}
+        {/* Brand block, upper-left: the p1 cover lockup — two-tone icon and an
+            ivory wordmark on the flame field. Wordmark colour rides on
+            currentColor, so text-brand-ivory is what makes it cover-accurate.
+            The header beside it is also h-16 and flame, so the two read as one
+            unbroken band. That is why the aside carries no right border: a
+            border here would draw a seam straight through the band. It lives
+            on the panel below instead. */}
+        <div className="flex h-16 shrink-0 items-center bg-brand-topbar px-6">
+          <TrinityLogo variant="color" className="h-7 w-auto text-brand-ivory" />
         </div>
-        {navContent}
+        {/* overflow-y-auto because flex-1 + min-h-0 would otherwise clip the
+            nav list, which runs to 30+ items for admins. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto border-r border-gray-200">
+          {navContent}
+        </div>
       </aside>
     </>
   );

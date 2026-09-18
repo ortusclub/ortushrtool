@@ -20,7 +20,7 @@ export default async function ConcernsLandingPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Workplace Concerns</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Workplace Concerns</h1>
         <p className="text-gray-600">
           A safe place to raise workplace issues — formally as an incident
           report, or anonymously as feedback.
@@ -36,7 +36,7 @@ export default async function ConcernsLandingPage() {
             <span className="rounded-lg bg-blue-50 p-2 text-blue-600 group-hover:bg-blue-100">
               <AlertTriangle size={20} />
             </span>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-base font-semibold text-gray-900">
               Report an Incident
             </h2>
           </div>
@@ -57,7 +57,7 @@ export default async function ConcernsLandingPage() {
             <span className="rounded-lg bg-teal-50 p-2 text-teal-600 group-hover:bg-teal-100">
               <MessageSquare size={20} />
             </span>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-base font-semibold text-gray-900">
               Anonymous Feedback
             </h2>
           </div>
@@ -90,7 +90,7 @@ export default async function ConcernsLandingPage() {
       {myReports && myReports.length > 0 && (
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-200 px-6 py-4">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="font-display text-[20px] text-gray-900">
               My Past Incident Reports
             </h2>
           </div>

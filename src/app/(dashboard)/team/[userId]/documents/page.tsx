@@ -41,7 +41,7 @@ export default async function TeamMemberDocumentsTab({
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-6">
-      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <h2 className="mb-4 flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
         <FileText size={14} />
         Document Request History
       </h2>

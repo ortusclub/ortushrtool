@@ -14,7 +14,7 @@ export function CollapsibleHistory({ count, label = "History", children }: { cou
         className="flex w-full items-center gap-2 px-6 py-4 text-left"
       >
         {open ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}
-        <h2 className="text-lg font-semibold text-gray-900">
+        <h2 className="font-display text-[20px] text-gray-900">
           {label} {count > 0 && <span className="ml-1 text-sm font-normal text-gray-400">({count})</span>}
         </h2>
       </button>

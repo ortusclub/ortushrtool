@@ -221,7 +221,7 @@ function RequestList({
 }) {
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+      <h2 className="font-display text-sm uppercase tracking-wider text-gray-500">
         {title}
       </h2>
       {items.length === 0 ? (

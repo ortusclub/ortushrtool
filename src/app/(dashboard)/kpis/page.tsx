@@ -112,7 +112,7 @@ export default async function KpisPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">KPIs</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">KPIs</h1>
         <p className="text-gray-600">
           Track and manage key performance indicators
         </p>

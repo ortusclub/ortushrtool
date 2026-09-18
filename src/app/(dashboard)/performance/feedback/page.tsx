@@ -65,7 +65,7 @@ export default async function PerformanceFeedbackPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <h2 className="font-display text-[20px] text-gray-900 dark:text-gray-100">
             Peer Feedback
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">

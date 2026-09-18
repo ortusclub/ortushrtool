@@ -381,7 +381,7 @@ function StatusBadge({ status }: { status: string }) {
     absent: "bg-red-100 text-red-700",
     rest_day: "bg-gray-100 text-gray-600",
     on_leave: "bg-blue-100 text-blue-700",
-    holiday: "bg-purple-100 text-purple-700",
+    holiday: "bg-orange-200 text-orange-900",
     working: "bg-green-50 text-green-600",
     no_schedule: "bg-gray-100 text-gray-500",
   };

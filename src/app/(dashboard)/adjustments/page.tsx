@@ -31,7 +31,7 @@ export default async function AdjustmentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="font-display text-[26px] leading-tight text-gray-900">
             {isReviewer ? "Schedule Adjustment Approvals" : "My Adjustment Requests"}
           </h1>
           <p className="text-gray-600">
@@ -54,7 +54,7 @@ export default async function AdjustmentsPage() {
       {pending.length > 0 && (
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-200 px-6 py-4">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="font-display text-[20px] text-gray-900">
               Pending ({pending.length})
             </h2>
           </div>
@@ -126,7 +126,7 @@ export default async function AdjustmentsPage() {
       {/* Past */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="font-display text-[20px] text-gray-900">
             {pending.length > 0 ? "History" : "All Requests"}
           </h2>
         </div>

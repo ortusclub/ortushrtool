@@ -73,7 +73,7 @@ export default async function PlanAssigneesPage({
         >
           <ArrowLeft size={16} /> Back to Leave Plans
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">{plan.name}</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">{plan.name}</h1>
         {plan.description && (
           <p className="text-gray-600">{plan.description}</p>
         )}

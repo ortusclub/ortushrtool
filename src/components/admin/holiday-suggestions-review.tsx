@@ -86,7 +86,7 @@ export function HolidaySuggestionsReview({
   return (
     <div className="rounded-xl border border-amber-300 bg-amber-50 p-6">
       <div className="mb-1 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-amber-900">
+        <h2 className="font-display text-[20px] text-amber-900">
           Suggested Holidays — pending review ({suggestions.length})
         </h2>
         <button

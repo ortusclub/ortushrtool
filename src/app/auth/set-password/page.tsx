@@ -106,7 +106,7 @@ export default function SetPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow-lg">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Set Your Password</h1>
+          <h1 className="font-display text-[26px] leading-tight text-gray-900">Set Your Password</h1>
           <p className="mt-2 text-sm text-gray-600">
             Choose a password for your Ortus Club HR account.
           </p>

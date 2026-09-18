@@ -183,7 +183,7 @@ export default async function TeamMemberProfileTab({
 
         {/* Direct Reports */}
         <div className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-4 flex items-center justify-between text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-4 flex items-center justify-between font-display text-sm uppercase tracking-wide text-gray-500">
             <span>Direct Reports</span>
             {directReports && directReports.length > 0 && (
               <span className="text-xs font-normal text-gray-400">

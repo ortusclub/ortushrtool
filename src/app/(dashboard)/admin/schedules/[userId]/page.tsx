@@ -78,7 +78,7 @@ export default async function UserSchedulePage({
           <ArrowLeft size={16} />
           Back to Users
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">
           {displayName(user)}
         </h1>
         <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-gray-600">
@@ -96,7 +96,7 @@ export default async function UserSchedulePage({
 
       {/* Default Schedule */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-gray-500">
           Default Weekly Schedule
         </h2>
         <UserScheduleEditor
@@ -115,7 +115,7 @@ export default async function UserSchedulePage({
 
       {/* One-off Adjustment */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-gray-500">
           Add One-Off Adjustment
         </h2>
         <AdminAdjustmentForm userId={userId} />
@@ -124,7 +124,7 @@ export default async function UserSchedulePage({
       {/* Existing Adjustments */}
       {adjustments && adjustments.length > 0 && (
         <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-gray-500">
             Upcoming Adjustments
           </h2>
           <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -165,7 +165,7 @@ export default async function UserSchedulePage({
 
       {/* Add Leave */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-gray-500">
           Add Leave
         </h2>
         <AdminLeaveForm userId={userId} />
@@ -174,7 +174,7 @@ export default async function UserSchedulePage({
       {/* Existing Leave */}
       {leaves && leaves.length > 0 && (
         <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-3 font-display text-sm uppercase tracking-wide text-gray-500">
             Upcoming Leave
           </h2>
           <div className="rounded-xl border border-purple-200 bg-white shadow-sm">

@@ -169,7 +169,7 @@ export function ReportBuilder({
 
   return (
     <section className="space-y-4">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+      <h2 className="font-display text-sm uppercase tracking-wider text-gray-500">
         Custom Report Builder
       </h2>
 

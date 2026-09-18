@@ -113,7 +113,7 @@ export function DetailsEditor({
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-6">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="font-display text-sm uppercase tracking-wide text-gray-500">
           Details
         </h2>
         {canEdit && !editing && (

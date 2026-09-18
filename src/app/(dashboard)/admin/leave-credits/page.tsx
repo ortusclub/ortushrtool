@@ -22,7 +22,7 @@ export default async function LeaveCreditsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Leave Credits</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Leave Credits</h1>
         <p className="text-gray-600">
           One-off per-employee leave credits. Each credit adds to the
           employee&apos;s allocated balance for the given leave type and stops

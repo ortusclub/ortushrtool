@@ -109,7 +109,7 @@ export function BulkAdjustmentsSection({
           )}
           <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2">
             {open ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="font-display text-[20px] text-gray-900">
               Pending Schedule Adjustments ({adjustments.length})
             </h2>
             {approvableIds.length > 0 && (

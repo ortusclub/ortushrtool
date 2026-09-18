@@ -34,7 +34,7 @@ export default async function HolidaysPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Public Holidays</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Public Holidays</h1>
         <p className="text-gray-600">
           Upcoming public holidays across all office locations
         </p>
@@ -47,7 +47,7 @@ export default async function HolidaysPage() {
             className="rounded-xl border border-gray-200 bg-white shadow-sm"
           >
             <div className="border-b border-gray-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-gray-900">
+              <h2 className="font-display text-[20px] text-gray-900">
                 {HOLIDAY_COUNTRY_LABELS[country]}
               </h2>
               <p className="text-sm text-gray-500">

@@ -132,7 +132,7 @@ export function FileLeaveOnBehalf({ employees }: { employees: Employee[] }) {
         className="flex w-full items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-6 text-left hover:bg-gray-50"
       >
         <div>
-          <h3 className="font-semibold text-gray-900">File Leave on Behalf</h3>
+          <h3 className="text-base font-semibold text-gray-900">File Leave on Behalf</h3>
           <p className="text-sm text-gray-600">
             Submit a leave request for another employee — it goes through their manager&apos;s normal approval.
           </p>
@@ -147,7 +147,7 @@ export function FileLeaveOnBehalf({ employees }: { employees: Employee[] }) {
   return (
     <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-800">File Leave on Behalf</h3>
+        <h3 className="text-base font-semibold text-gray-900">File Leave on Behalf</h3>
         <button onClick={() => setOpen(false)} className="rounded p-1 text-gray-400 hover:bg-gray-100"><X size={16} /></button>
       </div>
 

@@ -55,7 +55,7 @@ export default async function ConcernsAdminPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Concerns — HR view</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Concerns — HR view</h1>
         <p className="text-gray-600">
           Review incident reports and anonymous feedback.
         </p>

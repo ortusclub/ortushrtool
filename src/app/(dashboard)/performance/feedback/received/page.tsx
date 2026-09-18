@@ -42,7 +42,7 @@ export default async function FeedbackReceivedPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <h2 className="font-display text-[20px] text-gray-900 dark:text-gray-100">
             Feedback forwarded to you
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">

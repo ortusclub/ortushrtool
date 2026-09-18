@@ -50,7 +50,7 @@ export function ReminderFlagsCard({ flags }: { flags: ReminderFlag[] }) {
     <div className="rounded-xl border border-orange-200 bg-orange-50 p-5 shadow-sm sm:col-span-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm text-orange-800">Waiting On You</p>
+          <h3 className="text-sm font-semibold text-orange-800">Waiting On You</h3>
           <p className="mt-1 text-3xl font-bold text-orange-900">
             {visible.length}
           </p>

@@ -8,9 +8,11 @@ import type { User } from "@/types/database";
 import { UserAvatar } from "@/components/shared/user-avatar";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { displayName } from "@/lib/utils";
+import { assignedCompanyLabel } from "@/lib/company-display";
 
 export function Header({ user }: { user: User }) {
   const router = useRouter();
+  const assignedTo = assignedCompanyLabel(user.company);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -35,22 +37,37 @@ export function Header({ user }: { user: User }) {
   };
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
-      <div />
-      <div className="flex items-center gap-4">
-        <ThemeToggle />
+    /* Flame bar. The sidebar's brand block is also h-16 and sits immediately
+       to the left, so the two form one continuous #E74820 band across the top
+       — the p1 cover field carried across the whole header, not just a corner. */
+    <header className="flex h-16 items-center justify-between bg-brand-topbar px-6">
+      {/* Sits at the left end of the flame band, immediately right of the
+          sidebar's logo block — so the brand and who you work with read as one
+          line. Previously below the logo in the sidebar, where it was clipped. */}
+      {assignedTo ? (
+        <p className="truncate text-sm text-white" title={assignedTo}>
+          Working with <span className="font-medium">{assignedTo}</span>
+        </p>
+      ) : (
+        <div />
+      )}
+      <div className="flex shrink-0 items-center gap-4">
+        <ThemeToggle className="rounded-lg p-2 text-white hover:bg-white/20" />
         <span
           className={`rounded-full px-3 py-1 text-xs font-medium ${roleBadgeColor[user.role]}`}
         >
           {roleLabel[user.role]}
         </span>
-        <Link href={`/team/${user.id}`} className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 hover:underline">
+        <Link
+          href={`/team/${user.id}`}
+          className="flex items-center gap-2 text-sm font-medium text-white hover:underline"
+        >
           <UserAvatar name={displayName(user)} avatarUrl={user.avatar_url} size="xs" />
           {displayName(user)}
         </Link>
         <button
           onClick={handleLogout}
-          className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          className="rounded-lg p-2 text-white hover:bg-white/20"
           title="Sign out"
         >
           <LogOut size={18} />

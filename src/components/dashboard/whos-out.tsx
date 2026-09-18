@@ -132,7 +132,7 @@ export function WhosOut({
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
           <Users size={16} />
           Who&apos;s Out This Week
         </h2>
@@ -270,8 +270,8 @@ export function WhosOut({
 
       {/* Upcoming Holidays */}
       {upcomingHolidays.length > 0 && (
-        <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50 p-4">
-          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-purple-900">
+        <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4">
+          <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-orange-900">
             <CalendarHeart size={16} />
             Upcoming Holidays
           </h3>
@@ -279,10 +279,10 @@ export function WhosOut({
             {upcomingHolidays.map((h, i) => (
               <div key={i} className="flex items-center justify-between">
                 <div>
-                  <span className="text-sm text-purple-800">{h.name}</span>
-                  <span className="ml-2 text-xs text-purple-500">{formatDate(h.date)}</span>
+                  <span className="text-sm text-orange-900">{h.name}</span>
+                  <span className="ml-2 text-xs text-orange-700">{formatDate(h.date)}</span>
                 </div>
-                <span className="rounded bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                <span className="rounded bg-orange-200 px-2 py-0.5 text-xs font-medium text-orange-900">
                   {HOLIDAY_COUNTRY_LABELS[h.country as keyof typeof HOLIDAY_COUNTRY_LABELS] ?? h.country}
                 </span>
               </div>

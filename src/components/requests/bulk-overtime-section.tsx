@@ -91,7 +91,7 @@ export function BulkOvertimeSection({
           )}
           <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2">
             {open ? <ChevronDown size={18} className="text-gray-400" /> : <ChevronRight size={18} className="text-gray-400" />}
-            <h2 className="text-lg font-semibold text-gray-900">Pending Overtime Requests ({requests.length})</h2>
+            <h2 className="font-display text-[20px] text-gray-900">Pending Overtime Requests ({requests.length})</h2>
             {approvableIds.length > 0 && (
               <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                 <Flag size={11} /> {approvableIds.length} need action

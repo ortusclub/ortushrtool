@@ -86,7 +86,7 @@ export function CsvImport() {
             <Users size={20} />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Import Users</h3>
+            <h3 className="text-base font-semibold text-gray-900">Import Users</h3>
             <p className="text-sm text-gray-600">
               Upload a CSV to create new users or update existing ones (matched by email).
               Schedule columns (M–F) are optional.

@@ -15,7 +15,7 @@ export default async function AnniversaryBenefitsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Anniversary Benefits</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Anniversary Benefits</h1>
         <p className="text-gray-600">
           Define what employees earn at each year milestone, per country. The
           work anniversary email shows the matching benefit when one exists for

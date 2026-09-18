@@ -355,13 +355,13 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
         <span className="inline-block h-3 w-3 rounded bg-green-100" /> Online
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="inline-block h-3 w-3 rounded bg-cyan-100" /> Adjusted
+        <span className="inline-block h-3 w-3 rounded bg-cyan-200" /> Adjusted
       </div>
       <div className="flex items-center gap-1.5">
         <span className="inline-block h-3 w-3 rounded bg-amber-100" /> Leave
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="inline-block h-3 w-3 rounded bg-purple-100" /> Holiday
+        <span className="inline-block h-3 w-3 rounded bg-orange-200" /> Holiday
       </div>
       <div className="flex items-center gap-1.5">
         <span className="inline-block h-3 w-3 rounded bg-teal-100" /> Working on Holiday
@@ -553,11 +553,11 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                               <NightDiffNote size="xs" />
                             </div>
                           )}
-                          <div className="mt-0.5 text-[10px] text-teal-600">Working on {"holidayName" in cell ? cell.holidayName : "Holiday"}</div>
+                          <div className="mt-0.5 text-[10px] text-teal-700">Working on {"holidayName" in cell ? cell.holidayName : "Holiday"}</div>
                         </div>
                       )}
                       {cell.type === "holiday" && (
-                        <span className="inline-block rounded bg-purple-100 px-2 py-1 text-xs font-medium text-purple-700">
+                        <span className="inline-block rounded bg-orange-200 px-2 py-1 text-xs font-medium text-orange-900">
                           {cell.label}
                         </span>
                       )}
@@ -570,7 +570,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                             >
                               {lv.label}
                               {lv.isHalfDay && (
-                                <span className="ml-1 font-normal text-amber-600">
+                                <span className="ml-1 font-normal text-amber-800">
                                   · ½ day{lv.period ? ` (${lv.period.toUpperCase()})` : ""}
                                 </span>
                               )}
@@ -583,7 +583,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                       )}
                       {cell.type === "adjusted" && (
                         <div>
-                          <span className="inline-block rounded bg-cyan-100 px-2 py-1 text-xs font-medium text-cyan-700">
+                          <span className="inline-block rounded bg-cyan-200 px-2 py-1 text-xs font-medium text-cyan-800">
                             {cell.label}
                           </span>
                           {"location" in cell && cell.location && (
@@ -601,7 +601,7 @@ export function WeeklyScheduleTable({ users, schedules, holidays }: Props) {
                               <NightDiffNote size="xs" />
                             </div>
                           )}
-                          <div className="mt-0.5 text-[10px] text-cyan-500">Adjusted</div>
+                          <div className="mt-0.5 text-[10px] text-cyan-700">Adjusted</div>
                         </div>
                       )}
                       {cell.type === "schedule" && (

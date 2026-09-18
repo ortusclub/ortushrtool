@@ -121,7 +121,7 @@ export default function OvertimeRequestPage() {
           Back to Requests
         </Link>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-6">
-          <h1 className="text-lg font-semibold text-amber-900">
+          <h1 className="font-display text-[26px] leading-tight text-amber-900">
             Overtime requests not enabled for your account
           </h1>
           <p className="mt-2 text-sm text-amber-800">
@@ -143,7 +143,7 @@ export default function OvertimeRequestPage() {
           <ArrowLeft size={16} />
           Back to Requests
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Request Overtime</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Request Overtime</h1>
         <p className="text-gray-600">
           Request approval for working extra hours on a specific date.
         </p>

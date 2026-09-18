@@ -92,7 +92,7 @@ export function ReviewForm({
     <div className="rounded-xl border border-gray-200 bg-white p-6">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="font-display text-sm uppercase tracking-wide text-gray-500">
             {cycleName}
           </h2>
           <p className="mt-0.5 text-xs text-gray-500">

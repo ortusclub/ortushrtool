@@ -10,7 +10,7 @@ export function RecentKudos({ kudos }: { kudos: KudosWithUsers[] }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-6">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="flex items-center gap-2 font-display text-sm uppercase tracking-wide text-gray-500">
           <Heart size={14} className="text-rose-500" />
           Recent Kudos
         </h2>

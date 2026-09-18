@@ -1,8 +1,10 @@
 "use client";
 
+import { BrandSunburst } from "@/components/brand/brand-shapes";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, CheckCircle2, Loader2 } from "lucide-react";
+import { Lock, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   FEEDBACK_CATEGORY_LABELS,
@@ -56,8 +58,8 @@ export function FeedbackForm() {
   if (submitted) {
     return (
       <div className="rounded-xl border border-teal-200 bg-teal-50 p-6 text-center">
-        <CheckCircle2 size={32} className="mx-auto text-teal-600" />
-        <h2 className="mt-3 text-lg font-semibold text-gray-900">
+        <BrandSunburst className="mx-auto h-12 w-12" />
+        <h2 className="mt-3 font-display text-[20px] text-gray-900">
           Feedback sent
         </h2>
         <p className="mt-2 text-sm text-gray-700">

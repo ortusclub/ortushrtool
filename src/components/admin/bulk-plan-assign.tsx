@@ -180,7 +180,7 @@ export function BulkPlanAssign({ plans, users }: Props) {
       {/* Bulk Assign */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-200 px-6 py-4">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+          <h2 className="flex items-center gap-2 font-display text-[20px] text-gray-900">
             <Users size={20} />
             Bulk Assign Plan
           </h2>
@@ -262,7 +262,7 @@ export function BulkPlanAssign({ plans, users }: Props) {
       {/* CSV Upload */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-200 px-6 py-4">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+          <h2 className="flex items-center gap-2 font-display text-[20px] text-gray-900">
             <Upload size={20} />
             Import from CSV
           </h2>

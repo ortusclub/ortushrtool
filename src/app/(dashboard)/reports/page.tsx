@@ -62,7 +62,7 @@ export default async function ReportsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Reports</h1>
         <p className="text-gray-600">
           Quick links to pages with built-in filter + export, plus a custom CSV
           builder for everything else (leave / overtime / holiday-work /

@@ -207,7 +207,7 @@ export function LeavePlansManager({
         </button>
       ) : (
         <div className="rounded-xl border border-blue-200 bg-white p-6 shadow-sm space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900">New Leave Plan</h3>
+          <h3 className="text-base font-semibold text-gray-900">New Leave Plan</h3>
 
           <div className="grid grid-cols-2 gap-4">
             <div>

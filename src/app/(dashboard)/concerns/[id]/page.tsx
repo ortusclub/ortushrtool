@@ -92,7 +92,7 @@ export default async function IncidentDetailPage({
           Back
         </Link>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="font-display text-[26px] leading-tight text-gray-900">
             Incident Report
           </h1>
           <span

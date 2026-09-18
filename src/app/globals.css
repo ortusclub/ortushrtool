@@ -3,6 +3,242 @@
 /* Enable class-based dark mode (Tailwind v4): `dark:` applies under .dark. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ═════════════════════ Trinity brand — "Salu-Salo" ═════════════════════
+   Source: Trinity Talent Acquisition brand book (2026), pp. 13-17.
+
+   The app hardcodes ~4,000 stock Tailwind color utilities across 290 files
+   (text-gray-700 x443, bg-blue-600 x99, ring-blue-500 x123...). Rather than
+   rewrite every component, we redefine Tailwind's default color SLOTS below.
+   In v4 the utilities compile from these custom properties, so overriding
+   --color-blue-600 re-skins every bg-/text-/border-/ring-blue-600 at once.
+
+   Consequence to know: class names no longer describe their color. `blue` is
+   the brand indigo, `gray` is a warm brown-neutral. New components should
+   prefer the semantic --color-brand-* tokens at the bottom of this block.
+
+   Brand book erratum: coco ivory, cocoa and golden orange all print
+   "HEX FFA103" on p14, contradicting their own RGB values. Verified against
+   rendered pixels — the RGB figures are correct, the hex labels are not. */
+@theme {
+  /* ── Primary: putobungbong indigo (p14) + its p16 ramp ──
+     Replaces blue. #3C3487 carries white text at 10.4:1. */
+  --color-blue-50:  #f0eff7;
+  --color-blue-100: #e1def0;
+  --color-blue-200: #c6c1e3;
+  --color-blue-300: #a79fd3;
+  --color-blue-400: #6f64c0;
+  --color-blue-500: #4f44ad;   /* p16 light  — focus rings */
+  --color-blue-600: #3c3487;   /* p14 brand  — primary buttons, links */
+  --color-blue-700: #2e2769;   /* hover */
+  --color-blue-800: #201847;   /* p16 dark */
+  --color-blue-900: #171033;
+  --color-blue-950: #0e0a20;
+
+  /* indigo-* utilities appear alongside blue-* in the app; same ramp so the
+     two never read as different brand colors. */
+  --color-indigo-50:  #f0eff7;
+  --color-indigo-100: #e1def0;
+  --color-indigo-200: #c6c1e3;
+  --color-indigo-300: #a79fd3;
+  --color-indigo-400: #6f64c0;
+  --color-indigo-500: #4f44ad;
+  --color-indigo-600: #3c3487;
+  --color-indigo-700: #2e2769;
+  --color-indigo-800: #201847;
+  --color-indigo-900: #171033;
+
+  /* ── Neutrals: warm browns keyed to coco ivory + cocoa (p14) ──
+     Lightness tracks stock Tailwind gray so existing contrast pairings keep
+     working; only the hue moves, cold slate -> warm brown. */
+  --color-gray-50:  #fcfcfd;   /* page background — a neutral near-white, a
+                                  clean step off the warm card surface
+                                  (--color-white #fffdfa) so cards lift again.
+                                  Was #fff8ee cream, then #fffdfa. */
+  --color-gray-100: #f8efe2;
+  --color-gray-200: #ede0ce;
+  --color-gray-300: #dccab1;   /* borders */
+  --color-gray-400: #a3907a;
+  --color-gray-500: #7e6a55;
+  --color-gray-600: #5e4c3b;
+  --color-gray-700: #46362a;
+  --color-gray-800: #2e241c;
+  --color-gray-900: #1d1611;
+  --color-gray-950: #120d09;
+
+  /* slate-* is used in a handful of places; alias it to the same neutrals. */
+  --color-slate-50:  #fcfcfd;
+  --color-slate-100: #f8efe2;
+  --color-slate-200: #ede0ce;
+  --color-slate-300: #dccab1;
+  --color-slate-600: #5e4c3b;
+  --color-slate-700: #46362a;
+  --color-slate-900: #1d1611;
+
+  /* Cards sit a touch warm so they don't read blue-white against the cream. */
+  --color-white: #fffdfa;
+
+  /* ── Success: natural green / leafy green (p14) + p16 ramp ──
+     Approved leave, present attendance, positive deltas. */
+  --color-green-50:  #f1f7ea;
+  --color-green-100: #e2efd6;
+  --color-green-200: #c9e2b2;
+  --color-green-300: #b3d48e;  /* p16 */
+  --color-green-400: #90c06c;  /* p14 leafy green */
+  --color-green-500: #5e9f33;  /* p14 natural green */
+  --color-green-600: #487a27;  /* darkened for white-text buttons (4.9:1) */
+  --color-green-700: #3a6220;
+  --color-green-800: #2f5119;
+  --color-green-900: #223b12;
+
+  --color-emerald-50:  #f1f7ea;
+  --color-emerald-100: #e2efd6;
+  --color-emerald-500: #5e9f33;
+  --color-emerald-600: #487a27;
+  --color-emerald-700: #3a6220;
+  --color-emerald-800: #2f5119;
+  --color-emerald-900: #223b12;
+
+  /* ── Danger: p16 red ramp ── rejected, absent, destructive actions. */
+  --color-red-50:  #fdf0f0;
+  --color-red-100: #fae0df;
+  --color-red-200: #f3c2c1;
+  --color-red-300: #e79a99;   /* p16 */
+  --color-red-400: #dd7574;   /* p16 */
+  --color-red-500: #ce3735;   /* p16 */
+  --color-red-600: #b62b29;   /* white text 5.6:1 */
+  --color-red-700: #94211f;
+  --color-red-800: #711917;
+  --color-red-900: #521210;
+
+  /* ── Warning: golden orange + yellow puto (p14) ──
+     Pending requests, expiring credits, schedule conflicts. */
+  --color-amber-50:  #fffaea;
+  --color-amber-100: #fff2c8;
+  --color-amber-200: #ffe58c;
+  --color-amber-300: #ffd850;
+  --color-amber-400: #ffcc1e;  /* p14 yellow puto — the pending accent */
+  --color-amber-500: #f5bc00;
+  --color-amber-600: #c99700;
+  --color-amber-700: #856200;  /* 5.37:1 on amber-50, 5.02:1 on amber-100 */
+  --color-amber-800: #6b4e00;  /* 7.41:1 on amber-50 */
+  --color-amber-900: #573f00;  /* 9.50:1 on amber-50 */
+
+  --color-yellow-50:  #fffaea;
+  --color-yellow-100: #fff2c8;
+  --color-yellow-200: #ffe58c;
+  --color-yellow-400: #ffcc1e;  /* p14 yellow puto */
+  --color-yellow-500: #f0b800;
+  --color-yellow-600: #c68f00;
+  --color-yellow-700: #9a6d00;
+  --color-yellow-800: #755000;
+  --color-yellow-900: #573a00;
+
+  /* ── Accents: empanada orange, kutsinta brown, p16 sky (p14/p16) ── */
+  --color-orange-50:  #fff4ed;
+  --color-orange-100: #ffe4d5;
+  --color-orange-200: #fecaae;
+  --color-orange-400: #fb844a;  /* p14 empanada orange */
+  --color-orange-500: #f26a29;
+  --color-orange-600: #d4530f;
+  --color-orange-700: #ac4c02;  /* p14 kutsinta brown */
+  --color-orange-800: #864b25;  /* p16 */
+  --color-orange-900: #66391c;  /* p16 cocoa-adjacent */
+
+  --color-teal-50:  #eefafd;
+  --color-teal-100: #cff2f8;   /* p16 sky */
+  --color-teal-200: #baecf5;   /* p16 sky */
+  --color-teal-500: #2a9fb8;
+  --color-teal-600: #1f8399;
+  --color-teal-700: #1a6a7c;
+  --color-teal-800: #17555f;
+  --color-teal-900: #143f47;
+
+  /* ── Categorical accents ──
+     These three families were the last to still render stock Tailwind. They
+     carry schedule/attendance categories that must stay distinguishable from
+     each other AND from Office (indigo) and Online (green), so each takes a
+     different p16 column rather than a shade of the same one. */
+
+  /* cyan — "Adjusted" schedule cells. p16 bright-blue column. */
+  --color-cyan-50:  #eaf6ff;
+  --color-cyan-100: #cfe9ff;
+  --color-cyan-200: #9fd4ff;
+  --color-cyan-300: #00caff;  /* p16 */
+  --color-cyan-400: #00b1ff;  /* p16 */
+  --color-cyan-500: #0088ff;  /* p16 */
+  --color-cyan-600: #0070d6;
+  --color-cyan-700: #0059a8;  /* 5.59:1 on cyan-100 */
+  --color-cyan-800: #044582;
+  --color-cyan-900: #073560;
+
+  /* sky — "half day leave". p16 sky column, airier than teal. */
+  --color-sky-50:  #f2fcfe;
+  --color-sky-100: #def6fa;  /* p16 */
+  --color-sky-200: #baecf5;  /* p16 */
+  --color-sky-300: #8fdcea;
+  --color-sky-500: #2ba3bb;
+  --color-sky-600: #1f87a0;
+  --color-sky-700: #196c81;  /* 5.33:1 on sky-100 */
+  --color-sky-800: #155563;
+  --color-sky-900: #123f4a;
+
+  /* rose — kudos hearts. Dusty rose off the p16 red column. */
+  --color-rose-50:  #fdf1f2;
+  --color-rose-100: #fadfe2;
+  --color-rose-300: #e79a99;  /* p16 */
+  --color-rose-400: #dd7574;  /* p16 */
+  --color-rose-500: #c44a62;  /* 4.55:1 on the page — an icon colour that also
+                                 works as text */
+  --color-rose-600: #b5435a;
+  --color-rose-700: #933548;
+
+  /* purple/pink chips: pulled toward the indigo family so the status palette
+     stays coherent rather than introducing a third unrelated hue. */
+  --color-purple-50:  #f3f0f9;
+  --color-purple-100: #e6e0f3;
+  --color-purple-500: #6f5bbd;
+  --color-purple-600: #5a4aa0;
+  --color-purple-700: #473b80;
+  --color-purple-800: #352c60;
+  --color-purple-900: #261f47;
+
+  --color-pink-50:  #fdf0f2;
+  --color-pink-100: #fadfe3;
+  --color-pink-500: #d1576f;
+  --color-pink-600: #b5435a;
+  --color-pink-700: #933548;
+
+  /* ── Semantic tokens — prefer these in NEW components ──
+     Class names above are legacy shims; these say what they mean. */
+  --color-brand-flame:        #e74820;  /* p1 cover field */
+
+  /* The top bar's colour, in one place — the sidebar brand block and the
+     header both paint with bg-brand-topbar, so swapping this one line moves
+     the whole band. Flame (#e74820) is the p1 cover treatment but only
+     carries white text at 3.93:1; indigo clears AA at 10.33:1. */
+  --color-brand-topbar:       var(--color-brand-indigo);
+  --color-brand-indigo:       #3c3487;
+  --color-brand-indigo-deep:  #201847;
+  --color-brand-indigo-light: #4f44ad;
+  --color-brand-brown:        #ac4c02;
+  --color-brand-cocoa:        #663924;
+  --color-brand-ivory:        #f5eace;  /* confirmed off p1 wordmark */
+  --color-brand-cream:        #fff8ee;
+  --color-brand-peach:        #ffe1c5;
+  --color-brand-green:        #5e9f33;
+  --color-brand-green-leaf:   #90c06c;
+  --color-brand-yellow:       #ffcc1e;
+  --color-brand-gold:         #ffa103;
+  --color-brand-orange:       #fb844a;
+
+  /* ── Typography (brand book p13) ──
+     Both faces are self-hosted via next/font/local in layout.tsx, which defines
+     the two --font-* variables referenced here. `font-sans` is applied on <html>
+     so General Sans inherits everywhere; use `font-display` for Maragsâ. */
+  --font-display: var(--font-maragsa), ui-serif, Georgia, serif;
+  --font-sans: var(--font-general-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
 /* ───────────────────────── Dark theme (retrofit) ─────────────────────────
    The app styles thousands of elements with hardcoded neutral utilities
    (bg-white, bg-gray-50, text-gray-*, border-gray-*). Rather than add dark:
@@ -11,77 +247,79 @@
    !important is needed. Brand/accent colors (blue-600 buttons, colored chips)
    are intentionally left alone; full-width -50 banners get dark tints. */
 
-.dark body { color: #d6d6d6; }
+.dark body { color: #d8d2cc; }
 
 /* Surfaces — soft, muted neutral dark (no blue tint, lifted off pure black so
    it reads subdued rather than stark). Page is the darkest layer, cards sit one
    step up, controls/raised chips a step above that. */
-.dark .bg-white { background-color: #1a1a1a; }    /* cards / panels / modals */
-.dark .bg-gray-50 { background-color: #131313; }   /* page background */
-.dark .bg-gray-100 { background-color: #242424; }
-.dark .bg-gray-200 { background-color: #353535; }
-.dark .bg-slate-100 { background-color: #242424; }
+/* Warmed a few points off neutral so the dark theme reads as the same brand
+   as the cream light theme rather than a different product. */
+.dark .bg-white { background-color: #1c1917; }    /* cards / panels / modals */
+.dark .bg-gray-50 { background-color: #151311; }   /* page background */
+.dark .bg-gray-100 { background-color: #262220; }
+.dark .bg-gray-200 { background-color: #37322e; }
+.dark .bg-slate-100 { background-color: #262220; }
 
 /* Semi-transparent light surfaces — opacity utilities the rules above don't
    match (escaped slash in the class name). These were the leftover white
    patches (e.g. table subheaders, sticky bars). */
-.dark .bg-white\/95 { background-color: #1a1a1a; }
-.dark .bg-gray-50\/60 { background-color: #171717; }
-.dark .bg-gray-50\/50 { background-color: #171717; }
+.dark .bg-white\/95 { background-color: #1c1917; }
+.dark .bg-gray-50\/60 { background-color: #191614; }
+.dark .bg-gray-50\/50 { background-color: #191614; }
 
 /* Hover surfaces */
-.dark .hover\:bg-gray-50:hover { background-color: #1f1f1f; }
-.dark .hover\:bg-gray-100:hover { background-color: #2a2a2a; }
-.dark .hover\:bg-blue-50:hover { background-color: #1d1d1d; }
+.dark .hover\:bg-gray-50:hover { background-color: #211d1b; }
+.dark .hover\:bg-gray-100:hover { background-color: #2c2725; }
+.dark .hover\:bg-blue-50:hover { background-color: #201d2b; }
 
 /* Text — soft neutral grays (eased off pure white to cut glare) */
-.dark .text-gray-900 { color: #e6e6e6; }
-.dark .text-gray-800 { color: #d6d6d6; }
-.dark .text-gray-700 { color: #bdbdbd; }
-.dark .text-gray-600 { color: #969696; }
-.dark .text-gray-500 { color: #7d7d7d; }
-.dark .text-gray-400 { color: #676767; }
-.dark .text-gray-300 { color: #4d4d4d; }
+.dark .text-gray-900 { color: #ece6e0; }
+.dark .text-gray-800 { color: #d8d2cc; }
+.dark .text-gray-700 { color: #c0b8b1; }
+.dark .text-gray-600 { color: #9a9189; }
+.dark .text-gray-500 { color: #81776f; }
+.dark .text-gray-400 { color: #6b625b; }
+.dark .text-gray-300 { color: #514a44; }
 
 /* Borders */
-.dark .border-gray-100 { border-color: #232323; }
-.dark .border-gray-200 { border-color: #2c2c2c; }
-.dark .border-gray-300 { border-color: #383838; }
+.dark .border-gray-100 { border-color: #252120; }
+.dark .border-gray-200 { border-color: #2f2a27; }
+.dark .border-gray-300 { border-color: #3b3531; }
 
 /* Dividers (Tailwind v4 divide-* selector) */
-.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #232323; }
-.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #2c2c2c; }
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #252120; }
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #2f2a27; }
 
 /* Full-width pastel banners → dark tints (chips at -100 stay as-is, readable) */
-.dark .bg-blue-50 { background-color: #1b2330; }
+.dark .bg-blue-50 { background-color: #1e1b33; }
 .dark .bg-red-50 { background-color: #2b2023; }
-.dark .bg-amber-50 { background-color: #29241a; }
+.dark .bg-amber-50 { background-color: #2c2313; }
 .dark .bg-yellow-50 { background-color: #29251a; }
-.dark .bg-green-50 { background-color: #1c2a22; }
-.dark .bg-emerald-50 { background-color: #1a2a24; }
+.dark .bg-green-50 { background-color: #1e2a17; }
+.dark .bg-emerald-50 { background-color: #1e2a17; }
 .dark .bg-purple-50 { background-color: #232130; }
 .dark .bg-teal-50 { background-color: #1a2a28; }
-.dark .bg-orange-50 { background-color: #2a221a; }
-.dark .bg-indigo-50 { background-color: #20222e; }
+.dark .bg-orange-50 { background-color: #2e2118; }
+.dark .bg-indigo-50 { background-color: #1e1b33; }
 .dark .bg-pink-50 { background-color: #2a2024; }
 
 /* Accent buttons — full-saturation solids glare on a dark background, so dim
    them to muted, lower-lightness versions (white text stays legible). Hover
    shades sit a touch lighter than their base for visible feedback. */
-.dark .bg-blue-600 { background-color: #2f5694; }
-.dark .bg-blue-500 { background-color: #335c9c; }
+.dark .bg-blue-600 { background-color: #4a4193; }
+.dark .bg-blue-500 { background-color: #554aa4; }
 .dark .bg-blue-700,
-.dark .hover\:bg-blue-700:hover { background-color: #3a64a8; }
+.dark .hover\:bg-blue-700:hover { background-color: #5a4fb0; }
 
-.dark .bg-red-600 { background-color: #9e3535; }
-.dark .bg-red-500 { background-color: #a83d3d; }
+.dark .bg-red-600 { background-color: #a13230; }
+.dark .bg-red-500 { background-color: #b03c3a; }
 .dark .bg-red-700,
-.dark .hover\:bg-red-700:hover { background-color: #ad4242; }
+.dark .hover\:bg-red-700:hover { background-color: #b84744; }
 
-.dark .bg-green-600 { background-color: #2f7d4f; }
-.dark .bg-green-500 { background-color: #348556; }
+.dark .bg-green-600 { background-color: #4a7c2c; }
+.dark .bg-green-500 { background-color: #528a31; }
 .dark .bg-green-700,
-.dark .hover\:bg-green-700:hover { background-color: #38855a; }
+.dark .hover\:bg-green-700:hover { background-color: #578f36; }
 
 .dark .bg-teal-600 { background-color: #2c7068; }
 .dark .bg-teal-700,
@@ -102,40 +340,68 @@
 
 .dark .bg-yellow-500 { background-color: #8f7825; }
 .dark .bg-amber-500 { background-color: #8f6e25; }
-.dark .bg-indigo-500 { background-color: #4a4d99; }
+.dark .bg-indigo-500 { background-color: #554aa4; }
 
 /* Colored chips & badges (bg-*-100/200) — light pastels become dark tints so
    they don't read as bright blobs on a dark page. */
-.dark .bg-amber-100 { background-color: #2f2817; }
+.dark .bg-amber-100 { background-color: #33280f; }
 .dark .bg-yellow-100 { background-color: #2f2a17; }
 .dark .bg-red-100 { background-color: #382226; }
-.dark .bg-green-100 { background-color: #1b3026; }
-.dark .bg-emerald-100 { background-color: #183028; }
-.dark .bg-blue-100 { background-color: #1d2a3c; }
-.dark .bg-blue-200 { background-color: #243652; }
-.dark .bg-indigo-100 { background-color: #22253b; }
+.dark .bg-green-100 { background-color: #22331a; }
+.dark .bg-emerald-100 { background-color: #22331a; }
+.dark .bg-blue-100 { background-color: #252040; }
+.dark .bg-blue-200 { background-color: #2f2853; }
+.dark .bg-indigo-100 { background-color: #252040; }
 .dark .bg-purple-100 { background-color: #282440; }
 .dark .bg-teal-100 { background-color: #163230; }
 .dark .bg-orange-100 { background-color: #312619; }
 .dark .bg-pink-100 { background-color: #312029; }
 
+/* ── Dark-mode gaps closed 2026-09-19 ──
+   The retrofit above was written when the app only used -50/-100 tints. The
+   brand pass introduced -200 chips (Holiday, Adjusted) and three new families
+   (cyan, sky, rose), none of which had dark rules — so their backgrounds
+   stayed light while their TEXT was remapped to a light colour by the rules
+   below, leaving light-on-light. The Holiday chip measured 1.20:1.
+
+   Rule of thumb when adding a colour class: if you introduce a bg-*-200 or a
+   new family, it needs an entry here, or dark mode silently breaks. */
+.dark .bg-orange-200 { background-color: #3b2a1b; }  /* Holiday chip */
+.dark .bg-cyan-200 { background-color: #22354f; }    /* Adjusted chip */
+.dark .bg-cyan-100 { background-color: #1c2b40; }
+.dark .bg-sky-100 { background-color: #16303a; }     /* half-day leave */
+.dark .bg-sky-200 { background-color: #1b3d49; }
+.dark .bg-amber-200 { background-color: #3a2f12; }
+.dark .bg-red-200 { background-color: #42272a; }
+.dark .bg-purple-200 { background-color: #332c54; }
+
+/* Solid amber day-cell on the time-off calendar. Its text-amber-900 is
+   remapped light below, so the fill has to drop far enough to carry it. */
+.dark .bg-amber-400 { background-color: #70590f; }
+
+.dark .text-cyan-500, .dark .text-cyan-600, .dark .text-cyan-700,
+.dark .text-cyan-800 { color: #8fc4f7; }
+.dark .text-sky-600, .dark .text-sky-700, .dark .text-sky-800 { color: #7fd0e2; }
+.dark .text-rose-500, .dark .text-rose-600 { color: #ea93a3; }
+.dark .text-red-400 { color: #f0908f; }
+
 /* Colored text — dark colored text (used on the now-dark tints, and as
    links/status text on dark cards) becomes a readable light shade. The
    stronger -800/-900 weights go a touch brighter for emphasis. */
-.dark .text-amber-500, .dark .text-amber-600, .dark .text-amber-700 { color: #f3c970; }
+.dark .text-amber-500, .dark .text-amber-600, .dark .text-amber-700 { color: #f5bf63; }
 .dark .text-amber-800, .dark .text-amber-900 { color: #fcd98a; }
 .dark .text-yellow-500, .dark .text-yellow-600, .dark .text-yellow-700 { color: #ddc94f; }
 .dark .text-yellow-800, .dark .text-yellow-900 { color: #f0dd6a; }
 .dark .text-red-500, .dark .text-red-600, .dark .text-red-700 { color: #f0908f; }
 .dark .text-red-800, .dark .text-red-900 { color: #f7a8a8; }
-.dark .text-green-500, .dark .text-green-600, .dark .text-green-700 { color: #74cf95; }
-.dark .text-green-800, .dark .text-green-900 { color: #92e0ae; }
+.dark .text-green-500, .dark .text-green-600, .dark .text-green-700 { color: #a3d47b; }
+.dark .text-green-800, .dark .text-green-900 { color: #b9e096; }
 .dark .text-emerald-500, .dark .text-emerald-600, .dark .text-emerald-700 { color: #66c6a0; }
 .dark .text-emerald-800, .dark .text-emerald-900 { color: #84dcb4; }
-.dark .text-blue-500, .dark .text-blue-600, .dark .text-blue-700 { color: #84b4ee; }
-.dark .text-blue-800, .dark .text-blue-900 { color: #a5cbf6; }
-.dark .text-indigo-500, .dark .text-indigo-600, .dark .text-indigo-700 { color: #9aa6ee; }
-.dark .text-indigo-800, .dark .text-indigo-900 { color: #b3bdf6; }
+.dark .text-blue-500, .dark .text-blue-600, .dark .text-blue-700 { color: #a9a0ef; }
+.dark .text-blue-800, .dark .text-blue-900 { color: #c2bbf7; }
+.dark .text-indigo-500, .dark .text-indigo-600, .dark .text-indigo-700 { color: #a9a0ef; }
+.dark .text-indigo-800, .dark .text-indigo-900 { color: #c2bbf7; }
 .dark .text-purple-500, .dark .text-purple-600, .dark .text-purple-700 { color: #c0a0e8; }
 .dark .text-purple-800, .dark .text-purple-900 { color: #d6b8f2; }
 .dark .text-teal-500, .dark .text-teal-600, .dark .text-teal-700 { color: #5cc6b8; }
@@ -149,11 +415,11 @@
 .dark input,
 .dark textarea,
 .dark select { color-scheme: dark; }
-.dark ::placeholder { color: #6e6e6e; }
+.dark ::placeholder { color: #726862; }
 
 /* Native <select> dropdowns: color-scheme alone leaves the control and its
    option popup white/translucent in several browsers, so set them explicitly
    (covers selects that have no bg utility of their own). */
-.dark select { background-color: #1a1a1a; color: #d6d6d6; }
+.dark select { background-color: #1c1917; color: #d8d2cc; }
 .dark select option,
-.dark select optgroup { background-color: #1a1a1a; color: #d6d6d6; }
+.dark select optgroup { background-color: #1c1917; color: #d8d2cc; }

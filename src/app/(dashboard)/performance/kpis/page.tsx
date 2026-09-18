@@ -97,7 +97,7 @@ export default async function PerformanceKpisPage({
       </div>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="mb-2 font-display text-sm uppercase tracking-wide text-gray-500">
           Active ({active.length})
         </h2>
         {active.length === 0 ? (
@@ -114,7 +114,7 @@ export default async function PerformanceKpisPage({
       </section>
       {completed.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+          <h2 className="mb-2 font-display text-sm uppercase tracking-wide text-gray-500">
             Completed / archived ({completed.length})
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">

@@ -23,7 +23,7 @@ export default async function DocumentsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Document Requests</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">Document Requests</h1>
         <p className="text-gray-600">
           Request HR documents like a Certificate of Employment, travel letter,
           leave certificate, or contract copy.
@@ -31,14 +31,14 @@ export default async function DocumentsPage() {
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+        <h2 className="font-display text-sm uppercase tracking-wider text-gray-500">
           New request
         </h2>
         <DocumentRequestForm />
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+        <h2 className="font-display text-sm uppercase tracking-wider text-gray-500">
           My requests
         </h2>
         {myRequests.length === 0 ? (

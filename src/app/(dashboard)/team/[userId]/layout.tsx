@@ -147,7 +147,7 @@ export default async function TeamMemberLayout({
             />
           )}
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="font-display text-[26px] leading-tight text-gray-900">
               {displayName(user)}
             </h1>
             {user.job_title && (

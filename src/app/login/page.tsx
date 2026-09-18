@@ -4,6 +4,14 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { TrinityLogo } from "@/components/brand/trinity-logo";
+import { Highlight } from "@/components/brand/highlight";
+import {
+  BrandAsterisk,
+  BrandTriangles,
+  BrandSpiral,
+  BrandLeaves,
+} from "@/components/brand/brand-shapes";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -89,14 +97,43 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow-lg">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Ortus Club</h1>
-          <p className="mt-2 text-gray-600">
-            Schedule & Attendance Management
-          </p>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gray-50 px-4 py-10">
+      <div aria-hidden className="pointer-events-none absolute inset-0 hidden lg:block">
+        <BrandAsterisk className="absolute left-[14%] top-[22%] h-20 w-20 -rotate-12" />
+        <BrandTriangles className="absolute right-[15%] top-[26%] h-16 w-16" />
+        <BrandSpiral className="absolute bottom-[24%] left-[18%] h-14 w-14" />
+        <BrandLeaves className="absolute bottom-[20%] right-[17%] h-16 w-16" />
+      </div>
+
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-gray-200">
+        {/* The palette as a single stroke across the top of the card — the
+            brand book's point is that the colors mean more together than
+            apart (p14). Order runs warm to cool. */}
+        <div aria-hidden className="flex h-1.5 w-full">
+          <div className="flex-1 bg-brand-brown" />
+          <div className="flex-1 bg-brand-gold" />
+          <div className="flex-1 bg-brand-yellow" />
+          <div className="flex-1 bg-brand-orange" />
+          <div className="flex-1 bg-brand-green-leaf" />
+          <div className="flex-1 bg-brand-green" />
+          <div className="flex-1 bg-brand-indigo" />
         </div>
+
+        <div className="space-y-6 p-8">
+          <div className="text-center">
+            {/* Same two-tone icon as the top bar (yellow puto + golden orange).
+                The wordmark rides on currentColor, so it goes dark here rather
+                than coco ivory — ivory on the white card measures ~1.1:1. */}
+            <TrinityLogo
+              variant="color"
+              className="mx-auto h-12 w-auto text-gray-900"
+            />
+            {/* The wordmark's "talent house" descender sits low in the SVG box,
+                so the tagline needs more clearance than a heading normally would. */}
+            <p className="mt-7 text-gray-900">
+              <Highlight>HR Platform</Highlight>
+            </p>
+          </div>
 
         {error && (
           <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
@@ -186,9 +223,10 @@ function LoginForm() {
           </svg>
           Sign in with Google
         </button>
-        <p className="text-center text-xs text-gray-400">
-          Use Google sign-in if your account email matches your Google account
-        </p>
+          <p className="text-center text-xs text-gray-400">
+            Use Google sign-in if your account email matches your Google account
+          </p>
+        </div>
       </div>
     </div>
   );

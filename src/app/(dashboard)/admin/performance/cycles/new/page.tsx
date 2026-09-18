@@ -28,7 +28,7 @@ export default async function NewCyclePage() {
         >
           <ArrowLeft size={16} /> Back to Performance
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">New Review Cycle</h1>
+        <h1 className="font-display text-[26px] leading-tight text-gray-900">New Review Cycle</h1>
         <p className="text-gray-600">
           Create a cycle, pick a form template, set due dates and participants.
         </p>
