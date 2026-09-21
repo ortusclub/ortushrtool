@@ -1,6 +1,19 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// Vercel kills edge middleware that hasn't responded within 25s. Without a
+// shorter cap of our own, a flaky Supabase Auth API takes the whole site down
+// for every request until that hard limit fires. Timing out early lets us
+// fail closed (redirect to /login) fast instead of a wall of 504s.
+function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -59,9 +72,13 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const result = await withTimeout(supabase.auth.getUser(), 8_000);
+    user = result.data.user;
+  } catch (error) {
+    console.error("Middleware auth check failed:", error);
+  }
 
   if (!user) {
     const url = request.nextUrl.clone();
@@ -72,16 +89,21 @@ export async function updateSession(request: NextRequest) {
   // Bump last_active_at at most once per minute per session. The cookie is the
   // hot-path throttle (no DB round-trip when fresh); the SQL function carries
   // its own 1-minute WHERE guard so a missing/forged cookie can't cause write
-  // amplification.
+  // amplification. Best-effort: a slow or failed bump shouldn't block the
+  // request, so it gets its own short timeout and swallows its own errors.
   const lastBump = Number(request.cookies.get("last_active_bump")?.value);
   if (!lastBump || Date.now() - lastBump > 60_000) {
-    await supabase.rpc("touch_last_active");
-    supabaseResponse.cookies.set("last_active_bump", String(Date.now()), {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24,
-    });
+    try {
+      await withTimeout(supabase.rpc("touch_last_active"), 5_000);
+      supabaseResponse.cookies.set("last_active_bump", String(Date.now()), {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24,
+      });
+    } catch (error) {
+      console.error("Middleware last_active bump failed:", error);
+    }
   }
 
   return supabaseResponse;
