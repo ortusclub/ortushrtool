@@ -99,7 +99,7 @@ export async function GET(request: Request) {
     const appUrl =
       envUrl && !envUrl.includes("localhost")
         ? envUrl
-        : "https://ortushrtool.vercel.app";
+        : "https://trinityhr.vercel.app";
     const breakdown_html = perCountry
       .map((c) =>
         c.error
