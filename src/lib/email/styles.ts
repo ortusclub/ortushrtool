@@ -21,7 +21,7 @@ const APP_URL = (() => {
   return url && !url.includes("localhost") ? url : "https://trinityhr.vercel.app";
 })();
 
-const LOGO_COLOR_URL = `${APP_URL}/email/trinity-mark-color.png`;
+const LOGO_WORDMARK_URL = `${APP_URL}/email/trinity-wordmark-color.png`;
 const LOGO_MONO_URL = `${APP_URL}/email/trinity-mark-mono.png`;
 
 const STRIPE_COLORS = [
@@ -49,9 +49,8 @@ const STRIPE =
   `</div>`;
 
 const HEADER =
-  `<div style="background:#f5eace;padding:18px 24px;border-bottom:1px solid #e9dcc0;">` +
-  `<img src="${LOGO_COLOR_URL}" width="33" height="16" alt="Trinity" style="vertical-align:middle;margin-right:9px;" />` +
-  `<span style="font-family: Georgia, 'Times New Roman', serif; font-size:17px; color:#201847; vertical-align:middle;">Trinity&nbsp;HR</span>` +
+  `<div style="background:#f5eace;padding:16px 24px;border-bottom:1px solid #e9dcc0;">` +
+  `<img src="${LOGO_WORDMARK_URL}" width="134" height="30" alt="Trinity Talent House" style="display:block;" />` +
   `</div>`;
 
 const FOOTER =
