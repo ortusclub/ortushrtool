@@ -25,7 +25,7 @@ export async function sendEmail({
   try {
     const ccList = cc ? (Array.isArray(cc) ? cc : [cc]) : undefined;
     const { data, error } = await resend.emails.send({
-      from: "Ortus Club HR <hr@ortusclub.com>",
+      from: "Trinity HR <hr@ortusclub.com>",
       to: Array.isArray(to) ? to : [to],
       ...(ccList && ccList.length > 0 ? { cc: ccList } : {}),
       subject,
