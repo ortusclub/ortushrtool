@@ -91,7 +91,7 @@ const navSections: NavSection[] = [
     title: "Admin",
     minRole: "hr_admin",
     items: [
-      { label: "All Attendance", href: "/attendance/all", icon: <Clock size={20} />, minRole: "hr_admin" },
+      { label: "All Attendance", href: "/attendance/all", icon: <Clock size={20} />, minRole: "hr_admin", roles: ["hr_support", "hr_admin", "super_admin"] },
       { label: "Reports", href: "/reports", icon: <BarChart3 size={20} />, minRole: "hr_admin" },
       { label: "All Schedules", href: "/admin/schedules", icon: <Calendar size={20} />, minRole: "hr_admin" },
       { label: "Manage Holidays", href: "/admin/holidays", icon: <CalendarHeart size={20} />, minRole: "hr_admin" },

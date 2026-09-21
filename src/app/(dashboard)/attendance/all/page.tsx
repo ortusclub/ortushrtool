@@ -1,5 +1,8 @@
-import { requireRole } from "@/lib/auth/helpers";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth/helpers";
+import { hasRole } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getSubdepartmentMap } from "@/lib/subdepartment";
 import { SyncDesktimeButton } from "@/components/admin/sync-desktime-button";
 import { AllAttendanceTable } from "@/components/attendance/all-attendance-table";
@@ -22,8 +25,16 @@ async function getShiftCutoffHour(): Promise<number> {
 
 export default async function AllAttendancePage() {
   const shiftCutoffHour = await getShiftCutoffHour();
-  await requireRole("hr_admin");
-  const supabase = await createClient();
+  const user = await getCurrentUser();
+  // hr_support watches company-wide attendance read-only: it never syncs
+  // DeskTime or uploads biometric punches (both API routes reject it anyway).
+  if (user.role !== "hr_support" && !hasRole(user.role, "hr_admin")) {
+    redirect("/");
+  }
+  const isWatcher = user.role === "hr_support";
+  // The role gate above is the access check; read the roster with the admin
+  // client so hr_support (whose users RLS only reaches itself) sees everyone.
+  const supabase = createAdminClient();
   const subdeptMap = await getSubdepartmentMap();
 
   const [{ data: rawUsers }, { data: allActive }] = await Promise.all([
@@ -56,8 +67,9 @@ export default async function AllAttendancePage() {
         </p>
       </div>
 
-      <SyncDesktimeButton />
+      {!isWatcher && <SyncDesktimeButton />}
 
+      {!isWatcher && (
       <details className="group rounded-xl border border-gray-200 bg-white">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-gray-800 hover:bg-gray-50">
           <span className="flex items-center gap-2">
@@ -76,6 +88,7 @@ export default async function AllAttendancePage() {
           <BiometricUpload />
         </div>
       </details>
+      )}
 
       <AllAttendanceTable shiftCutoffHour={shiftCutoffHour} users={users} />
     </div>
